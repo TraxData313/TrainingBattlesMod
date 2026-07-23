@@ -2,13 +2,17 @@ BUGS:
 
 
 NEXT UPDATE:
+- [ ] Training against a custom-composed enemy (devmod/testing/fun)
+    Instead of splitting your own army, spawn a mock enemy of chosen composition (culture,
+    tiers, counts) to drill against specific threats. (Idea parked — V1 is army-splitting.)
+    Maybe this option should be marked as developer option but it is good to test the defence/attack against other parties and if the user wants to use it to see how they would fare agains an enemy army of diverse troops
+    I need this to be able to to proper tests
+- [ ] for V1 lets not have the Train Battle option, but have the scouting one, as this one shouldnt be hard to keep
 
 
 POST V1 or NOT FULLY DECIDED:
-- [ ] Training against a custom-composed enemy
-    Instead of splitting your own army, spawn a mock enemy of chosen composition (culture,
-    tiers, counts) to drill against specific threats. (Idea parked — V1 is army-splitting.)
-    Maybe this option should be marked as developer option but it is good to test the defence/attack against other parties and if the user wants use it to see how they woldiers would fare agains an enemy army of diverse troops
+- [ ] I want the other party to become as a real party, lead by one of the companions if there are any there, for the AI to assign the campanions as division leaders, if it normally does
+- [ ] When I divide the army to see as I am starting a fight against a party, an animation where I fight with a party, my party being the men I got and the other party the men they got in their orange banner
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
     Choose one of the companions sent across to LEAD the other party (and with none picked,
     it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
