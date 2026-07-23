@@ -10,9 +10,13 @@ against themselves on the real terrain of their current map position. Afterward 
 dies: the "dead" become wounded (the surgeon's Medicine skill softening it), earned XP is
 kept at a configurable percent (default 75), the army goes disorganized, and a cooldown
 (default 24h) gates the next drill. Since 2026.07.23 the player can also CHOOSE the
-battlefield: among the scene variants the game would pick from at random, both for training
-drills and when DEFENDING real field battles (own toggle, attacker keeps vanilla). Later:
-garrison training at owned fiefs, and naval training battles.
+battlefield (training: any scene of the local terrain type, the patch's own marked "this
+ground"; real-defense choice exists behind a toggle but stays strict-patch-only) and SCOUT
+any of those battlefields alone — a free walk-around mission, no battle, no cost. DATA
+TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
+ONE land scene, so vanilla's "random among variants" never fires — the wider terrain-type
+pool is what keeps the pickers alive. Later: garrison training at owned fiefs, and naval
+training battles.
 
 ## Who does what — and how we work
 
@@ -59,10 +63,12 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
   TrainingBattleBehavior.cs   THE HEART: muster menu, picker flow, battle recipe, aftermath,
                               cooldown, stale-party recovery — read its class doc first
-  BattleSceneCatalog.cs       enumerates the battlefield variants for a position (vanilla's
-                              own candidate chain) + the shared "Choose the ground" inquiry
+  BattleSceneCatalog.cs       battlefield candidates for a position: strict patch chain +
+                              the wider same-terrain pool + the shared ground-picker inquiry
   DefendGroundBehavior.cs     "Survey the ground" on vanilla's encounter menu when the
                               player DEFENDS a real field battle (toggleable)
+  ScoutMission.cs             the scouting ride: enter any battlefield alone (no battle, no
+                              encounter) — "Camp" view set borrowed, own behavior list
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners while TrainingActive)
   Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else

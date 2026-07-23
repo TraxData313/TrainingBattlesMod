@@ -1,18 +1,24 @@
 BUGS:
 
 NEXT UPDATE:
+- [ ] Pay for the Training Battle it should be X mod configurable daily salaries for the soldiers involved. Also could you research how much it would cost if I had had to have the perk where I can buy equipment and give it to them for XP in salaries?
+- [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
+    follow-AI so the ride has an escort; needs agent-AI/order plumbing, own session.
+- [ ] DECIDE (Anton): should the real-defense ground choice also use the WIDER same-terrain
+    pool? Today it stays strict (only scenes truly claiming the map patch — with vanilla
+    data that is at most ONE, so the defend option effectively never shows). Widening gives
+    the choice back but lets you defend on ground you are not literally standing on.
 
 TESTS for the player:
-- [ ] NEW (2026.07.23): the ground pickers, both doors:
-    1. Training: "Survey the ground" in the muster menu — does the list show sensible
-       variants, does the fight open on the chosen one, does "As fate wills" go back to
-       random? (The option hides when only one scene fits the patch — ride somewhere else.)
-    2. Defending a real battle: get attacked in the field, look for "Survey the ground"
-       in the encounter menu (defender only), pick a scene, Fight — chosen ground? Then
-       once more but auto-resolve/get away instead: the choice must NOT leak into any
-       later battle.
-    3. Mod-compat sanity: with other mods installed the option order in the encounter
-       menu may shift — cosmetic only, but worth a glance.
+- [ ] NEW (2026.07.23 afternoon): scouting + the widened survey:
+    1. "Ride out and scout a battlefield" in the muster menu: does the mission open, do you
+       spawn on the ground (not under it / at a corner), horse present, does Tab (or escape
+       menu) bring you back to the muster menu with nothing lost?
+    2. "Survey the ground" now lists ALL battlefields of the local terrain type (the patch's
+       own scene marked "this ground") — pick a far one, Begin: does the drill open there?
+    3. The one-map mystery is solved (data truth: each patch has at most one scene) — but
+       verify battle_terrain_a isn't ALSO showing at, say, steppe or desert spots: the list
+       should change with the country you ride through.
 - [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —
     XP: "super" per Anton, wounded knob: 42 casualties → 3 wounded at 10% with the whole
     arithmetic confirmed in last_drill_report.txt, incl. +7.9k/+7.4k XP restored on two

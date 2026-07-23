@@ -127,6 +127,9 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_ground",
                 "{=TB_opt_ground}Survey the ground — choose the battlefield",
                 GroundCondition, _ => ChooseGround());
+            starter.AddGameMenuOption(MenuId, "training_scout",
+                "{=TB_opt_scout}Ride out and scout a battlefield",
+                ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
                 "{=TB_opt_attack}Begin — your half attacks",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
@@ -191,7 +194,7 @@ namespace TrainingBattles
         private bool GroundCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
-            var candidates = TrainingGroundCandidates();
+            var candidates = TrainingGroundPool(out _);
             if (candidates.Count == 0) return false;
             if (candidates.Count == 1)
             {
@@ -202,7 +205,7 @@ namespace TrainingBattles
             else
             {
                 args.Tooltip = new TextObject(_chosenSceneId == null
-                    ? "{=TB_tip_ground}See the " + candidates.Count + " battlefields that fit this ground and pick where the drill is fought."
+                    ? "{=TB_tip_ground}See the " + candidates.Count + " battlefields for this kind of country and pick where the drill is fought."
                     : "{=TB_tip_ground_set}Ground chosen: " + _chosenSceneId + ". Survey again to change it.");
             }
             return true;
@@ -210,9 +213,12 @@ namespace TrainingBattles
 
         private void ChooseGround()
         {
-            var candidates = TrainingGroundCandidates();
+            var candidates = TrainingGroundPool(out var localCount);
             if (candidates.Count < 2) return;
-            BattleSceneCatalog.ShowPicker(candidates, _chosenSceneId, sceneId =>
+            BattleSceneCatalog.ShowPicker(
+                "Choose the ground",
+                "The battlefields for this kind of country. Pick where the drill is fought.",
+                candidates, localCount, _chosenSceneId, offerFate: true, sceneId =>
             {
                 _chosenSceneId = sceneId;
                 // Re-init the muster menu so its text shows (or drops) the chosen ground.
@@ -220,15 +226,61 @@ namespace TrainingBattles
             });
         }
 
-        private static List<SingleplayerBattleSceneData> TrainingGroundCandidates()
+        private bool ScoutCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Mission;
+            if (TrainingGroundPool(out _).Count == 0) return false;
+            if (Hero.MainHero?.IsWounded == true)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_scout_wounded}You are wounded — scouting means riding.");
+            }
+            else
+            {
+                args.Tooltip = new TextObject("{=TB_tip_scout}Enter a battlefield alone — no battle, no cost — "
+                    + "to see the ground before you ever have to fight on it.");
+            }
+            return true;
+        }
+
+        private void ScoutGround()
+        {
+            var candidates = TrainingGroundPool(out var localCount);
+            if (candidates.Count == 0) return;
+            if (candidates.Count == 1)
+            {
+                LaunchScout(candidates[0].SceneID);
+                return;
+            }
+            BattleSceneCatalog.ShowPicker(
+                "Scout the ground",
+                "Pick a battlefield to ride out to. You go alone; nothing waits there but the land.",
+                candidates, localCount, null, offerFate: false, sceneId =>
+            {
+                if (sceneId != null) LaunchScout(sceneId);
+            });
+        }
+
+        private static void LaunchScout(string sceneId)
+        {
+            try { ScoutMission.Open(sceneId); }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: could not ride out (" + ex.Message + ")."));
+            }
+        }
+
+        private static List<SingleplayerBattleSceneData> TrainingGroundPool(out int localCount)
         {
             try
             {
-                return BattleSceneCatalog.CandidatesAt(
-                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter());
+                return BattleSceneCatalog.WiderPoolAt(
+                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter(), out localCount);
             }
             catch
             {
+                localCount = 0;
                 return new List<SingleplayerBattleSceneData>();
             }
         }
@@ -532,7 +584,7 @@ namespace TrainingBattles
             if (_chosenSceneId != null)
             {
                 var stillFits = false;
-                foreach (var scene in TrainingGroundCandidates())
+                foreach (var scene in TrainingGroundPool(out _))
                     if (scene.SceneID == _chosenSceneId) { stillFits = true; break; }
                 if (stillFits)
                 {

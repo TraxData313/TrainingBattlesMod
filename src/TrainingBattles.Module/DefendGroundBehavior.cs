@@ -76,7 +76,10 @@ namespace TrainingBattles
         {
             var candidates = Candidates();
             if (candidates.Count == 0) return;
-            BattleSceneCatalog.ShowPicker(candidates, TrainingBattlesSceneModel.PendingSceneId, sceneId =>
+            BattleSceneCatalog.ShowPicker(
+                "Choose the ground",
+                "These battlefields fit the ground you stand on. Pick where your line will form.",
+                candidates, candidates.Count, TrainingBattlesSceneModel.PendingSceneId, offerFate: true, sceneId =>
             {
                 TrainingBattlesSceneModel.PendingSceneId = sceneId;
                 InformationManager.DisplayMessage(new InformationMessage(sceneId == null
