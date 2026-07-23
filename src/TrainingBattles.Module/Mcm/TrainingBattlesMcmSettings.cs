@@ -22,35 +22,35 @@ namespace TrainingBattles.Mcm
         public override string FormatType => "json2";
 
         [SettingPropertyInteger("XP kept (%)", 0, 100, "0'%'", Order = 0, RequireRestart = false,
-            HintText = "How much of the experience earned in a training battle the troops keep. 100 = training teaches as well as real war; 0 = pure sparring, nothing sticks. Default 75.")]
+            HintText = "Share of battle XP the troops keep from a drill. Default 75.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
         public int XpKeptPercent { get; set; } = 75;
 
         [SettingPropertyInteger("Wounded among the fallen (%)", 0, 100, "0'%'", Order = 1, RequireRestart = false,
-            HintText = "Nobody dies in training. Of the men who 'fell' and whom the surgeon could not patch up on the spot (the surgeon's save uses the game's own Medicine-driven survival chance — a good doctor helps), this share wake up truly wounded; the rest shrug it off. Default 50.")]
+            HintText = "Fallen men your surgeon cannot save wake wounded at this rate; the rest shrug it off. Medicine skill helps. Default 50.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
         public int WoundedPercent { get; set; } = 50;
 
         [SettingPropertyBool("Disorganized after training", Order = 2, RequireRestart = false,
-            HintText = "The party becomes disorganized after a training battle (the vanilla slower-on-the-map post-battle state). Drilling is tiring. Default on.")]
+            HintText = "The party is disorganized for a while after a drill. Default on.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
         public bool DisorganizedAfterTraining { get; set; } = true;
 
         [SettingPropertyInteger("Cooldown (in-game hours)", 0, 168, "0", Order = 0, RequireRestart = false,
-            HintText = "How long the men need to rest between training battles. 0 = unlimited drilling. Default 24 — once a day.")]
+            HintText = "Rest needed between drills. 0 = unlimited. Default 24.")]
         [SettingPropertyGroup("Pacing", GroupOrder = 1)]
         public int CooldownHours { get; set; } = 24;
 
         [SettingPropertyDropdown("Open-menu key", Order = 0, RequireRestart = false,
-            HintText = "The campaign-map key that calls the men to a training muster. Pick one that does not clash with your other map keys. Default T.")]
+            HintText = "Campaign-map key for the training muster. Default G (T is the vanilla combat log).")]
         [SettingPropertyGroup("Controls", GroupOrder = 2)]
-        public Dropdown<string> OpenMenuHotkey { get; set; } = HotkeyChoices("T");
+        public Dropdown<string> OpenMenuHotkey { get; set; } = HotkeyChoices("G");
 
         private static Dropdown<string> HotkeyChoices(string selected)
         {
             var keys = new[]
             {
-                "T", "G", "H", "K", "O", "U", "Y", "X", "Z",
+                "G", "H", "K", "O", "U", "Y", "X", "Z", "T",
                 "F9", "F10", "F11", "F12",
             };
             var index = System.Array.IndexOf(keys, selected);

@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 1;
+        public int ConfigVersion { get; set; } = 2;
 
         /// <summary>How much of the experience earned in a training battle the troops KEEP,
         /// as a percent (0..100). Default 75 — drilling teaches, but not quite like real blood.</summary>
@@ -32,8 +32,9 @@ namespace TrainingBattles
         /// map for a while, the vanilla post-battle state). Default true — drilling is tiring.</summary>
         public bool DisorganizedAfterTraining { get; set; } = true;
 
-        /// <summary>The campaign-map key that opens the training muster menu. Default "T".</summary>
-        public string OpenMenuHotkey { get; set; } = "T";
+        /// <summary>The campaign-map key that opens the training muster menu. Default "G"
+        /// ("T" was the v1 default until it turned out vanilla uses T for the combat log).</summary>
+        public string OpenMenuHotkey { get; set; } = "G";
 
         // ------------------------------------------------------------------
 
@@ -90,7 +91,12 @@ namespace TrainingBattles
             XpKeptPercent = Clamp(XpKeptPercent, 0, 100);
             WoundedPercent = Clamp(WoundedPercent, 0, 100);
             CooldownHours = Clamp(CooldownHours, 0, 168);
-            if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "T";
+            // v1 shipped with "T" as the default — which vanilla uses for the combat log. Configs
+            // still carrying that default follow to "G"; a key set by hand later is honored.
+            if (ConfigVersion < 2 && string.Equals(OpenMenuHotkey?.Trim(), "T", StringComparison.OrdinalIgnoreCase))
+                OpenMenuHotkey = "G";
+            ConfigVersion = 2;
+            if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 
         private static int Clamp(int value, int min, int max) =>

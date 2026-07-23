@@ -1,22 +1,43 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] FIRST PLAYTEST of the V1 core (built 2026.07.23, all code in, 25 tests green, deployed
-    as "Training Battles (dev)" — enable it in the launcher). Anton drives, checking the
-    ranked risks from docs/training-battle-research.md §6:
-    1. Companion heroes sent to the opposing half — do they fight, and come home clean
-       (no relation hit, no capture, no odd hero state)?
-    2. LOSE a training battle on purpose — the defeat must end at the summary message,
-       never at "taken prisoner".
-    3. XP — do troops actually show upgrade progress after a drill (and does the configured
-       percent feel right)?
-    4. Loot/residue — no loot screen, no gold change, no morale/renown/influence lines,
-       no prisoners, food untouched.
-    5. The fallen — counts in the summary line vs. the party screen after; does a high-
-       Medicine surgeon visibly reduce the wounded?
-    6. MCM menu shows all five settings and edits stick (and land in config.json).
-    7. Cancel at every stage (picker cancel, menu cancel) leaves the party exactly as before.
-    8. Save/load mid-flow + the stale-party recovery message on a save made mid-drill.
+- [ ] Playtest round 2 (all fixes DEPLOYED 2026.07.23 — restart the game):
+    1. THE UPGRADE-XP BUG IS FIXED (root cause found in the game's own code: stack XP is
+       clamped to men × upgrade cost, so battle deaths destroyed the fallen men's stored
+       upgrade progress; the aftermath now restores XP absolutely — pre-battle pool + kept
+       share of earnings — after the men are back). VERIFY with the battle sisters: waiting
+       upgrades before ≈ waiting upgrades after + new ones from the drill's kept XP.
+    2. Hotkey is now G by default (T belongs to the vanilla combat log; configs carrying the
+       old T default migrate to G automatically — a hand-picked key is honored).
+    3. MCM tooltips shortened so they fit.
+    4. NEW: "Send the men in — watch it resolve from the hill" — the vanilla send-troops
+       auto-resolve view (live casualty ticker, Break In available). Verify: the aftermath
+       (men restored, XP kept, disorganized, cooldown) runs after the simulation ends —
+       the muster menu should briefly reappear with the summary and close itself.
+    Still open from round 1: companions on the opposing half; losing on purpose (must never
+    reach "taken prisoner"); surgeon Medicine visibly reducing wounded.
+- [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
+    Choose one of the companions sent across to LEAD the other party (and with none picked,
+    it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
+    ChangePartyLeader(hero)` delegates to the party component; our bandit component likely
+    ignores it. `CustomPartyComponent` carries a real settable leader BUT changing its leader
+    also flips party OWNERSHIP to the leader — a player-clan hero owning the opponent party
+    risks flipping its MapFaction and breaking the hostile encounter (the whole battle rides
+    on the bandit clan's hostility). Plan: test `CustomPartyComponent` with clan=bandit-clan
+    + leader=companion in a sandbox save; check `MapFaction` stays bandit and the mission
+    gives the enemy side a real general. Deserves its own careful session — not rushed in.
+- [ ] Show the two halves as real parties on the map before the fight (Anton's ask)
+    After dividing, see the opposing half standing on the map (with its picked commander)
+    and start the fight by riding at it — the vanilla party-encounter feel. This is the
+    "vanilla encounter menu" redesign: spawn the party visibly, let the vanilla encounter
+    flow own attack/send-troops/leave, and move our aftermath fully onto MapEventEnded
+    (the listener already exists since round 2). Pairs naturally with the commander task.
+- [ ] "Try to escape" option — PROBABLY NOT NEEDED, discuss
+    In vanilla that option exists when someone TRAPS you and you try to break away (speed
+    check, possible running battle). In a drill nobody chases you — "Cancel training" is
+    the honest escape, free and always available. If the wish is to PRACTICE escaping (see
+    the mechanics fire), that needs the opponent to chase the player on the map — which is
+    the map-parties redesign above. Parked until that lands.
 
 POST V1 or NOT FULLY DECIDED:
 - [ ] See and pick the battle terrain (training) — RESEARCHED, surprisingly easy

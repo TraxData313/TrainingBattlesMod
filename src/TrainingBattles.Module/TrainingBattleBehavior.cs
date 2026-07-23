@@ -56,6 +56,9 @@ namespace TrainingBattles
         private TroopRoster? _opponentSnapshot;    // opponent party before the fight
         private bool _checkResults;
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
+        private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
+        private bool? _pendingPlayerWon;           // winner captured at MapEventEnded, for flows where
+                                                   // PlayerEncounter.Battle is already gone at aftermath time
 
         public TrainingBattleBehavior(ModConfig config)
         {
@@ -66,6 +69,28 @@ namespace TrainingBattles
         public override void RegisterEvents()
         {
             CampaignEvents.OnSessionLaunchedEvent.AddNonSerializedListener(this, OnSessionLaunched);
+            CampaignEvents.MapEventEnded.AddNonSerializedListener(this, OnMapEventEnded);
+        }
+
+        /// <summary>The one reliable "the fight is truly over" signal, for every flow — the mission
+        /// path returns to our menu on its own, but the auto-resolve path leaves the menu first.</summary>
+        private void OnMapEventEnded(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
+        {
+            if (!TrainingActive || _opponentParty == null || mapEvent == null) return;
+            try
+            {
+                foreach (var party in mapEvent.InvolvedParties)
+                {
+                    if (party != _opponentParty.Party) continue;
+                    _pendingPlayerWon = mapEvent.WinningSide == mapEvent.PlayerSide;
+                    _aftermathReady = true;
+                    return;
+                }
+            }
+            catch
+            {
+                _aftermathReady = true;
+            }
         }
 
         public override void SyncData(IDataStore dataStore)
@@ -100,6 +125,9 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_begin_defend",
                 "{=TB_opt_defend}Begin — your half defends",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: true));
+            starter.AddGameMenuOption(MenuId, "training_send_troops",
+                "{=TB_opt_send}Send the men in — watch it resolve from the hill",
+                SendTroopsCondition, _ => LaunchTraining(playerDefends: false, simulate: true));
             starter.AddGameMenuOption(MenuId, "training_cancel",
                 "{=TB_opt_cancel}Cancel training",
                 CancelCondition, _ => CancelTraining(), isLeave: true);
@@ -161,6 +189,17 @@ namespace TrainingBattles
             return true;
         }
 
+        private bool SendTroopsCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Continue;
+            if (_pickedTeam == null || _pickedTeam.TotalHealthyCount < 1)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_pick_first}Divide the men first.");
+            }
+            return true;
+        }
+
         private bool CancelCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Leave;
@@ -182,6 +221,16 @@ namespace TrainingBattles
         {
             if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null) return;
             if (!(Game.Current?.GameStateManager?.ActiveState is MapState mapState)) return;
+
+            // The auto-resolve road exits our menu before the fight, so nothing re-inits it when the
+            // dust settles — once our map event has truly ended and no menu is up, re-enter the
+            // muster menu; its init runs the aftermath.
+            if (_aftermathReady && _checkResults && !mapState.AtMenu)
+            {
+                _aftermathReady = false;
+                try { GameMenu.ActivateGameMenu(MenuId); } catch { }
+                return;
+            }
 
             // The picker closed last frame — now that the map state is truly back, re-enter the
             // muster menu so its text and options reflect the pick.
@@ -213,7 +262,7 @@ namespace TrainingBattles
         {
             return Enum.TryParse<InputKey>((name ?? string.Empty).Trim(), ignoreCase: true, out var key)
                 ? key
-                : InputKey.T;
+                : InputKey.G;
         }
 
         private static bool CanMusterNow(out string reason)
@@ -320,7 +369,12 @@ namespace TrainingBattles
 
         private void BeginBattle(bool playerDefends)
         {
-            try { BeginBattleCore(playerDefends); }
+            LaunchTraining(playerDefends, simulate: false);
+        }
+
+        private void LaunchTraining(bool playerDefends, bool simulate)
+        {
+            try { LaunchTrainingCore(playerDefends, simulate); }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
@@ -329,7 +383,7 @@ namespace TrainingBattles
             }
         }
 
-        private void BeginBattleCore(bool playerDefends)
+        private void LaunchTrainingCore(bool playerDefends, bool simulate)
         {
             var picked = _pickedTeam;
             if (picked == null || picked.TotalHealthyCount < 1)
@@ -363,8 +417,13 @@ namespace TrainingBattles
                 var take = Math.Min(el.Number, live.Number);
                 if (take <= 0) continue;
                 var takeWounded = Math.Min(Math.Min(el.WoundedNumber, live.Wounded), take);
-                main.MemberRoster.AddToCounts(el.Character, -take, false, -takeWounded);
-                opponent.MemberRoster.AddToCounts(el.Character, take, false, takeWounded);
+                // The men's share of the stack's XP crosses with them (the game clamps a stack's
+                // XP to men × upgrade cost — leaving it all behind would see it clamped away).
+                var xpShare = (!el.Character.IsHero && live.Number > 0)
+                    ? (int)((long)live.Xp * take / live.Number)
+                    : 0;
+                main.MemberRoster.AddToCounts(el.Character, -take, false, -takeWounded, -xpShare);
+                opponent.MemberRoster.AddToCounts(el.Character, take, false, takeWounded, xpShare);
                 moved += take;
             }
             if (moved == 0 || main.MemberRoster.TotalHealthyCount < 1)
@@ -383,28 +442,38 @@ namespace TrainingBattles
             _opponentSnapshot = opponent.MemberRoster.CloneRosterData();
             TrainingActive = true;
             _checkResults = true;
+            _aftermathReady = false;
+            _pendingPlayerWon = null;
 
-            try
+            // The vanilla forced-battle recipe (Company of Trouble quest); a throw here is caught by
+            // LaunchTraining and unwinds honestly: men home, party gone, no cooldown burned.
+            PlayerEncounter.Start();
+            PlayerEncounter.Current.SetupFields(
+                playerDefends ? opponent.Party : PartyBase.MainParty,
+                playerDefends ? PartyBase.MainParty : opponent.Party);
+            PlayerEncounter.StartBattle();
+
+            if (simulate)
             {
-                // The vanilla forced-battle recipe (Company of Trouble quest).
-                PlayerEncounter.Start();
-                PlayerEncounter.Current.SetupFields(
-                    playerDefends ? opponent.Party : PartyBase.MainParty,
-                    playerDefends ? PartyBase.MainParty : opponent.Party);
-                PlayerEncounter.StartBattle();
-                var mapSceneWrapper = Campaign.Current.MapSceneWrapper;
-                var position = MobileParty.MainParty.Position;
-                var mapPatch = mapSceneWrapper.GetMapPatchAtPosition(in position);
-                CampaignMission.OpenBattleMission(
-                    Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, PlayerEncounter.IsNavalEncounter()),
-                    usesTownDecalAtlas: false);
+                // Vanilla's own "send troops" road (MenuHelper.EncounterOrderAttack): leave the menu
+                // and open the battle-simulation view — live casualties, and Break In stays available.
+                // The aftermath is triggered by MapEventEnded + the tick below, since our menu is gone.
+                GameMenu.ExitToLast();
+                PlayerEncounter.InitSimulation(null, null);
+                if (PlayerEncounter.Current?.BattleSimulation != null
+                    && Game.Current.GameStateManager.ActiveState is MapState mapState)
+                {
+                    mapState.StartBattleSimulation();
+                }
+                return;
             }
-            catch (Exception ex)
-            {
-                // The field failed us — unwind honestly: men home, party gone, no cooldown burned.
-                InformationManager.DisplayMessage(new InformationMessage("Training Battles: the drill could not start (" + ex.Message + ")."));
-                AbortLiveBattle();
-            }
+
+            var mapSceneWrapper = Campaign.Current.MapSceneWrapper;
+            var position = MobileParty.MainParty.Position;
+            var mapPatch = mapSceneWrapper.GetMapPatchAtPosition(in position);
+            CampaignMission.OpenBattleMission(
+                Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, PlayerEncounter.IsNavalEncounter()),
+                usesTownDecalAtlas: false);
         }
 
         private MobileParty? CreateOpponentParty()
@@ -441,6 +510,8 @@ namespace TrainingBattles
             }
             TrainingActive = false;
             _checkResults = false;
+            _aftermathReady = false;
+            _pendingPlayerWon = null;
             _opponentParty = null;
             _mainSnapshot = null;
             _opponentSnapshot = null;
@@ -454,15 +525,17 @@ namespace TrainingBattles
             var main = MobileParty.MainParty;
             var opponent = _opponentParty;
 
-            bool playerWon = false;
+            bool playerWon = _pendingPlayerWon ?? false;
             try
             {
                 var battle = PlayerEncounter.Battle;
-                playerWon = battle != null && battle.WinningSide == battle.PlayerSide;
+                if (battle != null) playerWon = battle.WinningSide == battle.PlayerSide;
             }
             catch { }
-            try { PlayerEncounter.Finish(); } catch { }
+            try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
             TrainingActive = false;
+            _aftermathReady = false;
+            _pendingPlayerWon = null;
 
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;
@@ -479,7 +552,12 @@ namespace TrainingBattles
             }
 
             // 2. Nobody dies in training: the fallen return — some wounded, per the surgeon's own
-            //    Medicine-driven save and the configured share — and earned XP is scaled.
+            //    Medicine-driven save and the configured share — and XP is restored ABSOLUTELY:
+            //    the game clamps a stack's XP to (men in stack × max upgrade cost), so battle
+            //    deaths silently destroy the fallen men's stored upgrade progress (found by Anton:
+            //    8 waiting upgrades melting to 6). Deltas cannot see clamped-away XP — instead,
+            //    the men come back FIRST (raising the clamp ceiling to full), then each stack's XP
+            //    is SET to its pre-battle pool plus the kept share of what the drill visibly earned.
             var restored = 0;
             var woundedTotal = 0;
             if (mainSnapshot != null && opponentSnapshot != null)
@@ -504,10 +582,13 @@ namespace TrainingBattles
                         CreditSurgeon(main, character, fallen);
                     }
 
-                    var xpEarned = now.Xp - pair.Value.Xp;
-                    var xpToRemove = AftermathMath.XpToRemove(xpEarned, _config.XpKeptPercent);
-                    if (xpToRemove > 0)
-                        main.MemberRoster.AddToCounts(character, 0, false, 0, -xpToRemove);
+                    // Visible earnings only — anything the clamp already ate mid-battle counts as
+                    // unearned (conservative, never negative). Target = old pool + kept earnings.
+                    var earned = Math.Max(0, now.Xp - pair.Value.Xp);
+                    var targetXp = pair.Value.Xp + AftermathMath.XpKept(earned, _config.XpKeptPercent);
+                    var xpAdjust = targetXp - now.Xp;
+                    if (xpAdjust != 0)
+                        main.MemberRoster.AddToCounts(character, 0, false, 0, xpAdjust);
                 }
             }
 
