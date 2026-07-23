@@ -239,11 +239,14 @@ namespace TrainingBattles
                     FinishTrainingBattle();
                     return;
                 }
-                // (b) The player bailed out of the mission (retreat) — the event is still alive
-                //     and vanilla shows its re-attack encounter menu. A drill you walk away from
-                //     is a drill that is over: finalize with the casualties so far.
+                // (b) The player bailed out — retreated from the mission OR canceled the
+                //     auto-resolve — and vanilla shows its re-attack/send-troops encounter menu.
+                //     A drill you walk away from is a drill that is over: finalize with the
+                //     casualties so far. (Letting that menu live re-starts the fight as a PURE
+                //     VANILLA battle with all our protections closed — Anton lost real upgrade
+                //     XP to exactly that.)
                 var encounter = PlayerEncounter.Current;
-                if (encounter != null && encounter.BattleSimulation == null && mapState.AtMenu
+                if (encounter != null && mapState.AtMenu
                     && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != MenuId)
                 {
                     FinishTrainingBattle();
@@ -553,7 +556,26 @@ namespace TrainingBattles
                 if (battle != null) playerWon = battle.WinningSide == battle.PlayerSide;
             }
             catch { }
+
+            // Kill the encounter POSITIVELY — nothing re-startable may survive. A merely-Finished
+            // encounter with the map event still undecided leaves vanilla's send-troops menu armed,
+            // and a re-run from there is a pure vanilla battle with all our protections closed
+            // (vanilla's own "leave" even simulates one real combat round on the way out).
+            try
+            {
+                var mapEvent = MobileParty.MainParty.MapEvent;
+                if (mapEvent != null && !mapEvent.IsFinalized)
+                    mapEvent.SetOverrideWinner(mapEvent.PlayerSide);
+            }
+            catch { }
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            try
+            {
+                // Pop whatever wrap/encounter menus linger (bounded — never spin).
+                for (var i = 0; i < 3 && Campaign.Current?.CurrentMenuContext != null; i++)
+                    GameMenu.ExitToLast();
+            }
+            catch { }
             TrainingActive = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
