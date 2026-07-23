@@ -13,7 +13,19 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 4;
+        public int ConfigVersion { get; set; } = 6;
+
+        /// <summary>The split-army drill: divide your own company in two and fight yourself —
+        /// THE CORE OF THE MOD, on by default and deliberately NOT in the MCM menu (Anton,
+        /// 2026.07.23: it's not cheating, and a player who only wants to scout simply doesn't
+        /// drill). This key stays as a hand-edit escape hatch only.</summary>
+        public bool EnableSplitTraining { get; set; } = true;
+
+        /// <summary>The developer option: compose a MOCK ENEMY of any culture (full troop tree,
+        /// any counts) and drill against it. The enemy are phantoms — fresh troops that never
+        /// touch the player's roster and vanish after the fight; the player's side follows the
+        /// normal training rules (cost, cooldown, XP kept, wounded-not-dead). Off by default.</summary>
+        public bool EnableMockEnemyTraining { get; set; } = false;
 
         /// <summary>How much of the experience earned in a training battle the troops KEEP,
         /// as a percent (0..100). Default 75 — the decided shipping default (Anton, 2026.07.23);
@@ -146,7 +158,13 @@ namespace TrainingBattles
                 XpKeptPercent = 75;
             // v4 added HeroHealthRestorePercent, AutoSplitInHalf, TrainingCostWages and the opponent
             // banner — all new keys with safe defaults, nothing to migrate.
-            ConfigVersion = 4;
+            // v5 added EnableSplitTraining (then default false) and EnableMockEnemyTraining
+            // (developer option — default false). v6, the same day: the split drill is the CORE
+            // of the mod — always on, its MCM toggle removed. Any v5 config carries false only
+            // because that was v5's short-lived default, so the migration flips it back on.
+            if (ConfigVersion < 6)
+                EnableSplitTraining = true;
+            ConfigVersion = 6;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

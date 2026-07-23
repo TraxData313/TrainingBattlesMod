@@ -61,6 +61,7 @@ namespace TrainingBattles.Mcm
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void PushConfigToMenu(TrainingBattlesMcmSettings s, ModConfig c)
         {
+            s.EnableMockEnemyTraining = c.EnableMockEnemyTraining;
             s.XpKeptPercent = c.XpKeptPercent;
             s.WoundedPercent = c.WoundedPercent;
             s.DisorganizedAfterTraining = c.DisorganizedAfterTraining;
@@ -77,6 +78,7 @@ namespace TrainingBattles.Mcm
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void PullMenuToConfig(TrainingBattlesMcmSettings s, ModConfig c)
         {
+            c.EnableMockEnemyTraining = s.EnableMockEnemyTraining;
             c.XpKeptPercent = s.XpKeptPercent;
             c.WoundedPercent = s.WoundedPercent;
             c.DisorganizedAfterTraining = s.DisorganizedAfterTraining;

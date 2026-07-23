@@ -32,11 +32,26 @@ namespace TrainingBattles
     /// docs/training-battle-research.md): a temp bandit-component party built from the player's own
     /// troops, a GameMenu that owns the whole flow, PlayerEncounter.Start/SetupFields/StartBattle,
     /// and CampaignMission.OpenBattleMission on the local map-patch scene.
+    ///
+    /// Since 2026.07.23 the muster's features are config-gated: the split-army drill hides behind
+    /// EnableSplitTraining (OFF for V1 — scouting ships first, the drill returns once playtested),
+    /// and EnableMockEnemyTraining (developer option, off) adds a second foe: a MOCK ENEMY composed
+    /// culture by culture from synthetic troop pools. The phantoms ride the same battle recipe but
+    /// are never the player's men — they spawn fresh into the temp party, never merge home, and the
+    /// aftermath sweeps any "prisoners" they'd have yielded.
     /// </summary>
     public sealed class TrainingBattleBehavior : CampaignBehaviorBase
     {
         public const string MenuId = "training_battle_menu";
         private const string OpponentPartyIdPrefix = "training_opponents";
+        // The mock-enemy drill's temp party: its men are PHANTOMS (never the player's), so the
+        // stale-party recovery must destroy it WITHOUT merging — a distinct prefix keeps the two
+        // recovery paths apart. Keep it outside OpponentPartyIdPrefix's StartsWith reach.
+        private const string MockEnemyPartyIdPrefix = "training_mock_enemy";
+        // The composer's supply: this many of EVERY troop of the culture's tree on the pool side.
+        private const int MockPoolPerTroop = 500;
+        // And the ceiling on how many men the composed enemy may field.
+        private const int MockEnemyMaxMen = 1000;
 
         private readonly ModConfig _config;
 
@@ -61,6 +76,11 @@ namespace TrainingBattles
         // Transient flow state — never saved; a mid-flow save/load resolves via the stale-party
         // recovery in OnSessionLaunched.
         private TroopRoster? _pickedTeam;          // the chosen opponents; real rosters untouched until Begin
+        private TroopRoster? _mockEnemyTeam;       // the composed mock enemy (developer option) —
+                                                   // phantom troops, never taken from the real roster;
+                                                   // mutually exclusive with _pickedTeam
+        private bool _opponentIsMockEnemy;         // live-battle flag: the temp party's men are NOT
+                                                   // ours — never merge them home, sweep their capture
         private MobileParty? _opponentParty;
         private TroopRoster? _mainSnapshot;        // main party AFTER the split, before the fight
         private TroopRoster? _opponentSnapshot;    // opponent party before the fight
@@ -129,6 +149,8 @@ namespace TrainingBattles
             // Fresh session: no picked team, no live battle — whatever the previous session left.
             TrainingActive = false;
             _pickedTeam = null;
+            _mockEnemyTeam = null;
+            _opponentIsMockEnemy = false;
             _chosenSceneId = null;
             _opponentParty = null;
             _mainSnapshot = null;
@@ -150,6 +172,9 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_pick",
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
+            starter.AddGameMenuOption(MenuId, "training_mock_enemy",
+                "{=TB_opt_mock}Compose a mock enemy to drill against",
+                MockEnemyCondition, _ => OpenMockEnemyComposer());
             starter.AddGameMenuOption(MenuId, "training_ground",
                 "{=TB_opt_ground2}Select the battlefield",
                 GroundCondition, _ => ChooseGround());
@@ -157,10 +182,10 @@ namespace TrainingBattles
                 "{=TB_opt_scout}Ride out and scout a battlefield",
                 ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
-                "{=TB_opt_attack2}Begin — your half attacks{TB_COST_SUFFIX}",
+                "{=TB_opt_attack4}Begin — {TB_BEGIN_ATTACK}{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
             starter.AddGameMenuOption(MenuId, "training_begin_defend",
-                "{=TB_opt_defend2}Begin — your half defends{TB_COST_SUFFIX}",
+                "{=TB_opt_defend4}Begin — {TB_BEGIN_DEFEND}{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: true));
             starter.AddGameMenuOption(MenuId, "training_send_troops",
                 "{=TB_opt_send2}Send the men in — watch it resolve from the hill{TB_COST_SUFFIX}",
@@ -185,20 +210,32 @@ namespace TrainingBattles
 
         private string BuildMenuText()
         {
+            var cost = ComputeTrainingCost();
+            var costText = cost > 0
+                ? " It will cost " + cost + " denars ("
+                    + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
+                    + " a man) to gather the training materials and pay the men for the drill."
+                : "";
             if (_pickedTeam != null && _pickedTeam.TotalManCount > 0)
             {
                 var yours = MobileParty.MainParty.MemberRoster.TotalHealthyCount - _pickedTeam.TotalHealthyCount;
-                var cost = ComputeTrainingCost();
                 return "The two halves stand ready on the field: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
-                     + " with you. " + DescribeChosenGround()
-                     + (cost > 0 ? " It will cost " + cost + " denars ("
-                        + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
-                        + " a man) to gather the training materials and pay the men for the drill." : "")
+                     + " with you. " + DescribeChosenGround() + costText
+                     + " Choose your side of the exercise — or call it off.";
+            }
+            if (_mockEnemyTeam != null && _mockEnemyTeam.TotalManCount > 0)
+            {
+                return "The mock enemy stands ready: " + _mockEnemyTeam.TotalHealthyCount
+                     + " " + DescribeMockEnemyCultures(_mockEnemyTeam) + " men opposite, "
+                     + MobileParty.MainParty.MemberRoster.TotalHealthyCount
+                     + " with you — phantoms for the drill, your own ranks untouched. "
+                     + DescribeChosenGround() + costText
                      + " Choose your side of the exercise — or call it off.";
             }
             // The muster is the mod's front door — it should SAY what a commander can do here,
-            // with the real numbers from the config, not make the player guess.
+            // with the real numbers from the config, not make the player guess. Only the features
+            // switched on get a paragraph.
             var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
                 + "Nobody dies in training: the men keep " + _config.XpKeptPercent + "% of the experience they earn, and of the fallen "
                 + "about " + _config.WoundedPercent + "% wake up truly wounded — a better surgeon saves more of them before that roll."
@@ -207,16 +244,48 @@ namespace TrainingBattles
                     + " a man — about " + ComputeTrainingCost() + " denars right now." : "")
                 + (_config.DisorganizedAfterTraining ? " The party is disorganized for a while after the drill." : "")
                 + (_config.CooldownHours > 0 ? " One drill per " + _config.CooldownHours + " hours." : "");
+            var mock = "MOCK ENEMY — compose an enemy force of any culture and any strength, and drill "
+                + "the whole company against it. The enemy are phantoms: nothing of yours crosses over, "
+                + "and your own men follow the training rules above.";
             var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground, stand where "
                 + "your line would form and see where the enemy's would, so you can judge the field before a "
                 + "chasing army — or your own next stand — chooses it for you.";
-            if (!CooldownReady(out var remaining))
+            var anyDrill = _config.EnableSplitTraining || _config.EnableMockEnemyTraining;
+            if (anyDrill && !CooldownReady(out var remaining))
             {
                 return "The men are still worn from the last drill — ready to muster again in "
                      + FormatRemaining(remaining) + ". Scouting needs no rest.{newline} {newline}" + scout;
             }
-            return "You call the company to a training muster. Two things a commander does here:{newline} {newline}"
-                 + drill + "{newline} {newline}" + scout + "{newline} {newline}" + DescribeChosenGround();
+            var sections = new List<string>();
+            if (_config.EnableSplitTraining) sections.Add(drill);
+            if (_config.EnableMockEnemyTraining) sections.Add(mock);
+            sections.Add(scout);
+            var text = "You call the company to a training muster.";
+            foreach (var section in sections) text += "{newline} {newline}" + section;
+            if (anyDrill) text += "{newline} {newline}" + DescribeChosenGround();
+            return text;
+        }
+
+        /// <summary>"Khuzait", or "mixed" when the composer was run more than once across
+        /// cultures — read straight off the composed roster, no extra state to go stale.</summary>
+        private static string DescribeMockEnemyCultures(TroopRoster team)
+        {
+            try
+            {
+                string? name = null;
+                foreach (var el in team.GetTroopRoster())
+                {
+                    var culture = el.Character?.Culture?.Name?.ToString();
+                    if (culture == null) continue;
+                    if (name == null) name = culture;
+                    else if (name != culture) return "mixed";
+                }
+                return name ?? "unknown";
+            }
+            catch
+            {
+                return "unknown";
+            }
         }
 
         /// <summary>The battlefield line of the muster text — always visible, updating the moment
@@ -247,6 +316,7 @@ namespace TrainingBattles
 
         private bool PickCondition(MenuCallbackArgs args)
         {
+            if (!_config.EnableSplitTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             if (!CooldownReady(out var remaining))
             {
@@ -268,8 +338,32 @@ namespace TrainingBattles
             return true;
         }
 
+        private bool MockEnemyCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableMockEnemyTraining) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            if (!CooldownReady(out var remaining))
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_rest}The men need rest — ready in " + FormatRemaining(remaining) + ".");
+            }
+            else if (MobileParty.MainParty.MemberRoster.TotalHealthyCount < 1)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_mock_none}Not a healthy soul to drill.");
+            }
+            else
+            {
+                args.Tooltip = new TextObject("{=TB_tip_mock}Pick a culture and build its force man by man — "
+                    + "a phantom enemy to test the whole company against. Your men follow the normal training "
+                    + "rules; the phantoms vanish afterward. Run it twice to mix cultures.");
+            }
+            return true;
+        }
+
         private bool GroundCondition(MenuCallbackArgs args)
         {
+            if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             var candidates = TrainingGroundPool(out _);
             if (candidates.Count == 0) return false;
@@ -383,13 +477,24 @@ namespace TrainingBattles
         /// "(N denars)" suffix the Begin/send option labels carry.</summary>
         private bool ReadyToBegin(MenuCallbackArgs args)
         {
+            if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             var costNow = ComputeTrainingCost();
             MBTextManager.SetTextVariable("TB_COST_SUFFIX",
                 costNow > 0 ? " (" + costNow + " denars)" : string.Empty, false);
-            if (_pickedTeam == null || _pickedTeam.TotalHealthyCount < 1)
+            var mockDrill = _pickedTeam == null && _mockEnemyTeam != null;
+            MBTextManager.SetTextVariable("TB_BEGIN_ATTACK",
+                mockDrill ? "you attack the mock enemy" : "your half attacks", false);
+            MBTextManager.SetTextVariable("TB_BEGIN_DEFEND",
+                mockDrill ? "you defend against the mock enemy" : "your half defends", false);
+            var team = _pickedTeam ?? _mockEnemyTeam;
+            if (team == null || team.TotalHealthyCount < 1)
             {
                 args.IsEnabled = false;
-                args.Tooltip = new TextObject("{=TB_tip_pick_first}Divide the men first.");
+                args.Tooltip = new TextObject(_config.EnableSplitTraining
+                    ? (_config.EnableMockEnemyTraining
+                        ? "{=TB_tip_pick_first2}Divide the men first — or compose a mock enemy."
+                        : "{=TB_tip_pick_first}Divide the men first.")
+                    : "{=TB_tip_mock_first}Compose the mock enemy first.");
                 return true;
             }
             if (costNow > 0 && (Hero.MainHero?.Gold ?? 0) < costNow)
@@ -436,6 +541,7 @@ namespace TrainingBattles
             // Nothing has touched the real rosters yet — dropping the pick is the whole cancel.
             // (isLeave only styles the option; leaving the menu is on us.)
             _pickedTeam = null;
+            _mockEnemyTeam = null;
             _chosenSceneId = null;
             try { GameMenu.ExitToLast(); } catch { }
         }
@@ -662,6 +768,7 @@ namespace TrainingBattles
                 if (!fromCancel && leftMemberRoster != null && leftMemberRoster.TotalManCount > 0)
                 {
                     _pickedTeam = leftMemberRoster.CloneRosterData();
+                    _mockEnemyTeam = null; // one foe at a time — the split pick displaces the phantom one
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: opposing half set — " + _pickedTeam.TotalHealthyCount + " able men."));
                 }
@@ -669,6 +776,147 @@ namespace TrainingBattles
                 {
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: selection closed without changes."));
+                }
+            }
+            catch { }
+            _returnToMenuPending = true;
+        }
+
+        // ------------------------------ the mock enemy (developer) ------------------------------
+
+        /// <summary>Step one of the composer: pick the enemy's culture. Main cultures first, then
+        /// any other culture that fields a troop tree (looters, sea raiders, the bandit clans...).</summary>
+        private void OpenMockEnemyComposer()
+        {
+            List<CultureObject> cultures;
+            try
+            {
+                cultures = new List<CultureObject>();
+                foreach (var culture in TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
+                {
+                    if (culture != null && TroopTreeOf(culture).Count > 0) cultures.Add(culture);
+                }
+                cultures.Sort((a, b) => a.IsMainCulture != b.IsMainCulture
+                    ? (a.IsMainCulture ? -1 : 1)
+                    : string.Compare(a.Name?.ToString(), b.Name?.ToString(), StringComparison.Ordinal));
+            }
+            catch
+            {
+                cultures = new List<CultureObject>();
+            }
+            if (cultures.Count == 0)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: no culture offers a troop tree to compose from."));
+                return;
+            }
+            var elements = new List<InquiryElement>();
+            foreach (var culture in cultures)
+            {
+                var label = (culture.Name?.ToString() ?? culture.StringId)
+                    + (culture.IsMainCulture ? "" : " (bandits)");
+                elements.Add(new InquiryElement(culture, label, null, true,
+                    TroopTreeOf(culture).Count + " troop types"));
+            }
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                "Compose a mock enemy",
+                "Whose banners shall the phantoms carry? Pick a culture, then build its force man by man."
+                + (_mockEnemyTeam != null ? " (The current composition opens pre-loaded — add another culture's men to mix.)" : ""),
+                elements, isExitShown: true, 1, 1, "Choose", "Cancel",
+                picked =>
+                {
+                    if (picked != null && picked.Count > 0 && picked[0].Identifier is CultureObject culture)
+                        OpenMockEnemyPicker(culture);
+                },
+                _ => { }), pauseGameActiveState: true);
+        }
+
+        /// <summary>Step two: the same party screen the split drill uses, but the pool side is a
+        /// synthetic supply of the culture's whole troop tree. Everything stays a dummy roster —
+        /// nothing here can touch the real party. Done with an empty left side clears the pick.</summary>
+        private void OpenMockEnemyPicker(CultureObject culture)
+        {
+            var left = TroopRoster.CreateDummyTroopRoster();
+            var leftPrisoners = TroopRoster.CreateDummyTroopRoster();
+            var pool = TroopRoster.CreateDummyTroopRoster();
+            var rightPrisoners = TroopRoster.CreateDummyTroopRoster();
+            foreach (var troop in TroopTreeOf(culture))
+                pool.AddToCounts(troop, MockPoolPerTroop);
+            if (_mockEnemyTeam != null)
+            {
+                // The previous composition opens pre-loaded — edit it, or add this culture's men
+                // on top (running the composer once per culture is how a mixed force is built).
+                foreach (var el in _mockEnemyTeam.GetTroopRoster())
+                {
+                    if (el.Character == null) continue;
+                    left.AddToCounts(el.Character, el.Number);
+                }
+            }
+            PartyScreenHelper.OpenScreenWithDummyRoster(
+                left, leftPrisoners, pool, rightPrisoners,
+                new TextObject("{=TB_mock_team}Mock enemy"),
+                new TextObject((culture.Name?.ToString() ?? "Troop") + " muster rolls"),
+                MockEnemyMaxMen,
+                pool.TotalManCount + left.TotalManCount,
+                MockPickerDoneCondition,
+                MockPickerClosed,
+                (character, _, _, _) => true);
+        }
+
+        /// <summary>The culture's fighting men: breadth-first over the upgrade tree from the
+        /// regular and noble lines (and the bandit line where the culture has one), sorted by tier.</summary>
+        private static List<CharacterObject> TroopTreeOf(CultureObject culture)
+        {
+            var seen = new HashSet<CharacterObject>();
+            var queue = new Queue<CharacterObject>();
+            var seeds = new[]
+            {
+                culture.BasicTroop, culture.EliteBasicTroop,
+                culture.BanditBandit, culture.BanditRaider, culture.BanditChief, culture.BanditBoss,
+            };
+            foreach (var seed in seeds)
+                if (seed != null && seen.Add(seed)) queue.Enqueue(seed);
+            while (queue.Count > 0)
+            {
+                var troop = queue.Dequeue();
+                var targets = troop.UpgradeTargets;
+                if (targets == null) continue;
+                foreach (var target in targets)
+                    if (target != null && seen.Add(target)) queue.Enqueue(target);
+            }
+            var result = new List<CharacterObject>(seen);
+            result.Sort((a, b) => a.Tier != b.Tier
+                ? a.Tier.CompareTo(b.Tier)
+                : string.Compare(a.Name?.ToString(), b.Name?.ToString(), StringComparison.Ordinal));
+            return result;
+        }
+
+        private static Tuple<bool, TextObject> MockPickerDoneCondition(TroopRoster leftMemberRoster, TroopRoster leftPrisonRoster, TroopRoster rightMemberRoster, TroopRoster rightPrisonRoster, int leftLimitNum, int rightLimitNum)
+        {
+            // An empty enemy side is a valid Done — it clears the composition.
+            return new Tuple<bool, TextObject>(true, TextObject.GetEmpty());
+        }
+
+        private void MockPickerClosed(PartyBase leftOwnerParty, TroopRoster leftMemberRoster, TroopRoster leftPrisonRoster, PartyBase rightOwnerParty, TroopRoster rightMemberRoster, TroopRoster rightPrisonRoster, bool fromCancel)
+        {
+            // Mirrors PickerClosed: this fires MID state-transition — record only, act on next tick.
+            try
+            {
+                if (!fromCancel)
+                {
+                    if (leftMemberRoster != null && leftMemberRoster.TotalManCount > 0)
+                    {
+                        _mockEnemyTeam = leftMemberRoster.CloneRosterData();
+                        _pickedTeam = null; // one foe at a time — the phantom displaces the split pick
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "Training Battles: mock enemy composed — " + _mockEnemyTeam.TotalHealthyCount + " phantoms."));
+                    }
+                    else
+                    {
+                        _mockEnemyTeam = null;
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "Training Battles: the mock enemy was dismissed."));
+                    }
                 }
             }
             catch { }
@@ -696,9 +944,12 @@ namespace TrainingBattles
         private void LaunchTrainingCore(bool playerDefends, bool simulate)
         {
             var picked = _pickedTeam;
-            if (picked == null || picked.TotalHealthyCount < 1)
+            var mock = _pickedTeam == null ? _mockEnemyTeam : null;
+            if ((picked == null || picked.TotalHealthyCount < 1)
+                && (mock == null || mock.TotalHealthyCount < 1))
             {
-                InformationManager.DisplayMessage(new InformationMessage("Training Battles: divide the men first."));
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: divide the men — or compose a mock enemy — first."));
                 return;
             }
             if (!CooldownReady(out _)) return;
@@ -717,41 +968,61 @@ namespace TrainingBattles
             }
 
             var main = MobileParty.MainParty;
-            var opponent = CreateOpponentParty();
+            var opponent = CreateOpponentParty(mock != null);
             if (opponent == null)
             {
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: could not raise the opposing half."));
                 return;
             }
 
-            // Move the picked men across — clamped against the live roster so a stale pick can
-            // never take more than the party truly has.
-            var have = ToDictionary(main.MemberRoster);
-            var moved = 0;
-            foreach (var el in picked.GetTroopRoster())
+            if (mock != null)
             {
-                if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
-                if (!have.TryGetValue(el.Character, out var live)) continue;
-                var take = Math.Min(el.Number, live.Number);
-                if (take <= 0) continue;
-                var takeWounded = Math.Min(Math.Min(el.WoundedNumber, live.Wounded), take);
-                // The men's share of the stack's XP crosses with them (the game clamps a stack's
-                // XP to men × upgrade cost — leaving it all behind would see it clamped away).
-                var xpShare = (!el.Character.IsHero && live.Number > 0)
-                    ? (int)((long)live.Xp * take / live.Number)
-                    : 0;
-                main.MemberRoster.AddToCounts(el.Character, -take, false, -takeWounded, -xpShare);
-                opponent.MemberRoster.AddToCounts(el.Character, take, false, takeWounded, xpShare);
-                moved += take;
+                // The phantoms muster fresh from the rolls — no man and no XP leaves the real
+                // roster; the whole company stands on the player's side.
+                foreach (var el in mock.GetTroopRoster())
+                {
+                    if (el.Character == null || el.Character.IsHero) continue;
+                    opponent.MemberRoster.AddToCounts(el.Character, el.Number);
+                }
+                if (opponent.MemberRoster.TotalHealthyCount < 1 || main.MemberRoster.TotalHealthyCount < 1)
+                {
+                    DestroyOpponentParty(opponent);
+                    _mockEnemyTeam = null;
+                    InformationManager.DisplayMessage(new InformationMessage("Training Battles: the mock enemy could not be formed."));
+                    return;
+                }
             }
-            if (moved == 0 || main.MemberRoster.TotalHealthyCount < 1)
+            else
             {
-                // Nothing (or everything) crossed over — put it all back and stand down.
-                MergePartyBackIntoMain(opponent);
-                DestroyOpponentParty(opponent);
-                _pickedTeam = null;
-                InformationManager.DisplayMessage(new InformationMessage("Training Battles: the halves could not be formed."));
-                return;
+                // Move the picked men across — clamped against the live roster so a stale pick can
+                // never take more than the party truly has.
+                var have = ToDictionary(main.MemberRoster);
+                var moved = 0;
+                foreach (var el in picked!.GetTroopRoster())
+                {
+                    if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
+                    if (!have.TryGetValue(el.Character, out var live)) continue;
+                    var take = Math.Min(el.Number, live.Number);
+                    if (take <= 0) continue;
+                    var takeWounded = Math.Min(Math.Min(el.WoundedNumber, live.Wounded), take);
+                    // The men's share of the stack's XP crosses with them (the game clamps a stack's
+                    // XP to men × upgrade cost — leaving it all behind would see it clamped away).
+                    var xpShare = (!el.Character.IsHero && live.Number > 0)
+                        ? (int)((long)live.Xp * take / live.Number)
+                        : 0;
+                    main.MemberRoster.AddToCounts(el.Character, -take, false, -takeWounded, -xpShare);
+                    opponent.MemberRoster.AddToCounts(el.Character, take, false, takeWounded, xpShare);
+                    moved += take;
+                }
+                if (moved == 0 || main.MemberRoster.TotalHealthyCount < 1)
+                {
+                    // Nothing (or everything) crossed over — put it all back and stand down.
+                    MergePartyBackIntoMain(opponent);
+                    DestroyOpponentParty(opponent);
+                    _pickedTeam = null;
+                    InformationManager.DisplayMessage(new InformationMessage("Training Battles: the halves could not be formed."));
+                    return;
+                }
             }
 
             // The men are paid BEFORE the first bruise; an abort refunds the chest in full.
@@ -774,12 +1045,18 @@ namespace TrainingBattles
             _itemSnapshot = SnapshotItems(main.Party.ItemRoster);
 
             _opponentParty = opponent;
+            _opponentIsMockEnemy = mock != null;
             _pickedTeam = null;
+            _mockEnemyTeam = null;
             // NOT CloneRosterData: the game's clone silently drops each stack's Xp (counts and
             // wounded only) — zeroed snapshots made the aftermath treat the ENTIRE pool as "drill
             // earnings" and tax it to the kept-percent, eating stored upgrades every training.
             _mainSnapshot = CloneWithXp(main.MemberRoster);
-            _opponentSnapshot = CloneWithXp(opponent.MemberRoster);
+            // The phantoms are nobody's men: an empty opponent snapshot keeps the aftermath's
+            // restore/XP arithmetic (and the scattered-hero walk-back) to OUR side only.
+            _opponentSnapshot = mock != null
+                ? TroopRoster.CreateDummyTroopRoster()
+                : CloneWithXp(opponent.MemberRoster);
             _prisonSnapshot = CloneWithXp(main.PrisonRoster);
             TrainingActive = true;
             _checkResults = true;
@@ -840,7 +1117,7 @@ namespace TrainingBattles
             CampaignMission.OpenBattleMission(ScoutMission.CreatePatchAwareRecord(sceneId));
         }
 
-        private MobileParty? CreateOpponentParty()
+        private MobileParty? CreateOpponentParty(bool mockEnemy)
         {
             try
             {
@@ -849,9 +1126,11 @@ namespace TrainingBattles
                 var clan = hideoutSettlement?.OwnerClan;
                 if (hideout == null || clan == null) return null;
                 var party = BanditPartyComponent.CreateBanditParty(
-                    OpponentPartyIdPrefix + "_" + DateTime.UtcNow.Ticks,
+                    (mockEnemy ? MockEnemyPartyIdPrefix : OpponentPartyIdPrefix) + "_" + DateTime.UtcNow.Ticks,
                     clan, hideout, isBossParty: false, null, MobileParty.MainParty.Position);
-                party.Party.SetCustomName(new TextObject("{=TB_opponents_name}Training Opponents"));
+                party.Party.SetCustomName(mockEnemy
+                    ? new TextObject("{=TB_mock_name}Mock Enemy")
+                    : new TextObject("{=TB_opponents_name}Training Opponents"));
                 party.SetPartyUsedByQuest(isActivelyUsed: true);
                 if (_config.UseOpponentBanner) ApplyOpponentLook(party, clan);
                 return party;
@@ -1071,9 +1350,11 @@ namespace TrainingBattles
             var opponent = _opponentParty;
             if (opponent != null)
             {
-                MergePartyBackIntoMain(opponent);
+                if (_opponentIsMockEnemy) MergeMockPrisonersHome(opponent); // phantoms dissolve, our men come home
+                else MergePartyBackIntoMain(opponent);
                 DestroyOpponentParty(opponent);
             }
+            _opponentIsMockEnemy = false;
             RestoreOpponentClanLook();
             // A drill that never happened is a drill nobody gets paid for.
             if (_chargedCost > 0)
@@ -1146,16 +1427,20 @@ namespace TrainingBattles
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;
             var prisonSnapshot = _prisonSnapshot;
+            var opponentWasMock = _opponentIsMockEnemy;
             _mainSnapshot = null;
             _opponentSnapshot = null;
             _prisonSnapshot = null;
             _opponentParty = null;
+            _opponentIsMockEnemy = false;
 
             // 1. Everyone comes home: survivors of the opposing half (and anyone who somehow ended
-            //    up a prisoner) rejoin the main party.
+            //    up a prisoner) rejoin the main party. A MOCK enemy's men are phantoms — they
+            //    dissolve with their party; only its prisoner wagons (ours, if anyone) come home.
             if (opponent != null)
             {
-                MergePartyBackIntoMain(opponent);
+                if (opponentWasMock) MergeMockPrisonersHome(opponent);
+                else MergePartyBackIntoMain(opponent);
                 DestroyOpponentParty(opponent);
             }
 
@@ -1163,11 +1448,12 @@ namespace TrainingBattles
             //     The reward model forbids that during training, but if any of our own slipped into
             //     the prisoner wagons anyway, walk them back to the ranks — only the ones the drill
             //     added (delta vs. the pre-battle prisoner snapshot; real prisoners stay prisoners).
+            //     (GetTroopRoster hands out the LIVE list — iterate a copy, the loop mutates it.)
             if (prisonSnapshot != null && mainSnapshot != null && opponentSnapshot != null)
             {
                 var prisonBefore = ToDictionary(prisonSnapshot);
                 var ours = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
-                foreach (var el in main.PrisonRoster.GetTroopRoster())
+                foreach (var el in new List<TroopRosterElement>(main.PrisonRoster.GetTroopRoster()))
                 {
                     var character = el.Character;
                     if (character == null || character.IsHero || !ours.ContainsKey(character)) continue;
@@ -1177,6 +1463,25 @@ namespace TrainingBattles
                     var extraWounded = Math.Min(Math.Max(el.WoundedNumber - was.Wounded, 0), extra);
                     main.PrisonRoster.AddToCounts(character, -extra, false, -extraWounded);
                     main.MemberRoster.AddToCounts(character, extra, false, extraWounded);
+                }
+            }
+
+            // 1b-mock. The reverse leak: phantoms WE "captured" would sit in the wagons as free
+            //     prisoners (recruits to press, bodies to sell). Sweep out exactly what the drill
+            //     added — a real prisoner of the same troop type from before the drill stays.
+            if (opponentWasMock && prisonSnapshot != null && mainSnapshot != null)
+            {
+                var prisonBefore = ToDictionary(prisonSnapshot);
+                var ownMen = ToDictionary(mainSnapshot);
+                foreach (var el in new List<TroopRosterElement>(main.PrisonRoster.GetTroopRoster()))
+                {
+                    var character = el.Character;
+                    if (character == null || character.IsHero || ownMen.ContainsKey(character)) continue;
+                    prisonBefore.TryGetValue(character, out var was);
+                    var extra = el.Number - was.Number;
+                    if (extra <= 0) continue;
+                    var extraWounded = Math.Min(Math.Max(el.WoundedNumber - was.Wounded, 0), extra);
+                    main.PrisonRoster.AddToCounts(character, -extra, false, -extraWounded);
                 }
             }
 
@@ -1300,7 +1605,9 @@ namespace TrainingBattles
             }
             _lastTrainingHours = (float)CampaignTime.Now.ToHours;
 
-            var summary = (playerWon ? "Your half carried the field. " : "The other half carried the field. ")
+            var summary = (opponentWasMock
+                    ? (playerWon ? "You carried the field. " : "The mock enemy carried the field. ")
+                    : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))
                 + (casualtiesTotal > 0
                     ? casualtiesTotal + " men fell or were hurt — " + woundedTotal + " wake up wounded, the rest shrug it off."
                     : "Not a man stayed down.")
@@ -1408,6 +1715,25 @@ namespace TrainingBattles
             catch { }
         }
 
+        /// <summary>The mock-enemy party's send-off: its MEMBERS are phantoms and dissolve with it,
+        /// but anyone in its prisoner wagons could only have been captured from OUR side — those
+        /// walk straight back into the ranks.</summary>
+        private static void MergeMockPrisonersHome(MobileParty party)
+        {
+            try
+            {
+                var main = MobileParty.MainParty;
+                foreach (var el in party.PrisonRoster.GetTroopRoster())
+                {
+                    if (el.Character == null) continue;
+                    main.MemberRoster.AddToCounts(el.Character, el.Number, false, el.WoundedNumber);
+                }
+                party.PrisonRoster.Clear();
+                party.MemberRoster.Clear();
+            }
+            catch { }
+        }
+
         private static void DestroyOpponentParty(MobileParty party)
         {
             try
@@ -1424,10 +1750,14 @@ namespace TrainingBattles
             try
             {
                 var stale = new List<MobileParty>();
+                var staleMock = new List<MobileParty>();
                 foreach (var party in MobileParty.All)
                 {
-                    if (party?.StringId != null && party.StringId.StartsWith(OpponentPartyIdPrefix, StringComparison.Ordinal))
+                    if (party?.StringId == null) continue;
+                    if (party.StringId.StartsWith(OpponentPartyIdPrefix, StringComparison.Ordinal))
                         stale.Add(party);
+                    else if (party.StringId.StartsWith(MockEnemyPartyIdPrefix, StringComparison.Ordinal))
+                        staleMock.Add(party);
                 }
                 foreach (var party in stale)
                 {
@@ -1435,6 +1765,15 @@ namespace TrainingBattles
                     DestroyOpponentParty(party);
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: an interrupted drill was found — the men have returned to the company."));
+                }
+                foreach (var party in staleMock)
+                {
+                    // Its men were never ours — merging them home would MINT free troops. The
+                    // phantoms dissolve; only its prisoner wagons (ours, if anyone) walk back.
+                    MergeMockPrisonersHome(party);
+                    DestroyOpponentParty(party);
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: an interrupted mock drill was found — the phantom enemy has dissolved."));
                 }
             }
             catch { }

@@ -2,12 +2,12 @@ BUGS:
 
 
 NEXT UPDATE:
-- [ ] Training against a custom-composed enemy (devmod/testing/fun)
-    Instead of splitting your own army, spawn a mock enemy of chosen composition (culture,
-    tiers, counts) to drill against specific threats. (Idea parked — V1 is army-splitting.)
-    Maybe this option should be marked as developer option but it is good to test the defence/attack against other parties and if the user wants to use it to see how they would fare agains an enemy army of diverse troops
-    I need this to be able to to proper tests
-- [ ] for V1 lets not have the Train Battle option, but have the scouting one, as this one shouldnt be hard to keep
+- [ ] Finish playtesting the mock-enemy drill. CONFIRMED by Anton (2026.07.23): a mock battle
+    works end-to-end — loot and the phantom troops disappeared as expected; and with the dev
+    toggle off the V1 default menu is scout-only, as designed. STILL UNTESTED: a deliberate
+    DEFEAT against the mock enemy (the capture/scatter guards on the losing path), mixing two
+    cultures (run the composer twice), and a skim of last_drill_report.txt after a mock drill
+    to confirm the XP/wounded arithmetic only touched our side.
 
 
 POST V1 or NOT FULLY DECIDED:
@@ -29,8 +29,26 @@ POST V1 or NOT FULLY DECIDED:
     "vanilla encounter menu" redesign: spawn the party visibly, let the vanilla encounter
     flow own attack/send-troops/leave, and move our aftermath fully onto MapEventEnded
     (the listener already exists since round 2). Pairs naturally with the commander task.
-- [ ] Training while leading an ARMY (V1 blocks it with an honest message) — split across
-    the whole army's parties, or at least allow the main party to drill beside the army.
+- [ ] Training while leading an ARMY (V1 blocks it with an honest message) — RESEARCH NOTES
+    READY (2026.07.23). The two vanilla wires that make armies hard: (1) PartyBase.
+    MapEventSide's setter CASCADES the event side to every AttachedParties member the moment
+    the leader's battle starts — there is no "just my party fights" switch; (2) MobileParty.
+    SetAttachedToInternal makes any party that attaches MID-event inherit the event side, so
+    stragglers rejoining would wander into a running drill. Lifting the block naively = other
+    lords' parties fight, take REAL casualties/clamp-destroyed XP/fugitive heroes, because the
+    aftermath only restores the main party. Three tiers, do B first:
+    - TIER B (recommended, 1–2 sessions): ARMY vs MOCK ENEMY — embrace the cascade (the whole
+      army joins against the phantoms; nobody crosses sides, no picker bookkeeping). Needs the
+      aftermath generalized per-party: CloneWithXp snapshot + fallen-restore + absolute XP
+      restore for EVERY friendly party in the event, per-party prisoner walk-back and loot
+      sweep, scattered heroes walked to their OWN parties. Reward-model guards are already
+      global while TrainingActive. This is Anton's "how would my army fare against X".
+    - TIER A (moderate, fiddly): main party drills BESIDE the army — detach AttachedParties
+      before StartBattle, re-attach after, guard re-attachment per tick; block the send-troops
+      sim path (it runs map time); member-of-army case is ugly, maybe leader-only.
+    - TIER C (hard, parked): split the ARMY against itself — Tier B's per-party aftermath PLUS
+      multi-party roster division and a real enemy command structure; overlaps the companion-
+      commander research below.
 - [ ] Garrison training at owned castles/towns
     Run training battles with the garrison of a castle/town the player owns — practice siege
     defense/assault on your own walls, maybe garrison vs. party mock sieges.

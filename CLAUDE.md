@@ -15,8 +15,13 @@ ground"; real-defense choice exists behind a toggle but stays strict-patch-only)
 any of those battlefields alone — a free walk-around mission, no battle, no cost. DATA
 TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
 ONE land scene, so vanilla's "random among variants" never fires — the wider terrain-type
-pool is what keeps the pickers alive. Later: garrison training at owned fiefs, and naval
-training battles.
+pool is what keeps the pickers alive. SCOPE (settled 2026.07.23 after one reversal): the
+split-army drill is THE CORE — always on, its `EnableSplitTraining` key lives in config.json
+as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; scout-only
+players simply don't drill). `EnableMockEnemyTraining` (default OFF, the one MCM "Features"
+toggle) adds the second drill mode: compose a phantom enemy of any culture/mix from
+synthetic troop pools and fight the whole company against it — the test bench for the
+battle pipeline. Later: garrison training at owned fiefs, and naval training battles.
 
 ## Who does what — and how we work
 
@@ -95,7 +100,11 @@ party until battle truly begins) → Begin attack/defend moves the picked men in
 bandit-component "Training Opponents" party and runs the Company-of-Trouble recipe → after the
 mission the menu's re-init runs the aftermath (merge home, resurrect the fallen via
 AftermathMath + the game's surgeon math, scale XP, disorganize, stamp cooldown) → summary
-message, menu exits.
+message, menu exits. The MOCK-ENEMY mode rides the same rails with phantoms: culture inquiry →
+same party screen over a synthetic 500-per-troop pool → fresh troops into a `training_mock_enemy_*`
+party that is NEVER merged home (stale recovery destroys, not merges — merging would mint free
+troops), empty opponent snapshot keeps the aftermath to our side, and a delta sweep removes any
+"captured" phantoms from the prisoner wagons.
 
 Conventions carried over from ImmersiveAI: **Core = pure and unit-tested, Module = game
 glue**; raw game-API research goes through ilspycmd/decompilation of the real game DLLs when
