@@ -32,25 +32,30 @@ What a real general does before the battle: know the field.
   have to fight there. If the map is good but the lines are bad, take another map or move.
 - **The scouted lines are the drilled lines** — training battles and the scout preview use
   the same deterministic deployment recipe (the game's own map-patch machinery), so what
-  you scouted is what you get. In a *real* defence the ground holds, but the enemy's
-  approach direction decides which end is theirs — the mod tells you so, honestly.
-- **Choose your ground when defending** (toggleable) — when you're the defender in a real
-  field battle and more than one scene truly fits your map patch, the encounter menu offers
-  the choice. (With the vanilla scene data each patch is claimed by exactly one scene, so
-  this mostly matters with scene-pack mods.)
+  you scouted is what you get.
+- **Survey & scout in REAL battles** *(a must-have pillar — toggleable per side, both on by
+  default)* — when a real field battle is about to start, the encounter menu offers the same
+  two tools, defending **or** attacking:
+  - **Survey the ground** — pick the battlefield from the local terrain's variants (your
+    true ground marked *"this ground"*), or leave it to fate.
+  - **Scout the battlefield** — ride the field alone *before committing to the fight*. And
+    here the preview is **exact**: both armies stand frozen on the map, so the attacker's
+    true approach direction is already known — the lines, ends, and facings you scout are
+    precisely the ones the battle will use. No time passes; the fight waits for your return.
 
 ## The knobs
 
 Every parameter lives in a JSON config
 (`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod
 Configuration Menu (MCM)** — XP kept %, wounded %, cooldown hours, disorganized toggle,
-defender ground choice, hotkey (default `G` on the campaign map).
+the real-battle survey/scout toggles (defending and attacking separately), hotkey
+(default `G` on the campaign map).
 
 ## Status
 
 The V1 core loop is **playtested and working** (divide → fight → nobody dies, wounded
-filtered through the surgeon, XP banked, disorganized, cooldown). The ground pickers and
-the scouting ride are built and awaiting playtest. See [TASKS_TODO.md](TASKS_TODO.md) for
+filtered through the surgeon, XP banked, disorganized, cooldown). The real-battle
+survey/scout tools are built and awaiting playtest. See [TASKS_TODO.md](TASKS_TODO.md) for
 what's next: paying salaries for drills, scouting with companions, garrison training,
 naval training battles (War Sails).
 

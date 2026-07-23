@@ -11,7 +11,7 @@ namespace TrainingBattles.Models
     /// before us — vanilla's, or another mod's: the game's own AddModel hands us the previous
     /// model as <c>BaseModel</c>, so we decorate the chain instead of replacing it. The choice
     /// is consumed on read and additionally cleared when the player's map event ends (see
-    /// <see cref="DefendGroundBehavior"/>), so it can never leak into an unrelated battle.
+    /// <see cref="RealBattleGroundBehavior"/>), so it can never leak into an unrelated battle.
     /// </summary>
     public sealed class TrainingBattlesSceneModel : SceneModel
     {

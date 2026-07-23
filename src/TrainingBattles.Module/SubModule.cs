@@ -23,8 +23,9 @@ namespace TrainingBattles
                 // If MCM was not yet ready when the main menu came up, bind it now (no-op once bound).
                 Mcm.McmBridge.TryBind(config);
                 starter.AddBehavior(new TrainingBattleBehavior(config));
-                // Pick your ground when defending a real field battle (same picker as training).
-                starter.AddBehavior(new DefendGroundBehavior(config));
+                // Survey (pick) and scout the ground on a real field battle's encounter menu,
+                // defending or attacking (same picker and scout ride as training).
+                starter.AddBehavior(new RealBattleGroundBehavior(config));
                 // The "it was only training" guard: zero renown/loot/prisoners while a drill runs.
                 starter.AddModel(new Models.TrainingBattleRewardModel());
                 // The ground-choice gate: hands out the player's chosen battlefield, else

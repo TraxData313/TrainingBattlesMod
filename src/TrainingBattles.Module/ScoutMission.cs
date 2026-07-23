@@ -29,9 +29,11 @@ namespace TrainingBattles
     /// when the mission record carries map-patch data, the deployment spawn path and both sides'
     /// ends are chosen DETERMINISTICALLY from the encounter position and direction — no dice.
     /// Without patch data (what training battles passed before this), vanilla picks a RANDOM path
-    /// and pivot. So scout and drill share <see cref="CreatePatchAwareRecord"/>: same scene, same
-    /// map spot, same fixed approach direction — identical lines. A REAL defence keeps the ground
-    /// but the enemy's true approach direction picks the path ends, which can differ.
+    /// and pivot. So scout and drill share <see cref="CreatePatchAwareRecord(string)"/>: same
+    /// scene, same map spot, same fixed approach direction — identical lines. A REAL battle's
+    /// direction comes from where the attacker actually stands — and the encounter-menu scout
+    /// (<see cref="OpenForRealEncounter"/>) passes exactly that, so scouting an imminent battle
+    /// previews its true lines, ends and facings included.
     /// </summary>
     internal static class ScoutMission
     {
@@ -49,6 +51,12 @@ namespace TrainingBattles
         /// real field battles (MenuHelper.EncounterAttackConsequence), so deployment is computed
         /// deterministically and the scouted lines are the drilled lines.</summary>
         public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId)
+            => CreatePatchAwareRecord(sceneId, AssumedEncounterDirection);
+
+        /// <summary>Same record with an explicit approach direction — a REAL encounter's scout
+        /// passes the true attacker-to-defender direction (vanilla's own formula), so the previewed
+        /// path ends are the coming battle's, not the drill's assumed ones.</summary>
+        public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId, Vec2 encounterDirection)
         {
             var position = MobileParty.MainParty.Position;
             var wrapper = Campaign.Current.MapSceneWrapper;
@@ -66,13 +74,27 @@ namespace TrainingBattles
                 SceneHasMapPatch = true,
                 DecalAtlasGroup = 2,
                 PatchCoordinates = patch.normalizedCoordinates,
-                PatchEncounterDir = AssumedEncounterDirection,
+                PatchEncounterDir = encounterDirection,
             };
         }
 
+        /// <summary>The training/muster scout: assumed approach direction, the player previews the
+        /// defender's line (a drill later forms exactly these lines).</summary>
         public static void Open(string sceneId)
+            => Open(sceneId, AssumedEncounterDirection, BattleSideEnum.Defender, realEncounter: false);
+
+        /// <summary>The REAL-encounter scout, launched from the encounter menu while the armies
+        /// stand facing each other: the true approach direction and the player's true side, so the
+        /// ride previews the exact lines and facings of the imminent battle. The encounter and its
+        /// map event are left untouched — campaign time is frozen inside missions, and on leaving
+        /// the ride the encounter menu re-activates (the same mission-under-a-menu shape as
+        /// vanilla's pre-battle conversation).</summary>
+        public static void OpenForRealEncounter(string sceneId, BattleSideEnum playerSide, Vec2 encounterDirection)
+            => Open(sceneId, encounterDirection, playerSide, realEncounter: true);
+
+        private static void Open(string sceneId, Vec2 encounterDirection, BattleSideEnum playerSide, bool realEncounter)
         {
-            var rec = CreatePatchAwareRecord(sceneId);
+            var rec = CreatePatchAwareRecord(sceneId, encounterDirection);
             MissionState.OpenNew(MissionName, rec, _ => new MissionBehavior[]
             {
                 new MissionOptionsComponent(),
@@ -82,7 +104,7 @@ namespace TrainingBattles
                 new MissionBoundaryPlacer(),
                 new MissionBoundaryCrossingHandler(10f),
                 new EquipmentControllerLeaveLogic(),
-                new ScoutMissionLogic(),
+                new ScoutMissionLogic(playerSide, realEncounter),
             });
         }
     }
@@ -92,6 +114,20 @@ namespace TrainingBattles
     /// hardcoded test horseman.</summary>
     internal sealed class ScoutMissionLogic : MissionLogic
     {
+        private readonly BattleSideEnum _playerSide;
+        private readonly bool _realEncounter;
+
+        /// <param name="playerSide">Whose line the player stands on. The muster scout always
+        /// previews the defender's; a real encounter passes the player's true side.</param>
+        /// <param name="realEncounter">True when scouting an IMMINENT battle from the encounter
+        /// menu — the record then carries the enemy's true approach, so the report may promise
+        /// the lines instead of hedging.</param>
+        public ScoutMissionLogic(BattleSideEnum playerSide = BattleSideEnum.Defender, bool realEncounter = false)
+        {
+            _playerSide = playerSide;
+            _realEncounter = realEncounter;
+        }
+
         public override void AfterStart()
         {
             base.AfterStart();
@@ -102,12 +138,18 @@ namespace TrainingBattles
             if (TryGetDeploymentLines(out var defenderFrame, out var attackerFrame))
             {
                 // The commander's preview: stand ON your line, look at theirs.
-                frame = defenderFrame;
-                var toEnemy = attackerFrame.origin.AsVec2 - defenderFrame.origin.AsVec2;
+                var ownFrame = _playerSide == BattleSideEnum.Attacker ? attackerFrame : defenderFrame;
+                var enemyFrame = _playerSide == BattleSideEnum.Attacker ? defenderFrame : attackerFrame;
+                frame = ownFrame;
+                var toEnemy = enemyFrame.origin.AsVec2 - ownFrame.origin.AsVec2;
                 direction = toEnemy.Normalized();
-                deploymentReport = "You stand where YOUR line would form — the enemy's line is about "
-                    + (int)toEnemy.Length + " paces ahead. A drill here forms exactly these lines; "
-                    + "in a real defence the enemy's approach decides which end is theirs.";
+                deploymentReport = _realEncounter
+                    ? "You stand where YOUR line will form — the enemy's line is about "
+                        + (int)toEnemy.Length + " paces ahead. Their approach is known, so these "
+                        + "are the true lines and facings of the coming battle."
+                    : "You stand where YOUR line would form — the enemy's line is about "
+                        + (int)toEnemy.Length + " paces ahead. A drill here forms exactly these lines; "
+                        + "in a real defence the enemy's approach decides which end is theirs.";
             }
             else
             {

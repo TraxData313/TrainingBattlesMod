@@ -61,20 +61,25 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Pacing", GroupOrder = 2)]
         public bool AutoSplitInHalf { get; set; } = true;
 
-        [SettingPropertyBool("Training banner for the opposing half", Order = 1, RequireRestart = false,
+        [SettingPropertyBool("Survey & scout ground when defending", Order = 0, RequireRestart = false,
+            HintText = "When you DEFEND a real field battle, the encounter menu lets you pick the battlefield (the local terrain's variants, your true ground marked) and scout it alone before the fight — the previewed lines are the coming battle's true ones. Default on.")]
+        [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
+        public bool ChooseGroundWhenDefending { get; set; } = true;
+
+        [SettingPropertyBool("Survey & scout ground when attacking", Order = 1, RequireRestart = false,
+            HintText = "The same battlefield choice and lone scout ride when you ATTACK a real field battle — walk the field before ordering the assault. Default on.")]
+        [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
+        public bool ChooseGroundWhenAttacking { get; set; } = true;
+
+        [SettingPropertyBool("Training banner for the opposing half", Order = 2, RequireRestart = false,
             HintText = "The opposing half flies the training banner and its colors instead of random bandit colors. Default on.")]
         [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
         public bool UseOpponentBanner { get; set; } = true;
 
-        [SettingPropertyText("Opponent banner code", Order = 2, RequireRestart = false,
+        [SettingPropertyText("Opponent banner code", Order = 3, RequireRestart = false,
             HintText = "The opposing half's banner, as a banner code (copy one from the game's banner editor with Ctrl+C). Default: orange field, white cross.")]
         [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
         public string OpponentBannerCode { get; set; } = ModConfig.DefaultOpponentBannerCode;
-
-        [SettingPropertyBool("Choose ground when defending", Order = 0, RequireRestart = false,
-            HintText = "When you DEFEND a real field battle, the encounter menu offers a choice among the battlefield variants the game would pick from at random. Default on.")]
-        [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
-        public bool ChooseGroundWhenDefending { get; set; } = true;
 
         [SettingPropertyDropdown("Open-menu key", Order = 0, RequireRestart = false,
             HintText = "Campaign-map key for the training muster. Default G (T is the vanilla combat log).")]

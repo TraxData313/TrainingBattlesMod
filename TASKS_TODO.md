@@ -2,6 +2,18 @@ BUGS:
 
 
 NEXT UPDATE:
+- [ ] Playtest the real-battle ground tools with the LUDA SAVE (Anton has a save just before
+    Luda's party closes in to attack). What to check, in order of risk:
+    1. THE BIG ONE — "Scout the battlefield" from the encounter menu, then LEAVE the ride
+       (hold Tab): the encounter menu must come back with Attack!/Try to get away intact and
+       the map event unharmed (the mission-under-a-menu shape vanilla's pre-battle
+       conversation uses; ours is the first non-conversation tenant). If the menu comes back
+       wrong or the fight auto-starts, the scout option gets pulled from real encounters.
+    2. "Survey the ground" as DEFENDER: pick a non-local scene, Attack!, confirm the battle
+       opens on the picked scene; also confirm walking away (Try to get away) clears the pick.
+    3. Scout precision: scout, note the lines, then fight — the real deployment should match
+       the scouted lines exactly (same ends, same facing).
+    4. The same two options when the PLAYER attacks someone (toggle "when attacking").
 - [ ] Finish playtesting the mock-enemy drill. CONFIRMED by Anton (2026.07.23): a mock battle
     works end-to-end — loot and the phantom troops disappeared as expected; and with the dev
     toggle off the V1 default menu is scout-only, as designed. STILL UNTESTED: a deliberate

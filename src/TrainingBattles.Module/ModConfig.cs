@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 6;
+        public int ConfigVersion { get; set; } = 7;
 
         /// <summary>The split-army drill: divide your own company in two and fight yourself —
         /// THE CORE OF THE MOD, on by default and deliberately NOT in the MCM menu (Anton,
@@ -84,11 +84,18 @@ namespace TrainingBattles
         /// ("T" was the v1 default until it turned out vanilla uses T for the combat log).</summary>
         public string OpenMenuHotkey { get; set; } = "G";
 
-        /// <summary>When the player DEFENDS a real field battle, the encounter menu offers a
-        /// choice among the battlefield variants the game would otherwise pick from at random —
-        /// you chose where to stand and wait, so you choose the ground. The attacker always gets
-        /// vanilla's pick. Default true.</summary>
+        /// <summary>When the player DEFENDS a real field battle, the encounter menu offers the
+        /// ground tools: SURVEY (pick the battlefield from the same wider same-terrain pool the
+        /// training muster offers, the true local ground marked) and SCOUT (ride the field alone
+        /// before committing — the armies stand frozen, so the previewed lines and facings are the
+        /// coming battle's true ones). You chose where to stand and wait, so the ground is yours.
+        /// Default true.</summary>
         public bool ChooseGroundWhenDefending { get; set; } = true;
+
+        /// <summary>The same ground tools when the player ATTACKS a real field battle — Anton's
+        /// must-have (2026.07.23): the commander walks the field before ordering the assault.
+        /// Default true.</summary>
+        public bool ChooseGroundWhenAttacking { get; set; } = true;
 
         // ------------------------------------------------------------------
 
@@ -164,7 +171,9 @@ namespace TrainingBattles
             // because that was v5's short-lived default, so the migration flips it back on.
             if (ConfigVersion < 6)
                 EnableSplitTraining = true;
-            ConfigVersion = 6;
+            // v7 added ChooseGroundWhenAttacking (default true) and widened the real-battle
+            // ground tools to the terrain pool — new key with a safe default, nothing to migrate.
+            ConfigVersion = 7;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

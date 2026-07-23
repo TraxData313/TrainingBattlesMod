@@ -10,9 +10,14 @@ against themselves on the real terrain of their current map position. Afterward 
 dies: the "dead" become wounded (the surgeon's Medicine skill softening it), earned XP is
 kept at a configurable percent (default 75), the army goes disorganized, and a cooldown
 (default 24h) gates the next drill. Since 2026.07.23 the player can also CHOOSE the
-battlefield (training: any scene of the local terrain type, the patch's own marked "this
-ground"; real-defense choice exists behind a toggle but stays strict-patch-only) and SCOUT
-any of those battlefields alone — a free walk-around mission, no battle, no cost. DATA
+battlefield and SCOUT it alone — a free walk-around mission, no battle, no cost — from TWO
+doors: the training muster (any scene of the local terrain type, the patch's own marked
+"this ground"), and a REAL field battle's encounter menu, defending or attacking (a per-side
+toggle each, both default on; Anton's must-have of 2026.07.23 — this superseded the earlier
+"real battles stay strict-patch-only" call, which one-scene-per-patch data had made an
+option that never appeared). The real-encounter scout is EXACT: both armies stand frozen,
+so the true attacker→defender direction is known and the previewed lines/ends/facings are
+the coming battle's own. DATA
 TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
 ONE land scene, so vanilla's "random among variants" never fires — the wider terrain-type
 pool is what keeps the pickers alive. SCOPE (settled 2026.07.23 after one reversal): the
@@ -70,8 +75,10 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               cooldown, stale-party recovery — read its class doc first
   BattleSceneCatalog.cs       battlefield candidates for a position: strict patch chain +
                               the wider same-terrain pool + the shared ground-picker inquiry
-  DefendGroundBehavior.cs     "Survey the ground" on vanilla's encounter menu when the
-                              player DEFENDS a real field battle (toggleable)
+  RealBattleGroundBehavior.cs "Survey the ground" (pick it) + "Scout the battlefield" (ride
+                              it alone — exact lines, the true approach direction is known)
+                              on vanilla's encounter menu for real field battles, defender
+                              and attacker each behind their own toggle
   ScoutMission.cs             the scouting ride: enter any battlefield alone (no battle, no
                               encounter) — own behavior list; spawns the player ON the defender
                               deployment line (BattleSpawnPathSelector is deterministic WITH

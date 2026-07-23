@@ -72,6 +72,7 @@ namespace TrainingBattles.Mcm
             s.UseOpponentBanner = c.UseOpponentBanner;
             s.OpponentBannerCode = c.OpponentBannerCode;
             s.ChooseGroundWhenDefending = c.ChooseGroundWhenDefending;
+            s.ChooseGroundWhenAttacking = c.ChooseGroundWhenAttacking;
             SelectOrAdd(s.OpenMenuHotkey, c.OpenMenuHotkey);
         }
 
@@ -90,6 +91,7 @@ namespace TrainingBattles.Mcm
             c.OpponentBannerCode = string.IsNullOrWhiteSpace(s.OpponentBannerCode)
                 ? c.OpponentBannerCode : s.OpponentBannerCode;
             c.ChooseGroundWhenDefending = s.ChooseGroundWhenDefending;
+            c.ChooseGroundWhenAttacking = s.ChooseGroundWhenAttacking;
             c.OpenMenuHotkey = s.OpenMenuHotkey.SelectedValue ?? c.OpenMenuHotkey;
         }
 
