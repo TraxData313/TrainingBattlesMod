@@ -81,6 +81,23 @@ glue**; raw game-API research goes through ilspycmd/decompilation of the real ga
 docs are missing; `dotnet test` after touching Core; close the game (or sit at the main menu)
 before deploying or the DLL is locked.
 
+**TaleWorlds footguns learned the hard way (blood was spilled for each line):**
+- `TroopRoster.CloneRosterData()` silently DROPS each stack's Xp (copies counts/wounded
+  only). Use the behavior's `CloneWithXp` whenever XP matters — a zero-XP snapshot cost
+  Anton's parties 25% of their stored upgrades per drill for three playtest rounds.
+- `PartyBase.OnXpChanged` clamps a stack's XP to (men × max upgrade cost) on every XP
+  write — battle deaths silently destroy the fallen men's stored upgrade progress; restore
+  men BEFORE writing XP.
+- Vanilla's encounter state machine owns every non-happy battle path (auto-resolve wrap,
+  retreat, defeat). Never wait for its menus: finalize from the tick, and kill the map
+  event POSITIVELY (`SetOverrideWinner` + `PlayerEncounter.Finish` + bounded menu pops) or
+  a lingering encounter menu restarts the fight as a pure vanilla battle with all
+  protections disarmed. Vanilla's "leave" consequence even simulates one real combat round.
+- `isLeave` on a GameMenuOption only styles it — exiting the menu is the consequence's job
+  (`GameMenu.ExitToLast`).
+- The party-screen closed callback fires MID state-transition — never touch menus inside
+  it; set a flag and act on the next tick.
+
 ## Build & deploy
 
 ```powershell

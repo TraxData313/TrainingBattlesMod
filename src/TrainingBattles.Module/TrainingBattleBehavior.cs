@@ -460,9 +460,12 @@ namespace TrainingBattles
 
             _opponentParty = opponent;
             _pickedTeam = null;
-            _mainSnapshot = main.MemberRoster.CloneRosterData();
-            _opponentSnapshot = opponent.MemberRoster.CloneRosterData();
-            _prisonSnapshot = main.PrisonRoster.CloneRosterData();
+            // NOT CloneRosterData: the game's clone silently drops each stack's Xp (counts and
+            // wounded only) — zeroed snapshots made the aftermath treat the ENTIRE pool as "drill
+            // earnings" and tax it to the kept-percent, eating stored upgrades every training.
+            _mainSnapshot = CloneWithXp(main.MemberRoster);
+            _opponentSnapshot = CloneWithXp(opponent.MemberRoster);
+            _prisonSnapshot = CloneWithXp(main.PrisonRoster);
             TrainingActive = true;
             _checkResults = true;
             _aftermathReady = false;
@@ -714,6 +717,21 @@ namespace TrainingBattles
             public int Number { get; }
             public int Wounded { get; }
             public int Xp { get; }
+        }
+
+        /// <summary>A roster clone that keeps each stack's XP. The game's own
+        /// <c>CloneRosterData</c> copies counts and wounded but silently DROPS Xp — snapshots made
+        /// with it read as zero-XP and poison every downstream XP computation.</summary>
+        private static TroopRoster CloneWithXp(TroopRoster source)
+        {
+            var clone = TroopRoster.CreateDummyTroopRoster();
+            if (source == null) return clone;
+            foreach (var el in source.GetTroopRoster())
+            {
+                if (el.Character == null) continue;
+                clone.AddToCounts(el.Character, el.Number, false, el.WoundedNumber, el.Xp);
+            }
+            return clone;
         }
 
         private static Dictionary<CharacterObject, RosterLine> ToDictionary(TroopRoster roster)
