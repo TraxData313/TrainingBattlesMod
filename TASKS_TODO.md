@@ -14,6 +14,16 @@ NEXT UPDATE:
     3. Scout precision: scout, note the lines, then fight — the real deployment should match
        the scouted lines exactly (same ends, same facing).
     4. The same two options when the PLAYER attacks someone (toggle "when attacking").
+    5. ARMY battles (Anton's ask, VERIFIED IN CODE 2026.07.23 — every army road leads to the
+       same "encounter" menu our options live on: "Attack army" on the army_encounter menu
+       is just SwitchToMenu("encounter"), and join_encounter's help-a-side does
+       PlayerEncounter.JoinBattle then SwitchToMenu("encounter"); the side gate, the scene
+       query and the direction formula — AttackerSide.LeaderParty, i.e. the army leader —
+       are all army-agnostic, so no code was needed). Confirm in play: survey+scout appear
+       when the player's ARMY fights a field battle, as leader and as a mere member, and
+       the chosen scene sticks. Note: as an army MEMBER the tools still show (the player
+       fights the mission either way) — if that feels like overreach, an "army leader only"
+       gate is a one-line decision.
 - [ ] Finish playtesting the mock-enemy drill. CONFIRMED by Anton (2026.07.23): a mock battle
     works end-to-end — loot and the phantom troops disappeared as expected; and with the dev
     toggle off the V1 default menu is scout-only, as designed. STILL UNTESTED: a deliberate
