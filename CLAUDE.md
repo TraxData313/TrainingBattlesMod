@@ -78,21 +78,34 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 Game path and MCM path live in `Directory.Build.props`; personal overrides go in
 `Directory.Build.props.user` (git-ignored via `*.user`).
 
-## Design notes so far (pre-code)
+## Design (researched 2026.07.23 — READ docs/training-battle-research.md FIRST)
 
-- **Picker GUI**: model it on the lair-attack "send troops" troop selection screen — find the
-  vanilla screen/VM it uses and either reuse or clone the pattern. Must support assigning
-  heroes (including the player) to sides.
-- **The mock battle**: likely a custom MapEvent/encounter between the player's party and a
-  temporary "mirror" party holding Team 2's roster, so the vanilla encounter menu (fight /
-  send troops / try to escape) comes for free; "Cancel training" tears the temporary party
-  and event down. Simulation details (XP flow, casualty interception) are the heart of the
-  research — casualty interception probably via the battle's `MapEventSide`/`TroopRoster`
-  results or a Harmony touch on the casualty application, decided when the real APIs are on
-  the table.
-- **Aftermath**: apply XP with `TrainingXpPercent`; convert kills to wounded with
-  `TrainingDeathToWoundedFactor` scaled by the surgeon's Medicine; set the disorganized
-  state the same way vanilla does after battles; start the cooldown clock
-  (`TrainingCooldownHours`, 0 = off).
-- **Terrain picking (later)**: research how the game maps a world position to battle scenes
-  (scene variants per terrain type) — the training door first, the real-defense door after.
+The feasibility research is DONE and verified against this game version's decompiled DLLs.
+The full write-up with code snippets is **docs/training-battle-research.md**; TASKS_DONE has
+the narrative. The shape of V1:
+
+- **Picker GUI**: `PartyScreenHelper.OpenScreenWithDummyRosterWithMainParty` (namespace
+  `Helpers`, TaleWorlds.CampaignSystem) — the lair/alley/quest "pick your men" screen; heroes
+  transferable, Cancel delegate built in.
+- **The mock battle**: copy the Company of Trouble quest recipe
+  (`LandLordCompanyOfTroubleIssueBehavior` in the decompiled corpus): temp party from the
+  player's own troops via `BanditPartyComponent.CreateBanditParty` + `SetPartyUsedByQuest`,
+  our own GameMenu owning the flow, `PlayerEncounter.Start/SetupFields/StartBattle`,
+  `CampaignMission.OpenBattleMission(SceneModel.GetBattleSceneForMapPatch(...))`, then read
+  `PlayerEncounter.Battle.WinningSide`, `Finish()`, `DestroyPartyAction`.
+- **Aftermath**: roster snapshot/diff (`CloneRosterData`, `AddToCounts` with wounded+xp
+  args); dead→wounded via `PartyHealingModel.GetSurvivalChance` × config factor +
+  `SkillLevelingManager.OnSurgeryApplied`; XP delta × `TrainingXpPercent`;
+  `MobileParty.SetDisorganized(true)`; a `BattleRewardModel` override zeroing
+  renown/influence while training. Cooldown timestamp via `SyncData` primitive.
+- **Terrain picking**: custom `SceneModel` override; candidates enumerable from
+  `GameSceneDataManager.Instance.SingleplayerBattleScenes` filtered by the current map
+  patch's `sceneIndex`. Same override later powers real-defense ground choice and naval.
+- **Top playtest risks** (research doc §6): companions riding the temp Team-2 party;
+  defeat path must never reach capture; XP-on-roster confirmation; loot residue.
+
+**Decompiled game source** (this exact game version): `..\reference\game-decompiled\`
+(CampaignSystem, SandBox, MountAndBlade). Regenerate: `ilspycmd -p -o <out> <dll>` with
+`$env:DOTNET_ROLL_FORWARD='LatestMajor'`; SandBox.dll is under
+`Modules\SandBox\bin\Win64_Shipping_Client`. Consult freely — it is the ground truth for
+this game version's APIs.
