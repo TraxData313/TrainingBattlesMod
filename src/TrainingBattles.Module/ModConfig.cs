@@ -20,11 +20,12 @@ namespace TrainingBattles
         /// revisit before a public release whether 75 is the better shipping default.</summary>
         public int XpKeptPercent { get; set; } = 100;
 
-        /// <summary>Of the men who "fell" in training and whom the surgeon could not patch up on the
-        /// spot, this percent (0..100) wake up truly WOUNDED; the rest shrug it off. The surgeon's
-        /// save uses the game's own Medicine-driven survival chance first — a good doctor helps.
-        /// Default 50 (Anton's "reduced by 2"). Nobody ever dies in training.</summary>
-        public int WoundedPercent { get; set; } = 50;
+        /// <summary>Of ALL the drill's casualties (the "dead" and the battle-wounded alike) whom the
+        /// surgeon could not patch up on the spot, this percent (0..100) wake up truly WOUNDED; the
+        /// rest shrug it off. The surgeon's save uses the game's own Medicine-driven survival chance
+        /// first — a good doctor helps. Default 10 (Anton's testing call, 2026.07.23). Nobody ever
+        /// dies in training.</summary>
+        public int WoundedPercent { get; set; } = 10;
 
         /// <summary>In-game hours between training battles (0 = unlimited). Default 24.</summary>
         public int CooldownHours { get; set; } = 24;

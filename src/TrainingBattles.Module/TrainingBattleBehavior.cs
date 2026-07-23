@@ -634,6 +634,7 @@ namespace TrainingBattles
             //    the men come back FIRST (raising the clamp ceiling to full), then each stack's XP
             //    is SET to its pre-battle pool plus the kept share of what the drill visibly earned.
             var restored = 0;
+            var casualtiesTotal = 0;
             var woundedTotal = 0;
             var xpRestored = 0;
             var xpKeptFromDrill = 0;
@@ -647,16 +648,30 @@ namespace TrainingBattles
                     if (character == null || character.IsHero) continue; // heroes never die here; game wounds them
                     after.TryGetValue(character, out var now);
 
+                    // EVERY casualty of the drill goes through the wounded filter — the truly dead
+                    // AND the battle-wounded. The game's own surgeon converts most mission "KIA"
+                    // into roster-wounded before we ever run (high Medicine = high conversion), so
+                    // filtering only the dead let vanilla's wounded sail past the WoundedPercent
+                    // knob entirely (Anton: 14 KIA at 10% → 14 wounded).
                     var fallen = pair.Value.Number - now.Number;
-                    if (fallen > 0)
+                    var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
+                    var casualties = Math.Max(fallen, 0) + newWounded;
+                    if (casualties > 0)
                     {
                         var saveChance = SurgeonSaveChance(main.Party, character);
-                        var wounded = AftermathMath.WoundedAmongFallen(
-                            fallen, saveChance, _config.WoundedPercent / 100.0, () => MBRandom.RandomFloat);
-                        main.MemberRoster.AddToCounts(character, fallen, false, wounded);
-                        restored += fallen;
-                        woundedTotal += wounded;
-                        CreditSurgeon(main, character, fallen);
+                        var woundedFinal = AftermathMath.WoundedAmongFallen(
+                            casualties, saveChance, _config.WoundedPercent / 100.0, () => MBRandom.RandomFloat);
+                        if (fallen > 0)
+                            main.MemberRoster.AddToCounts(character, fallen, false, 0); // men back first
+                        var finalNumber = now.Number + Math.Max(fallen, 0);
+                        var desiredWounded = Math.Min(pair.Value.Wounded + woundedFinal, finalNumber);
+                        var woundedAdjust = desiredWounded - now.Wounded;
+                        if (woundedAdjust != 0)
+                            main.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
+                        restored += Math.Max(fallen, 0);
+                        casualtiesTotal += casualties;
+                        woundedTotal += woundedFinal;
+                        CreditSurgeon(main, character, casualties);
                     }
 
                     // Visible earnings only — anything the clamp already ate mid-battle counts as
@@ -680,8 +695,8 @@ namespace TrainingBattles
             _lastTrainingHours = (float)CampaignTime.Now.ToHours;
 
             var summary = (playerWon ? "Your half carried the field. " : "The other half carried the field. ")
-                + (restored > 0
-                    ? restored + " fallen picked themselves up — " + woundedTotal + " carried to the wagons wounded."
+                + (casualtiesTotal > 0
+                    ? casualtiesTotal + " men fell or were hurt — " + woundedTotal + " wake up wounded, the rest shrug it off."
                     : "Not a man stayed down.")
                 + " Drill XP kept: " + xpKeptFromDrill
                 + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".");

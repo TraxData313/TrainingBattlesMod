@@ -27,9 +27,9 @@ namespace TrainingBattles.Mcm
         public int XpKeptPercent { get; set; } = 100;
 
         [SettingPropertyInteger("Wounded among the fallen (%)", 0, 100, "0'%'", Order = 1, RequireRestart = false,
-            HintText = "Fallen men your surgeon cannot save wake wounded at this rate; the rest shrug it off. Medicine skill helps. Default 50.")]
+            HintText = "Drill casualties your surgeon cannot save wake wounded at this rate; the rest shrug it off. Medicine skill helps. Default 10.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
-        public int WoundedPercent { get; set; } = 50;
+        public int WoundedPercent { get; set; } = 10;
 
         [SettingPropertyBool("Disorganized after training", Order = 2, RequireRestart = false,
             HintText = "The party is disorganized for a while after a drill. Default on.")]
