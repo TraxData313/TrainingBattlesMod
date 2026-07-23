@@ -1,21 +1,18 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] Playtest round 3 (build ready; installs itself the moment the game is closed — a
-    watcher retries the deploy every 30s. If in doubt, run tools\deploy.ps1 by hand with
-    the game closed, then restart the game):
-    1. The aftermath is now IMMEDIATE and menu-independent — the instant the fight is
-       decided (fought, hill-watched, or captured) the training wraps itself up; vanilla's
-       "capture opponent / leave" screen should no longer stick around, and RETREATING from
-       the mission now honestly ends the drill (no re-attack screen, no swinging at air).
-    2. The summary line now prints "Drill XP kept: N (and M upgrade XP restored)" — THE
-       verification for the battle-sisters upgrade bug. Check waiting upgrades before vs
-       after on both the fought path AND the hill-watch path.
-    3. Defeat: no member scatter, no gold loss, and the captured→released flash should be
-       gone (the aftermath cuts in before the capture wrap).
-    4. Round 2 items if not yet seen: hotkey now G; MCM tooltips fit; hill-watch works.
-    Still open from round 1: companions on the opposing half; surgeon Medicine visibly
-    reducing wounded.
+- [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —
+    XP: "super" per Anton, wounded knob: 42 casualties → 3 wounded at 10% with the whole
+    arithmetic confirmed in last_drill_report.txt, incl. +7.9k/+7.4k XP restored on two
+    fully wiped stacks; retreat/cancel end the drill cleanly):
+    1. Companions sent to the opposing half — do they fight, and come home clean?
+    2. LOSE on purpose with the current build — defeat must end at the summary, no capture
+       flash, no member scatter.
+    3. The earlier 22-KIA→7-wounded outlier: if a weird wounded count ever shows again,
+       read Configs\TrainingBattles\last_drill_report.txt — it names the source.
+- [ ] Decide the shipping defaults before any public release: XpKept 100 vs 75, Wounded 10
+    vs higher, and whether the surgeon's save should stack with the WoundedPercent knob
+    (today it does — the effective wounded rate is BELOW the knob when the doctor is good).
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
     Choose one of the companions sent across to LEAD the other party (and with none picked,
     it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
