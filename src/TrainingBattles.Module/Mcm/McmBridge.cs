@@ -64,7 +64,12 @@ namespace TrainingBattles.Mcm
             s.XpKeptPercent = c.XpKeptPercent;
             s.WoundedPercent = c.WoundedPercent;
             s.DisorganizedAfterTraining = c.DisorganizedAfterTraining;
+            s.HeroHealthRestorePercent = c.HeroHealthRestorePercent;
             s.CooldownHours = c.CooldownHours;
+            s.TrainingCostWages = c.TrainingCostWages;
+            s.AutoSplitInHalf = c.AutoSplitInHalf;
+            s.UseOpponentBanner = c.UseOpponentBanner;
+            s.OpponentBannerCode = c.OpponentBannerCode;
             s.ChooseGroundWhenDefending = c.ChooseGroundWhenDefending;
             SelectOrAdd(s.OpenMenuHotkey, c.OpenMenuHotkey);
         }
@@ -75,7 +80,13 @@ namespace TrainingBattles.Mcm
             c.XpKeptPercent = s.XpKeptPercent;
             c.WoundedPercent = s.WoundedPercent;
             c.DisorganizedAfterTraining = s.DisorganizedAfterTraining;
+            c.HeroHealthRestorePercent = s.HeroHealthRestorePercent;
             c.CooldownHours = s.CooldownHours;
+            c.TrainingCostWages = s.TrainingCostWages;
+            c.AutoSplitInHalf = s.AutoSplitInHalf;
+            c.UseOpponentBanner = s.UseOpponentBanner;
+            c.OpponentBannerCode = string.IsNullOrWhiteSpace(s.OpponentBannerCode)
+                ? c.OpponentBannerCode : s.OpponentBannerCode;
             c.ChooseGroundWhenDefending = s.ChooseGroundWhenDefending;
             c.OpenMenuHotkey = s.OpenMenuHotkey.SelectedValue ?? c.OpenMenuHotkey;
         }

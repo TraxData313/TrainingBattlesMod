@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 3;
+        public int ConfigVersion { get; set; } = 4;
 
         /// <summary>How much of the experience earned in a training battle the troops KEEP,
         /// as a percent (0..100). Default 75 — the decided shipping default (Anton, 2026.07.23);
@@ -26,6 +26,40 @@ namespace TrainingBattles
         /// first — a good doctor helps. Default 10 (Anton's testing call, 2026.07.23). Nobody ever
         /// dies in training.</summary>
         public int WoundedPercent { get; set; } = 10;
+
+        /// <summary>After a drill every HERO in it (the player and the companions) is healed back to
+        /// at least this percent of their max health — but never above what they walked in with, so
+        /// the drill can't be used as a free hospital. 0 disables the restore. Default 90: a training
+        /// bruise may sting a little, but it must never bench a companion for days.</summary>
+        public int HeroHealthRestorePercent { get; set; } = 90;
+
+        /// <summary>When opening the muster's "divide the men" screen with no pick yet made, deal the
+        /// company in half first: every companion and every man flips a fair coin for a side (the
+        /// player always stays on their own side). The picker opens pre-dealt and fully editable.
+        /// Default true.</summary>
+        public bool AutoSplitInHalf { get; set; } = true;
+
+        /// <summary>What a drill costs, in DAYS OF WAGES of every soldier on the training field
+        /// (both halves — they all drill). 0 = free. Default 1: one day's extra pay for a day of
+        /// hard knocks. (For scale: the Steward donation perks convert roughly 1 denar of cheap
+        /// gear into 1 XP — a drill's XP haul priced that way would cost ten times more.)</summary>
+        public int TrainingCostWages { get; set; } = 1;
+
+        /// <summary>Whether the opposing half flies the training banner (and its colors) instead of
+        /// whatever bandit clan lends us the temp party. Default true.</summary>
+        public bool UseOpponentBanner { get; set; } = true;
+
+        /// <summary>The opposing half's banner as a vanilla banner code (the same format the game's
+        /// banner editor copies with Ctrl+C — paste any code here). Default: an orange field with a
+        /// white cross. The banner's first color also becomes the opposing team's uniform color.</summary>
+        public string OpponentBannerCode { get; set; } = DefaultOpponentBannerCode;
+
+        /// <summary>Orange field (palette 223), white cross built from two stretched bars (shape 510,
+        /// palette 172 white) — layers: solid background, vertical bar, horizontal bar.</summary>
+        public const string DefaultOpponentBannerCode =
+            "11.223.223.1528.1528.764.764.1.0.0"
+            + ".510.172.172.420.1700.764.764.0.0.0"
+            + ".510.172.172.1700.420.764.764.0.0.0";
 
         /// <summary>In-game hours between training battles (0 = unlimited). Default 24.</summary>
         public int CooldownHours { get; set; } = 24;
@@ -99,6 +133,9 @@ namespace TrainingBattles
             XpKeptPercent = Clamp(XpKeptPercent, 0, 100);
             WoundedPercent = Clamp(WoundedPercent, 0, 100);
             CooldownHours = Clamp(CooldownHours, 0, 168);
+            HeroHealthRestorePercent = Clamp(HeroHealthRestorePercent, 0, 100);
+            TrainingCostWages = Clamp(TrainingCostWages, 0, 30);
+            if (string.IsNullOrWhiteSpace(OpponentBannerCode)) OpponentBannerCode = DefaultOpponentBannerCode;
             // v1 shipped with "T" as the default — which vanilla uses for the combat log. Configs
             // still carrying that default follow to "G"; a key set by hand later is honored.
             if (ConfigVersion < 2 && string.Equals(OpenMenuHotkey?.Trim(), "T", StringComparison.OrdinalIgnoreCase))
@@ -107,7 +144,9 @@ namespace TrainingBattles
             // config still on the old default follows; any other value is a hand pick and stays.
             if (ConfigVersion < 3 && XpKeptPercent == 100)
                 XpKeptPercent = 75;
-            ConfigVersion = 3;
+            // v4 added HeroHealthRestorePercent, AutoSplitInHalf, TrainingCostWages and the opponent
+            // banner — all new keys with safe defaults, nothing to migrate.
+            ConfigVersion = 4;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

@@ -74,6 +74,16 @@
       <HintPath>$(GameFolder)\Modules\SandBox\bin\Win64_Shipping_Client\SandBox.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- The VIEW assemblies (also under Modules), needed only by ScoutMissionViews: the scout ride's
+         view set = vanilla's "Camp" walk-around views + the hold-Tab "leaving area" bar. -->
+    <Reference Include="TaleWorlds.MountAndBlade.View">
+      <HintPath>$(GameFolder)\Modules\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.View.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SandBox.View">
+      <HintPath>$(GameFolder)\Modules\SandBox\bin\Win64_Shipping_Client\SandBox.View.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>

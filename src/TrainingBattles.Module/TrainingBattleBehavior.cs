@@ -49,6 +49,15 @@ namespace TrainingBattles
         // Persisted: when the last training battle ended, in campaign hours (0 = never).
         private float _lastTrainingHours;
 
+        // Persisted: while a drill has the lender bandit clan wearing our training colors, this
+        // holds "clanId|color|color2|bannerCode" so ANY later session can dress the clan back —
+        // even after a crash mid-drill (clan colors and banner live in the save file).
+        private string _clanRestoreData = string.Empty;
+
+        // Persisted one-shot: the 2026.07.23 builds could leave drill-scattered companions stuck
+        // as fugitives ("Regrouping"); the first launch after the fix walks them home, once.
+        private bool _fugitiveRescueDone;
+
         // Transient flow state — never saved; a mid-flow save/load resolves via the stale-party
         // recovery in OnSessionLaunched.
         private TroopRoster? _pickedTeam;          // the chosen opponents; real rosters untouched until Begin
@@ -58,6 +67,17 @@ namespace TrainingBattles
         private TroopRoster? _prisonSnapshot;      // main party's prisoners before the fight — to spot
                                                    // own men who ended up "captured" by the drill
         private string? _chosenSceneId;            // the battlefield the player picked for the drill
+        private readonly Dictionary<Hero, int> _heroHpBefore = new Dictionary<Hero, int>();
+                                                   // heroes' health walking INTO the drill — the
+                                                   // restore ceiling (training is not a hospital)
+        private Dictionary<(ItemObject, ItemModifier?), int>? _itemSnapshot;
+                                                   // the baggage train before the fight — anything
+                                                   // ABOVE it afterward is drill loot and is removed,
+                                                   // no matter which mod's loot pipeline handed it out
+        private int _lootSweepTicks;               // clean-map ticks counted before the FINAL loot
+                                                   // sweep — loot screens grant items only when the
+                                                   // player closes them, AFTER the aftermath ran
+        private int _chargedCost;                  // the pay-chest already charged; refunded on abort
         private bool _checkResults;
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
         private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
@@ -100,6 +120,8 @@ namespace TrainingBattles
         public override void SyncData(IDataStore dataStore)
         {
             dataStore.SyncData("TrainingBattles_LastTrainingHours", ref _lastTrainingHours);
+            dataStore.SyncData("TrainingBattles_ClanRestore", ref _clanRestoreData);
+            dataStore.SyncData("TrainingBattles_FugitiveRescueDone", ref _fugitiveRescueDone);
         }
 
         private void OnSessionLaunched(CampaignGameStarter starter)
@@ -112,7 +134,11 @@ namespace TrainingBattles
             _mainSnapshot = null;
             _opponentSnapshot = null;
             _checkResults = false;
+            _heroHpBefore.Clear();
+            _chargedCost = 0;
+            RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
             RecoverStaleOpponentParties();
+            RescueStuckFugitiveCompanions();
             AddMenus(starter);
         }
 
@@ -125,19 +151,19 @@ namespace TrainingBattles
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
             starter.AddGameMenuOption(MenuId, "training_ground",
-                "{=TB_opt_ground}Survey the ground — choose the battlefield",
+                "{=TB_opt_ground2}Select the battlefield",
                 GroundCondition, _ => ChooseGround());
             starter.AddGameMenuOption(MenuId, "training_scout",
                 "{=TB_opt_scout}Ride out and scout a battlefield",
                 ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
-                "{=TB_opt_attack}Begin — your half attacks",
+                "{=TB_opt_attack2}Begin — your half attacks{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
             starter.AddGameMenuOption(MenuId, "training_begin_defend",
-                "{=TB_opt_defend}Begin — your half defends",
+                "{=TB_opt_defend2}Begin — your half defends{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: true));
             starter.AddGameMenuOption(MenuId, "training_send_troops",
-                "{=TB_opt_send}Send the men in — watch it resolve from the hill",
+                "{=TB_opt_send2}Send the men in — watch it resolve from the hill{TB_COST_SUFFIX}",
                 SendTroopsCondition, _ => LaunchTraining(playerDefends: false, simulate: true));
             starter.AddGameMenuOption(MenuId, "training_cancel",
                 "{=TB_opt_cancel}Cancel training",
@@ -146,6 +172,9 @@ namespace TrainingBattles
 
         private void MenuInit(MenuCallbackArgs args)
         {
+            // Without a real background mesh the menu shows the engine's placeholder — a big red
+            // "temp". Same field-camp image the Company of Trouble quest menu uses.
+            try { args.MenuContext.SetBackgroundMeshName("wait_ambush"); } catch { }
             if (_checkResults)
             {
                 FinishTrainingBattle();
@@ -159,10 +188,13 @@ namespace TrainingBattles
             if (_pickedTeam != null && _pickedTeam.TotalManCount > 0)
             {
                 var yours = MobileParty.MainParty.MemberRoster.TotalHealthyCount - _pickedTeam.TotalHealthyCount;
+                var cost = ComputeTrainingCost();
                 return "The two halves stand ready on the field: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
-                     + " with you."
-                     + (_chosenSceneId != null ? " The ground is chosen: " + _chosenSceneId + "." : "")
+                     + " with you. " + DescribeChosenGround()
+                     + (cost > 0 ? " It will cost " + cost + " denars ("
+                        + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
+                        + " a man) to gather the training materials and pay the men for the drill." : "")
                      + " Choose your side of the exercise — or call it off.";
             }
             // The muster is the mod's front door — it should SAY what a commander can do here,
@@ -170,6 +202,9 @@ namespace TrainingBattles
             var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
                 + "Nobody dies in training: the men keep " + _config.XpKeptPercent + "% of the experience they earn, and of the fallen "
                 + "about " + _config.WoundedPercent + "% wake up truly wounded — a better surgeon saves more of them before that roll."
+                + (_config.TrainingCostWages > 0 ? " Training materials and the men's drill pay cost "
+                    + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
+                    + " a man — about " + ComputeTrainingCost() + " denars right now." : "")
                 + (_config.DisorganizedAfterTraining ? " The party is disorganized for a while after the drill." : "")
                 + (_config.CooldownHours > 0 ? " One drill per " + _config.CooldownHours + " hours." : "");
             var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground, stand where "
@@ -177,12 +212,38 @@ namespace TrainingBattles
                 + "chasing army — or your own next stand — chooses it for you.";
             if (!CooldownReady(out var remaining))
             {
-                return "The men are still worn from the last drill — ready to muster again in about "
-                     + Math.Ceiling(remaining) + " hours. Scouting needs no rest.{newline} {newline}" + scout;
+                return "The men are still worn from the last drill — ready to muster again in "
+                     + FormatRemaining(remaining) + ". Scouting needs no rest.{newline} {newline}" + scout;
             }
             return "You call the company to a training muster. Two things a commander does here:{newline} {newline}"
-                 + drill + "{newline} {newline}" + scout;
+                 + drill + "{newline} {newline}" + scout + "{newline} {newline}" + DescribeChosenGround();
         }
+
+        /// <summary>The battlefield line of the muster text — always visible, updating the moment
+        /// the player picks a different ground in "Select the battlefield".</summary>
+        private string DescribeChosenGround()
+        {
+            if (_chosenSceneId == null)
+                return "Battlefield: as fate wills — the ground you stand on decides.";
+            foreach (var scene in TrainingGroundPool(out _))
+                if (scene.SceneID == _chosenSceneId)
+                    return "Battlefield: " + BattleSceneCatalog.Describe(scene) + " (your choice).";
+            return "Battlefield: " + _chosenSceneId + " (your choice).";
+        }
+
+        /// <summary>"in 20 hours and 15 minutes", "in 45 minutes" — the honest clock, not "about N hours".</summary>
+        private static string FormatRemaining(double hours)
+        {
+            var totalMinutes = (int)Math.Ceiling(hours * 60.0);
+            if (totalMinutes < 1) totalMinutes = 1;
+            var h = totalMinutes / 60;
+            var m = totalMinutes % 60;
+            if (h <= 0) return m + (m == 1 ? " minute" : " minutes");
+            var text = h + (h == 1 ? " hour" : " hours");
+            return m > 0 ? text + " and " + m + (m == 1 ? " minute" : " minutes") : text;
+        }
+
+        private static string FormatDaysWages(int days) => days == 1 ? " day's wages" : " days' wages";
 
         private bool PickCondition(MenuCallbackArgs args)
         {
@@ -190,7 +251,7 @@ namespace TrainingBattles
             if (!CooldownReady(out var remaining))
             {
                 args.IsEnabled = false;
-                args.Tooltip = new TextObject("{=TB_tip_rest}The men need rest — ready in about " + Math.Ceiling(remaining) + " hours.");
+                args.Tooltip = new TextObject("{=TB_tip_rest}The men need rest — ready in " + FormatRemaining(remaining) + ".");
             }
             else if (MobileParty.MainParty.MemberRoster.TotalHealthyCount < 2)
             {
@@ -222,7 +283,7 @@ namespace TrainingBattles
             {
                 args.Tooltip = new TextObject(_chosenSceneId == null
                     ? "{=TB_tip_ground}See the " + candidates.Count + " battlefields for this kind of country and pick where the drill is fought."
-                    : "{=TB_tip_ground_set}Ground chosen: " + _chosenSceneId + ". Survey again to change it.");
+                    : "{=TB_tip_ground_set}Battlefield chosen: " + _chosenSceneId + ". Select again to change it.");
             }
             return true;
         }
@@ -308,23 +369,60 @@ namespace TrainingBattles
         private bool BeginCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
-            if (_pickedTeam == null || _pickedTeam.TotalHealthyCount < 1)
-            {
-                args.IsEnabled = false;
-                args.Tooltip = new TextObject("{=TB_tip_pick_first}Divide the men first.");
-            }
-            return true;
+            return ReadyToBegin(args);
         }
 
         private bool SendTroopsCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Continue;
+            return ReadyToBegin(args);
+        }
+
+        /// <summary>The shared gate for every "start the drill" option: a divided company and, when
+        /// training costs wages, enough gold in the purse to fill the pay-chest. Also stamps the
+        /// "(N denars)" suffix the Begin/send option labels carry.</summary>
+        private bool ReadyToBegin(MenuCallbackArgs args)
+        {
+            var costNow = ComputeTrainingCost();
+            MBTextManager.SetTextVariable("TB_COST_SUFFIX",
+                costNow > 0 ? " (" + costNow + " denars)" : string.Empty, false);
             if (_pickedTeam == null || _pickedTeam.TotalHealthyCount < 1)
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_pick_first}Divide the men first.");
+                return true;
+            }
+            if (costNow > 0 && (Hero.MainHero?.Gold ?? 0) < costNow)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_poor}The drill's pay-chest wants " + costNow
+                    + " denars (" + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
+                    + " for every soul on the field) — you carry " + (Hero.MainHero?.Gold ?? 0) + ".");
             }
             return true;
+        }
+
+        /// <summary>What this drill costs: every soldier on the field (both halves — they all train)
+        /// earns <see cref="ModConfig.TrainingCostWages"/> extra days of their daily wage. Uses the
+        /// game's own wage model, so mercenaries cost their usual half-again more.</summary>
+        private int ComputeTrainingCost()
+        {
+            if (_config.TrainingCostWages <= 0) return 0;
+            try
+            {
+                var model = Campaign.Current.Models.PartyWageModel;
+                var total = 0;
+                foreach (var el in MobileParty.MainParty.MemberRoster.GetTroopRoster())
+                {
+                    if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
+                    total += model.GetCharacterWage(el.Character) * el.Number;
+                }
+                return total * _config.TrainingCostWages;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private bool CancelCondition(MenuCallbackArgs args)
@@ -349,6 +447,21 @@ namespace TrainingBattles
         {
             if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null) return;
             if (!(Game.Current?.GameStateManager?.ActiveState is MapState mapState)) return;
+
+            // The FINAL loot sweep. The aftermath's own sweep runs before any loot SCREEN is
+            // closed — and a loot screen grants its items only on close. So the snapshot stays
+            // alive until the map has been the active state for a moment (any loot/inventory
+            // screen would be its own state and pause this counter), then one last diff removes
+            // whatever the screen handed out, and the snapshot retires.
+            if (_itemSnapshot != null && !TrainingActive && !_checkResults)
+            {
+                if (++_lootSweepTicks >= 30)
+                {
+                    RemoveDrillLoot();
+                    _itemSnapshot = null;
+                    _lootSweepTicks = 0;
+                }
+            }
 
             // Finalize the training the moment it is truly decided — WITHOUT waiting for (or
             // trusting) vanilla's wrap-up menus. Vanilla owns every non-happy path (the
@@ -457,6 +570,10 @@ namespace TrainingBattles
                     left.AddToCounts(el.Character, take, false, takeWounded);
                 }
             }
+            else if (_config.AutoSplitInHalf)
+            {
+                AutoSplitInHalf(left, right);
+            }
             PartyScreenHelper.OpenScreenWithDummyRoster(
                 left, leftPrisoners, right, rightPrisoners,
                 new TextObject("{=TB_team_opponents}Training opponents"),
@@ -466,6 +583,51 @@ namespace TrainingBattles
                 PickerDoneCondition,
                 PickerClosed,
                 PickerTransferable);
+        }
+
+        /// <summary>Deals the company in half before the picker opens: every companion and every man
+        /// flips a fair coin for a side (the player never crosses). Just a PRE-DEAL of the picker's
+        /// rosters — the player still edits and confirms; Cancel still discards everything.</summary>
+        private static void AutoSplitInHalf(TroopRoster left, TroopRoster right)
+        {
+            // GetTroopRoster hands out the LIVE internal list — copy before mutating the roster.
+            var stacks = new List<TroopRosterElement>(right.GetTroopRoster());
+            foreach (var el in stacks)
+            {
+                var character = el.Character;
+                if (character == null || character == CharacterObject.PlayerCharacter) continue;
+                var wounded = el.WoundedNumber;
+                var healthy = el.Number - wounded;
+                var takeHealthy = CoinFlips(healthy);
+                var takeWounded = CoinFlips(wounded);
+                var take = takeHealthy + takeWounded;
+                if (take <= 0) continue;
+                right.AddToCounts(character, -take, false, -takeWounded);
+                left.AddToCounts(character, take, false, takeWounded);
+            }
+            // The drill needs a healthy man on EACH side. If every coin fell one way, walk one back.
+            if (left.TotalHealthyCount < 1) MoveOneHealthyNonPlayer(right, left);
+            if (right.TotalHealthyCount < 1) MoveOneHealthyNonPlayer(left, right);
+        }
+
+        private static int CoinFlips(int men)
+        {
+            var crossed = 0;
+            for (var i = 0; i < men; i++)
+                if (MBRandom.RandomFloat < 0.5f) crossed++;
+            return crossed;
+        }
+
+        private static void MoveOneHealthyNonPlayer(TroopRoster from, TroopRoster to)
+        {
+            foreach (var el in new List<TroopRosterElement>(from.GetTroopRoster()))
+            {
+                if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
+                if (el.Number - el.WoundedNumber < 1) continue;
+                from.AddToCounts(el.Character, -1, false, 0);
+                to.AddToCounts(el.Character, 1, false, 0);
+                return;
+            }
         }
 
         private static bool PickerTransferable(CharacterObject character, PartyScreenLogic.TroopType type, PartyScreenLogic.PartyRosterSide side, PartyBase leftOwnerParty)
@@ -545,6 +707,14 @@ namespace TrainingBattles
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + reason));
                 return;
             }
+            // The pay-chest is counted over the WHOLE company (both halves drill), before the split.
+            var cost = ComputeTrainingCost();
+            if (cost > 0 && (Hero.MainHero?.Gold ?? 0) < cost)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the pay-chest wants " + cost + " denars — the purse is short."));
+                return;
+            }
 
             var main = MobileParty.MainParty;
             var opponent = CreateOpponentParty();
@@ -583,6 +753,25 @@ namespace TrainingBattles
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: the halves could not be formed."));
                 return;
             }
+
+            // The men are paid BEFORE the first bruise; an abort refunds the chest in full.
+            if (cost > 0)
+            {
+                GiveGoldAction.ApplyBetweenCharacters(Hero.MainHero, null, cost);
+                _chargedCost = cost;
+            }
+
+            // Every hero's health walking in — the aftermath heals them back toward
+            // HeroHealthRestorePercent of max, but never above this mark.
+            _heroHpBefore.Clear();
+            SnapshotHeroHealth(main.MemberRoster);
+            SnapshotHeroHealth(opponent.MemberRoster);
+
+            // The baggage train before the fight: whatever appears above this afterward is drill
+            // loot — vanilla's or any loot mod's — and the aftermath removes it. (Our reward model
+            // zeroes vanilla's loot rolls, but Harmony loot mods hook the same battle commit we
+            // deliberately let run for the XP books — Anton caught BannerLoot paying out.)
+            _itemSnapshot = SnapshotItems(main.Party.ItemRoster);
 
             _opponentParty = opponent;
             _pickedTeam = null;
@@ -664,12 +853,214 @@ namespace TrainingBattles
                     clan, hideout, isBossParty: false, null, MobileParty.MainParty.Position);
                 party.Party.SetCustomName(new TextObject("{=TB_opponents_name}Training Opponents"));
                 party.SetPartyUsedByQuest(isActivelyUsed: true);
+                if (_config.UseOpponentBanner) ApplyOpponentLook(party, clan);
                 return party;
             }
             catch
             {
                 return null;
             }
+        }
+
+        // ------------------------------ the training colors ------------------------------
+
+        /// <summary>Dresses the opposing half in the training banner. The banner itself goes on the
+        /// party (<c>SetCustomBanner</c> — the team's flag). The team COLORS and the men's shield
+        /// heraldry, though, are read straight from the party's MAP FACTION at spawn time (verified
+        /// in Mission.SpawnTroop: ClothingColor1/2 = team color = faction color pair; leaderless
+        /// origins take the faction's banner) — so the lender bandit clan briefly wears our colors
+        /// too, and <see cref="RestoreOpponentClanLook"/> dresses it back after the drill. The
+        /// restore data is SAVED (SyncData) because clan colors persist in the save file: a crash
+        /// mid-drill must not leave Calradia's looters flying an orange cross forever.</summary>
+        private void ApplyOpponentLook(MobileParty party, Clan clan)
+        {
+            try
+            {
+                var banner = new Banner(_config.OpponentBannerCode);
+                party.Party.SetCustomBanner(banner);
+                if (_clanRestoreData.Length == 0) // never stack two restores onto one clan
+                {
+                    _clanRestoreData = clan.StringId + "|" + clan.Color + "|" + clan.Color2 + "|"
+                        + (clan.Banner?.Serialize() ?? string.Empty);
+                }
+                clan.Color = banner.GetPrimaryColor();
+                clan.Color2 = banner.GetFirstIconColor();
+                clan.Banner = banner;
+            }
+            catch { /* colors are decoration — a bad banner code must never stop a drill */ }
+        }
+
+        /// <summary>Undoes <see cref="ApplyOpponentLook"/>'s clan changes, whether this session made
+        /// them or a crashed one did (the restore data rides in the save).</summary>
+        private void RestoreOpponentClanLook()
+        {
+            if (string.IsNullOrEmpty(_clanRestoreData)) return;
+            try
+            {
+                var parts = _clanRestoreData.Split(new[] { '|' }, 4);
+                if (parts.Length == 4)
+                {
+                    foreach (var clan in Clan.All)
+                    {
+                        if (clan?.StringId != parts[0]) continue;
+                        if (uint.TryParse(parts[1], out var color)) clan.Color = color;
+                        if (uint.TryParse(parts[2], out var color2)) clan.Color2 = color2;
+                        if (parts[3].Length > 0) clan.Banner = new Banner(parts[3]);
+                        break;
+                    }
+                }
+            }
+            catch { }
+            _clanRestoreData = string.Empty;
+        }
+
+        // ------------------------------ hero health ------------------------------
+
+        private void SnapshotHeroHealth(TroopRoster roster)
+        {
+            try
+            {
+                foreach (var el in roster.GetTroopRoster())
+                {
+                    var hero = el.Character?.HeroObject;
+                    if (hero != null) _heroHpBefore[hero] = hero.HitPoints;
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>Nobody limps home from training — not the heroes either. Each hero is healed
+        /// back to at least <see cref="ModConfig.HeroHealthRestorePercent"/> of max health, but
+        /// never above what they walked in with (a drill can't be used as a free hospital), and a
+        /// battle that somehow left them healthier is left alone.</summary>
+        private void RestoreHeroHealth()
+        {
+            if (_config.HeroHealthRestorePercent <= 0) { _heroHpBefore.Clear(); return; }
+            try
+            {
+                foreach (var pair in _heroHpBefore)
+                {
+                    var hero = pair.Key;
+                    if (hero == null || hero.IsDead) continue;
+                    var floor = Math.Min(pair.Value,
+                        (int)(hero.MaxHitPoints * (_config.HeroHealthRestorePercent / 100.0)));
+                    if (hero.HitPoints < floor) hero.HitPoints = floor;
+                }
+            }
+            catch { }
+            _heroHpBefore.Clear();
+        }
+
+        /// <summary>Every hero from the drill who is alive but no longer riding with the main party
+        /// (vanilla scattered them as fugitives — "Regrouping" on the clan screen) returns to the
+        /// ranks at once. Training scatters nobody.</summary>
+        private static void RecoverScatteredHeroes(TroopRoster? snapshot)
+        {
+            if (snapshot == null) return;
+            try
+            {
+                foreach (var el in new List<TroopRosterElement>(snapshot.GetTroopRoster()))
+                {
+                    var hero = el.Character?.HeroObject;
+                    if (hero == null || hero == Hero.MainHero || !hero.IsAlive) continue;
+                    if (hero.PartyBelongedTo == MobileParty.MainParty) continue;
+                    if (hero.IsPrisoner) continue; // 1b's walk-back owns the prisoner path
+                    try
+                    {
+                        if (hero.IsFugitive) hero.ChangeState(Hero.CharacterStates.Active);
+                        AddHeroToPartyAction.Apply(hero, MobileParty.MainParty, showNotification: false);
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "Training Battles: " + hero.Name + " rejoined the company — nobody scatters after a drill."));
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>One-shot repair for saves touched by the 2026.07.23 builds: drills could leave
+        /// companions of the losing half stuck as fugitives ("Regrouping" on the clan screen, and
+        /// unlike vanilla scatter they never walked home). Runs once per save, then never again —
+        /// so a companion who legitimately scatters in a REAL battle later keeps vanilla's rules.</summary>
+        private void RescueStuckFugitiveCompanions()
+        {
+            if (_fugitiveRescueDone) return;
+            _fugitiveRescueDone = true;
+            try
+            {
+                var companions = Clan.PlayerClan?.Companions;
+                if (companions == null) return;
+                foreach (var hero in new List<Hero>(companions))
+                {
+                    if (hero == null || !hero.IsAlive || !hero.IsFugitive) continue;
+                    try
+                    {
+                        hero.ChangeState(Hero.CharacterStates.Active);
+                        AddHeroToPartyAction.Apply(hero, MobileParty.MainParty, showNotification: false);
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "Training Battles: " + hero.Name + " found their way back to the company."));
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>The baggage train, itemized — keyed by item AND modifier so a "fine" sword the
+        /// party already owned is never confused with a looted plain one.</summary>
+        private static Dictionary<(ItemObject, ItemModifier?), int> SnapshotItems(ItemRoster roster)
+        {
+            var result = new Dictionary<(ItemObject, ItemModifier?), int>();
+            try
+            {
+                for (var i = 0; i < roster.Count; i++)
+                {
+                    var el = roster.GetElementCopyAtIndex(i);
+                    if (el.EquipmentElement.Item == null) continue;
+                    var key = (el.EquipmentElement.Item, (ItemModifier?)el.EquipmentElement.ItemModifier);
+                    result.TryGetValue(key, out var have);
+                    result[key] = have + el.Amount;
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        /// <summary>Removes every item the party GAINED since the pre-fight snapshot — the drill's
+        /// loot, whichever pipeline granted it (vanilla's commit or a Harmony loot mod's). Items the
+        /// party lost are not touched: nothing is ever added. Does NOT clear the snapshot — the
+        /// caller owns its lifetime, because loot screens hand items over only when the player
+        /// CLOSES them (Anton took a full loot screen home past the first, immediate sweep), so the
+        /// tick runs one final sweep after the map is truly quiet again.</summary>
+        private void RemoveDrillLoot()
+        {
+            var before = _itemSnapshot;
+            if (before == null) return;
+            try
+            {
+                var roster = MobileParty.MainParty.Party.ItemRoster;
+                var gained = new List<(EquipmentElement Element, int Extra)>();
+                for (var i = 0; i < roster.Count; i++)
+                {
+                    var el = roster.GetElementCopyAtIndex(i);
+                    if (el.EquipmentElement.Item == null) continue;
+                    var key = (el.EquipmentElement.Item, (ItemModifier?)el.EquipmentElement.ItemModifier);
+                    before.TryGetValue(key, out var had);
+                    var extra = el.Amount - had;
+                    if (extra > 0) gained.Add((el.EquipmentElement, extra));
+                }
+                var removed = 0;
+                foreach (var pair in gained)
+                {
+                    roster.AddToCounts(pair.Element, -pair.Extra);
+                    removed += pair.Extra;
+                }
+                if (removed > 0)
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: " + removed + " looted item" + (removed == 1 ? "" : "s")
+                        + " returned — there are no spoils in sparring."));
+            }
+            catch { }
         }
 
         /// <summary>Tears down a battle that failed to start: men merged home, temp party destroyed,
@@ -683,6 +1074,16 @@ namespace TrainingBattles
                 MergePartyBackIntoMain(opponent);
                 DestroyOpponentParty(opponent);
             }
+            RestoreOpponentClanLook();
+            // A drill that never happened is a drill nobody gets paid for.
+            if (_chargedCost > 0)
+            {
+                try { GiveGoldAction.ApplyBetweenCharacters(null, Hero.MainHero, _chargedCost); } catch { }
+                _chargedCost = 0;
+            }
+            _heroHpBefore.Clear();
+            _itemSnapshot = null;
+            _lootSweepTicks = 0;
             TrainingActive = false;
             _checkResults = false;
             _aftermathReady = false;
@@ -738,7 +1139,9 @@ namespace TrainingBattles
             TrainingActive = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            _chargedCost = 0; // the drill happened — the chest is spent
             Models.TrainingBattlesSceneModel.PendingSceneId = null; // never read = never armed again
+            RestoreOpponentClanLook(); // the lender clan gets its own colors back
 
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;
@@ -776,6 +1179,27 @@ namespace TrainingBattles
                     main.MemberRoster.AddToCounts(character, extra, false, extraWounded);
                 }
             }
+
+            // 1c. Companions who "scattered": vanilla makes the losing side's uncaptured heroes
+            //     FUGITIVE at map-event end (the clan screen calls it "Regrouping" — Anton found
+            //     two companions stuck there). Our no-capture guard is exactly what routes them to
+            //     that path, so every hero of the drill who is no longer in the party walks
+            //     straight back into the ranks.
+            RecoverScatteredHeroes(mainSnapshot);
+            RecoverScatteredHeroes(opponentSnapshot);
+
+            // 1d. No spoils from sparring: anything the baggage train gained over the pre-fight
+            //     snapshot is drill loot (whoever's pipeline granted it) and is quietly removed.
+            //     First sweep here; the snapshot stays alive for the tick's FINAL sweep, because a
+            //     loot screen (BannerLoot pushes one) grants its items only when the player closes
+            //     it — after this very method has come and gone.
+            _lootSweepTicks = 0;
+            RemoveDrillLoot();
+
+            // 1e. The heroes walk out on their own legs: healed back toward the configured floor
+            //     (never above their pre-drill health) — a bruise may sting, but the player and the
+            //     companions are never benched by training.
+            RestoreHeroHealth();
 
             // 2. Nobody dies in training: the fallen return — some wounded, per the surgeon's own
             //    Medicine-driven save and the configured share — and XP is restored ABSOLUTELY:

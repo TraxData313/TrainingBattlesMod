@@ -35,6 +35,11 @@ namespace TrainingBattles
     /// </summary>
     internal static class ScoutMission
     {
+        /// <summary>The mission (and view-set) name the scout ride opens under. The matching view
+        /// list lives in <see cref="ScoutMissionViews"/>: vanilla's "Camp" walk-around set plus the
+        /// hold-Tab "leaving area" bar that "Camp" does not carry.</summary>
+        public const string MissionName = "TrainingBattlesScout";
+
         /// <summary>The approach direction every drill and scout preview assumes. Fixed so the two
         /// always agree; a real battle's direction comes from where the attacker actually rides in.</summary>
         internal static readonly Vec2 AssumedEncounterDirection = new Vec2(0f, 1f);
@@ -68,7 +73,7 @@ namespace TrainingBattles
         public static void Open(string sceneId)
         {
             var rec = CreatePatchAwareRecord(sceneId);
-            MissionState.OpenNew("Camp", rec, _ => new MissionBehavior[]
+            MissionState.OpenNew(MissionName, rec, _ => new MissionBehavior[]
             {
                 new MissionOptionsComponent(),
                 new CampaignMissionComponent(),
@@ -118,7 +123,7 @@ namespace TrainingBattles
                 .Controller(AgentControllerType.Player));
             agent.WieldInitialWeapons();
             InformationManager.DisplayMessage(new InformationMessage(
-                "Scouting the ground. Ride, look, remember — and leave (Tab) when you have seen enough."));
+                "Scouting the ground. Ride, look, remember — and hold Tab to leave when you have seen enough."));
             if (deploymentReport != null)
                 InformationManager.DisplayMessage(new InformationMessage(deploymentReport));
         }
@@ -150,11 +155,10 @@ namespace TrainingBattles
             }
         }
 
-        public override bool MissionEnded(ref MissionResult missionResult)
-        {
-            // The Leave game key (Tab); the escape menu's leave goes through BasicLeaveMissionLogic.
-            return Mission.InputManager.IsGameKeyPressed(4);
-        }
+        // Leaving is entirely vanilla's: the mission is friendly, so holding the Leave key (Tab)
+        // runs Mission's own 0.6s leave timer — drawn by the MissionLeaveView in our view set —
+        // and the escape menu's leave goes through BasicLeaveMissionLogic. (The old key-press
+        // MissionEnded override here ended the mission INSTANTLY, before the bar could ever show.)
 
         private MatrixFrame FindSpawnFrame()
         {

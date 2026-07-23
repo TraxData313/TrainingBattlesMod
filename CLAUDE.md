@@ -68,11 +68,14 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   DefendGroundBehavior.cs     "Survey the ground" on vanilla's encounter menu when the
                               player DEFENDS a real field battle (toggleable)
   ScoutMission.cs             the scouting ride: enter any battlefield alone (no battle, no
-                              encounter) — "Camp" view set borrowed, own behavior list; spawns
-                              the player ON the defender deployment line (BattleSpawnPathSelector
-                              is deterministic WITH map-patch record data, random without — so
-                              CreatePatchAwareRecord is shared by scout AND training battles,
-                              making the scouted lines the drilled lines)
+                              encounter) — own behavior list; spawns the player ON the defender
+                              deployment line (BattleSpawnPathSelector is deterministic WITH
+                              map-patch record data, random without — so CreatePatchAwareRecord
+                              is shared by scout AND training battles, making the scouted lines
+                              the drilled lines); leaving is vanilla hold-Tab
+  ScoutMissionViews.cs        the scout's view set ("TrainingBattlesScout"): vanilla's Camp
+                              walk-around views + the hold-Tab leave bar Camp lacks — read its
+                              class doc before touching (the ViewCreatorModule scanner footgun)
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners while TrainingActive)
   Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else
@@ -86,7 +89,7 @@ tools/deploy.ps1              build + install as "Training Battles (dev)" into t
                               future Workshop copy)
 ```
 
-Flow in one breath: hotkey (default `T`) on the open map → muster menu (`training_battle_menu`)
+Flow in one breath: hotkey (default `G`) on the open map → muster menu (`training_battle_menu`)
 → "Divide the men" opens the party screen over a CLONE of the roster (nothing leaves the real
 party until battle truly begins) → Begin attack/defend moves the picked men into a temp
 bandit-component "Training Opponents" party and runs the Company-of-Trouble recipe → after the
@@ -115,6 +118,21 @@ before deploying or the DLL is locked.
   (`GameMenu.ExitToLast`).
 - The party-screen closed callback fires MID state-transition — never touch menus inside
   it; set a flag and act on the next tick.
+- `TroopRoster.GetTroopRoster()` returns the LIVE internal list, not a copy — copy it
+  before a loop that mutates the same roster.
+- `ViewCreatorManager` reflects over EVERY static method of a `[ViewCreatorModule]` class
+  and reads its `[ViewMethod]` attribute with `[0]` and no length check — one attribute-less
+  static member (even a property getter) crashes the scan. One method per class, nothing else.
+- Mission team looks come from THREE places (all read live at spawn): the team flag from
+  `PartyBase.CustomBanner`, but uniform tint from the MAP FACTION's color pair and leaderless
+  troops' shield heraldry from the faction's banner — recoloring the opponents means dressing
+  the lender bandit CLAN too, and clan colors PERSIST IN SAVES (restore data must ride SyncData).
+- The battle commit we drive via `PlayerEncounter.Update()` settles XP AND LOOT in one guarded
+  pass — our reward model zeroes vanilla's loot rolls, but Harmony loot mods hook that same
+  commit, so the aftermath diffs the pre-fight ItemRoster snapshot and removes anything gained.
+- Vanilla makes the losing side's UNCAPTURED heroes FUGITIVE at map-event end ("Regrouping" on
+  the clan screen) and REMOVES them from the roster — a no-capture guard reroutes companions
+  into exactly that hole; the aftermath must walk snapshot-heroes home explicitly.
 
 ## Build & deploy
 
