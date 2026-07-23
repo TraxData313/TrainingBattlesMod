@@ -22,9 +22,9 @@ namespace TrainingBattles.Mcm
         public override string FormatType => "json2";
 
         [SettingPropertyInteger("XP kept (%)", 0, 100, "0'%'", Order = 0, RequireRestart = false,
-            HintText = "Share of battle XP the troops keep from a drill. Default 75.")]
+            HintText = "Share of battle XP the troops keep from a drill. Default 100.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
-        public int XpKeptPercent { get; set; } = 75;
+        public int XpKeptPercent { get; set; } = 100;
 
         [SettingPropertyInteger("Wounded among the fallen (%)", 0, 100, "0'%'", Order = 1, RequireRestart = false,
             HintText = "Fallen men your surgeon cannot save wake wounded at this rate; the rest shrug it off. Medicine skill helps. Default 50.")]

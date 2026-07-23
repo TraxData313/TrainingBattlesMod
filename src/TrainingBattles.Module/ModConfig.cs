@@ -16,8 +16,9 @@ namespace TrainingBattles
         public int ConfigVersion { get; set; } = 2;
 
         /// <summary>How much of the experience earned in a training battle the troops KEEP,
-        /// as a percent (0..100). Default 75 — drilling teaches, but not quite like real blood.</summary>
-        public int XpKeptPercent { get; set; } = 75;
+        /// as a percent (0..100). Default 100 for the testing period (Anton's call, 2026.07.23) —
+        /// revisit before a public release whether 75 is the better shipping default.</summary>
+        public int XpKeptPercent { get; set; } = 100;
 
         /// <summary>Of the men who "fell" in training and whom the surgeon could not patch up on the
         /// spot, this percent (0..100) wake up truly WOUNDED; the rest shrug it off. The surgeon's

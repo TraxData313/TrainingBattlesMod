@@ -560,15 +560,21 @@ namespace TrainingBattles
             }
             catch { }
 
-            // Kill the encounter POSITIVELY — nothing re-startable may survive. A merely-Finished
-            // encounter with the map event still undecided leaves vanilla's send-troops menu armed,
-            // and a re-run from there is a pure vanilla battle with all our protections closed
-            // (vanilla's own "leave" even simulates one real combat round on the way out).
+            // Kill the encounter POSITIVELY — but let vanilla SETTLE THE BOOKS first. The XP and
+            // casualty commit for player battles runs inside PlayerEncounter's own update
+            // (DoApplyMapEventResults → CalculateAndCommitMapEventResults, guarded so it runs only
+            // once) — finishing without it silently discards everything the men earned (Anton:
+            // promotions on the battle scoreboard, +0 on the roster). So: give the event a winner
+            // if it lacks one, drive one PlayerEncounter.Update() to run the commit, THEN finish.
+            // A merely-Finished encounter with an undecided event would also leave vanilla's
+            // send-troops menu armed — and a re-run from there is a pure vanilla battle.
             try
             {
                 var mapEvent = MobileParty.MainParty.MapEvent;
-                if (mapEvent != null && !mapEvent.IsFinalized)
+                if (mapEvent != null && !mapEvent.IsFinalized && !mapEvent.HasWinner)
                     mapEvent.SetOverrideWinner(mapEvent.PlayerSide);
+                for (var i = 0; i < 3 && PlayerEncounter.Current != null; i++)
+                    PlayerEncounter.Update();
             }
             catch { }
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
