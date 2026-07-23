@@ -16,6 +16,19 @@ namespace TrainingBattles
     /// </summary>
     internal static class BattleSceneCatalog
     {
+        /// <summary>The ONE name each ground tool goes by, on every door that offers it (the
+        /// training muster and the real-battle encounter menu) — same label, same localization
+        /// key, so the player never wonders whether two names are two features (Anton's call,
+        /// 2026.07.23). Change the text here and every menu follows.</summary>
+        public const string SelectBattlefieldOptionText = "{=TB_opt_ground2}Select the battlefield";
+
+        /// <summary>See <see cref="SelectBattlefieldOptionText"/> — the scout ride's one name.</summary>
+        public const string ScoutBattlefieldOptionText = "{=TB_opt_scout}Ride out and scout a battlefield";
+
+        /// <summary>The shared picker-dialog titles, one per tool, same everywhere.</summary>
+        public const string SelectPickerTitle = "Choose the ground";
+        public const string ScoutPickerTitle = "Scout the ground";
+
         public static List<SingleplayerBattleSceneData> CandidatesAt(CampaignVec2 position, bool isNaval)
         {
             var result = new List<SingleplayerBattleSceneData>();

@@ -176,10 +176,10 @@ namespace TrainingBattles
                 "{=TB_opt_mock}Compose a mock enemy to drill against",
                 MockEnemyCondition, _ => OpenMockEnemyComposer());
             starter.AddGameMenuOption(MenuId, "training_ground",
-                "{=TB_opt_ground2}Select the battlefield",
+                BattleSceneCatalog.SelectBattlefieldOptionText,
                 GroundCondition, _ => ChooseGround());
             starter.AddGameMenuOption(MenuId, "training_scout",
-                "{=TB_opt_scout}Ride out and scout a battlefield",
+                BattleSceneCatalog.ScoutBattlefieldOptionText,
                 ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
                 "{=TB_opt_attack4}Begin — {TB_BEGIN_ATTACK}{TB_COST_SUFFIX}",
@@ -387,7 +387,7 @@ namespace TrainingBattles
             var candidates = TrainingGroundPool(out var localCount);
             if (candidates.Count < 2) return;
             BattleSceneCatalog.ShowPicker(
-                "Choose the ground",
+                BattleSceneCatalog.SelectPickerTitle,
                 "The battlefields for this kind of country. Pick where the drill is fought.",
                 candidates, localCount, _chosenSceneId, offerFate: true, sceneId =>
             {
@@ -426,7 +426,7 @@ namespace TrainingBattles
                 return;
             }
             BattleSceneCatalog.ShowPicker(
-                "Scout the ground",
+                BattleSceneCatalog.ScoutPickerTitle,
                 "Pick a battlefield and ride out alone. Walk the ground, stand on your deployment line, "
                 + "and see if the deploy is good for your battle — if the map is fine but the lines are "
                 + "bad, take another map or another spot.",

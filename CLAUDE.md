@@ -75,10 +75,11 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               cooldown, stale-party recovery — read its class doc first
   BattleSceneCatalog.cs       battlefield candidates for a position: strict patch chain +
                               the wider same-terrain pool + the shared ground-picker inquiry
-  RealBattleGroundBehavior.cs "Survey the ground" (pick it) + "Scout the battlefield" (ride
-                              it alone — exact lines, the true approach direction is known)
-                              on vanilla's encounter menu for real field battles, defender
-                              and attacker each behind their own toggle
+  RealBattleGroundBehavior.cs "Select the battlefield" + "Ride out and scout a battlefield"
+                              (exact lines — the true approach direction is known) on
+                              vanilla's encounter menu for real field battles, defender and
+                              attacker each behind their own toggle; labels are the muster's
+                              own, shared via BattleSceneCatalog constants
   ScoutMission.cs             the scouting ride: enter any battlefield alone (no battle, no
                               encounter) — own behavior list; spawns the player ON the defender
                               deployment line (BattleSpawnPathSelector is deterministic WITH

@@ -51,11 +51,13 @@ namespace TrainingBattles
             TrainingBattlesSceneModel.PendingSceneId = null;
             // Indices 4/5 slot the options right before vanilla's "{ATTACK_TEXT}!" — cosmetic
             // only; wherever another mod pushes them, they still work.
+            // Same labels as the training muster's tools — one name per tool, everywhere
+            // (the shared constants in BattleSceneCatalog are the single source of the text).
             starter.AddGameMenuOption("encounter", "training_battles_survey_ground",
-                "{=TB_opt_survey_ground}Survey the ground",
+                BattleSceneCatalog.SelectBattlefieldOptionText,
                 SurveyGroundCondition, _ => SurveyGround(), isLeave: false, index: 4);
             starter.AddGameMenuOption("encounter", "training_battles_scout_ground",
-                "{=TB_opt_scout_ground}Scout the battlefield",
+                BattleSceneCatalog.ScoutBattlefieldOptionText,
                 ScoutGroundCondition, _ => ScoutGround(), isLeave: false, index: 5);
         }
 
@@ -90,7 +92,7 @@ namespace TrainingBattles
                 ? (mapEvent.PlayerSide == BattleSideEnum.Defender
                     ? "{=TB_tip_survey_def}You stand and wait — so the ground is yours to choose. See the possible battlefields and pick where your line will form."
                     : "{=TB_tip_survey_att}You bring the battle — see the possible battlefields and pick the field you drive them onto.")
-                : "{=TB_tip_survey_set}Ground chosen: " + chosen + ". Survey again to change it.");
+                : "{=TB_tip_survey_set}Ground chosen: " + chosen + ". Select again to change it.");
             return true;
         }
 
@@ -99,7 +101,7 @@ namespace TrainingBattles
             var candidates = Candidates(out var localCount);
             if (candidates.Count == 0) return;
             BattleSceneCatalog.ShowPicker(
-                "Choose the ground",
+                BattleSceneCatalog.SelectPickerTitle,
                 "These battlefields fit the ground you stand on. Pick where your line will form.",
                 candidates, localCount, TrainingBattlesSceneModel.PendingSceneId, offerFate: true, sceneId =>
             {
@@ -134,9 +136,9 @@ namespace TrainingBattles
                 return;
             }
             BattleSceneCatalog.ShowPicker(
-                "Scout the battlefield",
+                BattleSceneCatalog.ScoutPickerTitle,
                 "Pick a battlefield and ride out alone — the fight waits. The first entries are the "
-                + "ground you truly stand on; survey the ground to make another field the real one.",
+                + "ground you truly stand on; select the battlefield to make another field the real one.",
                 candidates, localCount, TrainingBattlesSceneModel.PendingSceneId, offerFate: false, sceneId =>
             {
                 if (sceneId != null) LaunchScout(sceneId, playerSide, direction);

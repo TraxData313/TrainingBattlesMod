@@ -23,9 +23,9 @@ campaign exactly as it was.
 
 What a real general does before the battle: know the field.
 
-- **Survey the ground** — see every battlefield the game could put your fight on: the map
-  patch's own scene (marked *"this ground"*) plus every scene of the local terrain type —
-  and pick the one a drill is fought on.
+- **Select the battlefield** — see every battlefield the game could put your fight on: the
+  map patch's own scene (marked *"this ground"*) plus every scene of the local terrain type
+  — and pick the one a drill is fought on.
 - **Ride out and scout** — enter any of those battlefields **alone**: no battle, no enemy,
   no cost, no cooldown. You spawn **on your deployment line**, facing the enemy's, with the
   distance called out — so you can judge both the terrain *and* the deploy before you ever
@@ -35,10 +35,10 @@ What a real general does before the battle: know the field.
   you scouted is what you get.
 - **Survey & scout in REAL battles** *(a must-have pillar — toggleable per side, both on by
   default)* — when a real field battle is about to start, the encounter menu offers the same
-  two tools, defending **or** attacking:
-  - **Survey the ground** — pick the battlefield from the local terrain's variants (your
-    true ground marked *"this ground"*), or leave it to fate.
-  - **Scout the battlefield** — ride the field alone *before committing to the fight*. And
+  two tools, defending **or** attacking — same names, same tools as in the muster:
+  - **Select the battlefield** — pick it from the local terrain's variants (your true
+    ground marked *"this ground"*), or leave it to fate.
+  - **Ride out and scout a battlefield** — walk the field alone *before committing*. And
     here the preview is **exact**: both armies stand frozen on the map, so the attacker's
     true approach direction is already known — the lines, ends, and facings you scout are
     precisely the ones the battle will use. No time passes; the fight waits for your return.
