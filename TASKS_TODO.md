@@ -10,13 +10,19 @@ NEXT UPDATE:
     the choice back but lets you defend on ground you are not literally standing on.
 
 TESTS for the player:
-- [ ] NEW (2026.07.23 afternoon): scouting + the widened survey:
+- [ ] NEW (2026.07.23 afternoon): scouting + the widened survey + the deployment preview:
     1. "Ride out and scout a battlefield" in the muster menu: does the mission open, do you
-       spawn on the ground (not under it / at a corner), horse present, does Tab (or escape
-       menu) bring you back to the muster menu with nothing lost?
-    2. "Survey the ground" now lists ALL battlefields of the local terrain type (the patch's
+       spawn ON YOUR DEPLOYMENT LINE (facing the enemy's, distance message shown), horse
+       present, does Tab (or escape menu) bring you back to the muster menu with nothing lost?
+    2. THE DEPLOY PROMISE: scout a map, note where your line stands — then drill on the same
+       map from the same spot: the deployment screen's lines should match the scouted spot.
+       (Both now run the game's deterministic patch-based deployment; if they DON'T match,
+       that promise in the menu text must be softened — report it.)
+    3. "Survey the ground" now lists ALL battlefields of the local terrain type (the patch's
        own scene marked "this ground") — pick a far one, Begin: does the drill open there?
-    3. The one-map mystery is solved (data truth: each patch has at most one scene) — but
+    4. The muster menu text: two pillars readable, real percentages shown, "{newline}"
+       rendering as actual line breaks (if you see the literal word "newline", report it).
+    5. The one-map mystery is solved (data truth: each patch has at most one scene) — but
        verify battle_terrain_a isn't ALSO showing at, say, steppe or desert spots: the list
        should change with the country you ride through.
 - [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —

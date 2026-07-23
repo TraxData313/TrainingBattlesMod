@@ -68,7 +68,11 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   DefendGroundBehavior.cs     "Survey the ground" on vanilla's encounter menu when the
                               player DEFENDS a real field battle (toggleable)
   ScoutMission.cs             the scouting ride: enter any battlefield alone (no battle, no
-                              encounter) — "Camp" view set borrowed, own behavior list
+                              encounter) — "Camp" view set borrowed, own behavior list; spawns
+                              the player ON the defender deployment line (BattleSpawnPathSelector
+                              is deterministic WITH map-patch record data, random without — so
+                              CreatePatchAwareRecord is shared by scout AND training battles,
+                              making the scouted lines the drilled lines)
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners while TrainingActive)
   Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else

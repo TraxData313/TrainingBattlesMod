@@ -165,14 +165,23 @@ namespace TrainingBattles
                      + (_chosenSceneId != null ? " The ground is chosen: " + _chosenSceneId + "." : "")
                      + " Choose your side of the exercise — or call it off.";
             }
+            // The muster is the mod's front door — it should SAY what a commander can do here,
+            // with the real numbers from the config, not make the player guess.
+            var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
+                + "Nobody dies in training: the men keep " + _config.XpKeptPercent + "% of the experience they earn, and of the fallen "
+                + "about " + _config.WoundedPercent + "% wake up truly wounded — a better surgeon saves more of them before that roll."
+                + (_config.DisorganizedAfterTraining ? " The party is disorganized for a while after the drill." : "")
+                + (_config.CooldownHours > 0 ? " One drill per " + _config.CooldownHours + " hours." : "");
+            var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground, stand where "
+                + "your line would form and see where the enemy's would, so you can judge the field before a "
+                + "chasing army — or your own next stand — chooses it for you.";
             if (!CooldownReady(out var remaining))
             {
-                return "The men are still worn from the last drill. They will be ready to muster again in about "
-                     + Math.Ceiling(remaining) + " hours.";
+                return "The men are still worn from the last drill — ready to muster again in about "
+                     + Math.Ceiling(remaining) + " hours. Scouting needs no rest.{newline} {newline}" + scout;
             }
-            return "You call the company to a training muster. Divide the men into two halves, "
-                 + "choose your side, and drill on the very ground you stand on. Nobody dies in "
-                 + "training — but wounds, sweat and lessons are real.";
+            return "You call the company to a training muster. Two things a commander does here:{newline} {newline}"
+                 + drill + "{newline} {newline}" + scout;
         }
 
         private bool PickCondition(MenuCallbackArgs args)
@@ -187,6 +196,13 @@ namespace TrainingBattles
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_few}You need at least two healthy souls to hold a drill.");
+            }
+            else
+            {
+                args.Tooltip = new TextObject("{=TB_tip_pick}A mock battle against your own men: they keep "
+                    + _config.XpKeptPercent + "% of the XP they earn, about " + _config.WoundedPercent
+                    + "% of the fallen wake wounded (a better doctor lowers that), nobody dies"
+                    + (_config.DisorganizedAfterTraining ? ", and the party is disorganized for a while after." : "."));
             }
             return true;
         }
@@ -237,8 +253,10 @@ namespace TrainingBattles
             }
             else
             {
-                args.Tooltip = new TextObject("{=TB_tip_scout}Enter a battlefield alone — no battle, no cost — "
-                    + "to see the ground before you ever have to fight on it.");
+                args.Tooltip = new TextObject("{=TB_tip_scout}Enter a battlefield alone — no battle, no cost. "
+                    + "You spawn where your line would form, the enemy's line marked ahead: judge the ground "
+                    + "AND the deployment before you ever have to fight on it. (A drill forms exactly the "
+                    + "scouted lines; a real defence keeps the ground, but the enemy's approach picks their end.)");
             }
             return true;
         }
@@ -254,7 +272,9 @@ namespace TrainingBattles
             }
             BattleSceneCatalog.ShowPicker(
                 "Scout the ground",
-                "Pick a battlefield to ride out to. You go alone; nothing waits there but the land.",
+                "Pick a battlefield and ride out alone. Walk the ground, stand on your deployment line, "
+                + "and see if the deploy is good for your battle — if the map is fine but the lines are "
+                + "bad, take another map or another spot.",
                 candidates, localCount, null, offerFate: false, sceneId =>
             {
                 if (sceneId != null) LaunchScout(sceneId);
@@ -624,9 +644,11 @@ namespace TrainingBattles
             var mapSceneWrapper = Campaign.Current.MapSceneWrapper;
             var position = MobileParty.MainParty.Position;
             var mapPatch = mapSceneWrapper.GetMapPatchAtPosition(in position);
-            CampaignMission.OpenBattleMission(
-                Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, PlayerEncounter.IsNavalEncounter()),
-                usesTownDecalAtlas: false);
+            var sceneId = Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, PlayerEncounter.IsNavalEncounter());
+            // The patch-aware record makes deployment DETERMINISTIC (same lines every drill, and
+            // the same lines the scout ride previews). The old string overload carried no patch
+            // data, and without it the game picks a random spawn path and pivot per battle.
+            CampaignMission.OpenBattleMission(ScoutMission.CreatePatchAwareRecord(sceneId));
         }
 
         private MobileParty? CreateOpponentParty()

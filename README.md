@@ -1,43 +1,58 @@
 # Training Battles
 
-**Split your army. Pick a side. Fight yourself — and get better at it.**
+**Drill your army against itself. Scout the ground like a real general. Fight where you
+choose to fight.**
 
-A training mod for *Mount & Blade II: Bannerlord*. Divide your army into two teams through a
-troop-picking GUI, choose which side defends, and run a full mock battle on the very terrain
-you're standing on — then walk away with the experience and (almost) all of your men.
+A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
-**Status: the V1 core is built and installed for testing — divide, fight, nobody dies, XP
-kept, disorganized, cooldown, MCM menu. First playtest pending; see
-[TASKS_TODO.md](TASKS_TODO.md) for the checklist and the dreams beyond.**
+## Pillar 1 — Training battles
 
-## What it will do
+Split your army into two halves through a troop-picking GUI, choose which half you command
+(attacking or defending), and fight a full mock battle on the very terrain you're standing
+on — or watch it resolve from the hill via the send-troops simulation.
 
-- **Divide your army in teams** — a picker GUI (in the spirit of the lair-attack troop
-  selection) where you choose the heroes and troops of Team 1 and Team 2, and which team you
-  personally command.
-- **Pick the defender, then fight** — a real battle event between your two halves, with the
-  usual options (fight, send troops, try to escape...) plus **Cancel training** to call the
-  whole thing off, no harm done.
-- **Nobody really dies** — after the battle, "dead" troops become wounded instead (rate
-  configurable — and your surgeon's Medicine skill helps), everyone keeps the XP they earned
-  (reduced by a configurable percent), and the army becomes disorganized. War is a school,
-  not a funeral.
-- **Once a day** — by default one training battle per 24 in-game hours (configurable).
-- **See your ground** — practice your commanding on the actual terrain of your current map
-  position; later, preview and pick between the possible battle maps for the spot — including
-  when you *defend* in real battles.
-- **Configurable everything** — every parameter in a JSON config file AND in the in-game
-  **Mod Configuration Menu (MCM)** from the start.
+**Nobody really dies.** Afterward the fallen wake up: your surgeon's Medicine saves most on
+the spot, a configurable share of the rest (default 10%) are wounded, and the others shrug
+it off. The men keep a configurable share of the XP they earned (default 75%), the party
+goes disorganized for a while, and a cooldown (default 24 in-game hours) gates the next
+drill. No loot lost, no prisoners taken, no renown or relations touched — war as a school,
+not a funeral. **Cancel training** is always available before the fight and leaves the
+campaign exactly as it was.
 
-## Why
+## Pillar 2 — Scouting & choosing your ground
 
-To practice commanding and mock-fight without consequences, and to scout the battlefield you
-would really fight on — see the hills before you have to hold them.
+What a real general does before the battle: know the field.
 
-## Further dreams
+- **Survey the ground** — see every battlefield the game could put your fight on: the map
+  patch's own scene (marked *"this ground"*) plus every scene of the local terrain type —
+  and pick the one a drill is fought on.
+- **Ride out and scout** — enter any of those battlefields **alone**: no battle, no enemy,
+  no cost, no cooldown. You spawn **on your deployment line**, facing the enemy's, with the
+  distance called out — so you can judge both the terrain *and* the deploy before you ever
+  have to fight there. If the map is good but the lines are bad, take another map or move.
+- **The scouted lines are the drilled lines** — training battles and the scout preview use
+  the same deterministic deployment recipe (the game's own map-patch machinery), so what
+  you scouted is what you get. In a *real* defence the ground holds, but the enemy's
+  approach direction decides which end is theirs — the mod tells you so, honestly.
+- **Choose your ground when defending** (toggleable) — when you're the defender in a real
+  field battle and more than one scene truly fits your map patch, the encounter menu offers
+  the choice. (With the vanilla scene data each patch is claimed by exactly one scene, so
+  this mostly matters with scene-pack mods.)
 
-Garrison training at your own castles and towns; naval training battles at sea (dividing
-ships and troops, War Sails). See the bottom of [TASKS_TODO.md](TASKS_TODO.md).
+## The knobs
+
+Every parameter lives in a JSON config
+(`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod
+Configuration Menu (MCM)** — XP kept %, wounded %, cooldown hours, disorganized toggle,
+defender ground choice, hotkey (default `G` on the campaign map).
+
+## Status
+
+The V1 core loop is **playtested and working** (divide → fight → nobody dies, wounded
+filtered through the surgeon, XP banked, disorganized, cooldown). The ground pickers and
+the scouting ride are built and awaiting playtest. See [TASKS_TODO.md](TASKS_TODO.md) for
+what's next: paying salaries for drills, scouting with companions, garrison training,
+naval training battles (War Sails).
 
 ## Freely given
 
@@ -55,12 +70,10 @@ conventions: ideas land in [TASKS_TODO.md](TASKS_TODO.md), finished work moves t
 [TASKS_DONE.md](TASKS_DONE.md) with a timestamp, and the deep documentation lives in
 [CLAUDE.md](CLAUDE.md).
 
-Planned layout (mirrors ImmersiveAI):
-
 | Project | Target | Purpose |
 |---|---|---|
-| `src/TrainingBattles.Core` | netstandard2.0 | Game-independent logic: team split rules, XP/casualty math, cooldown. Unit-tested. |
-| `src/TrainingBattles.Module` | net472 | The Bannerlord module: menus, the picker GUI, the battle event, aftermath. References game DLLs. |
+| `src/TrainingBattles.Core` | netstandard2.0 | Game-independent logic: aftermath math, cooldown. Unit-tested. |
+| `src/TrainingBattles.Module` | net472 | The Bannerlord module: menus, picker GUI, the battle, scouting, aftermath. References game DLLs. |
 | `tests/TrainingBattles.Core.Tests` | net8.0 | xUnit tests for Core. |
 
 **Build & deploy** (requires the .NET 8 SDK and a Bannerlord install; path in
