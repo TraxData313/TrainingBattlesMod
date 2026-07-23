@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Helpers;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
@@ -638,6 +639,14 @@ namespace TrainingBattles
             var woundedTotal = 0;
             var xpRestored = 0;
             var xpKeptFromDrill = 0;
+            // Every drill writes a full account of the aftermath arithmetic to
+            // Configs\TrainingBattles\last_drill_report.txt — per stack: what the snapshots held,
+            // what the battle left, what was restored/filtered and with what rolls. When a number
+            // on the party screen looks wrong, this file is the witness.
+            var report = new StringBuilder();
+            report.AppendLine("Training drill report — " + CampaignTime.Now
+                + " | XpKept " + _config.XpKeptPercent + "% | Wounded " + _config.WoundedPercent + "% | playerWon " + playerWon);
+            report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | newWounded | casualties | saveChance | woundedFinal | woundedAdjust | xpAdjust");
             if (mainSnapshot != null && opponentSnapshot != null)
             {
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
@@ -656,16 +665,19 @@ namespace TrainingBattles
                     var fallen = pair.Value.Number - now.Number;
                     var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
                     var casualties = Math.Max(fallen, 0) + newWounded;
+                    var saveChance = 0.0;
+                    var woundedFinal = 0;
+                    var woundedAdjust = 0;
                     if (casualties > 0)
                     {
-                        var saveChance = SurgeonSaveChance(main.Party, character);
-                        var woundedFinal = AftermathMath.WoundedAmongFallen(
+                        saveChance = SurgeonSaveChance(main.Party, character);
+                        woundedFinal = AftermathMath.WoundedAmongFallen(
                             casualties, saveChance, _config.WoundedPercent / 100.0, () => MBRandom.RandomFloat);
                         if (fallen > 0)
                             main.MemberRoster.AddToCounts(character, fallen, false, 0); // men back first
                         var finalNumber = now.Number + Math.Max(fallen, 0);
                         var desiredWounded = Math.Min(pair.Value.Wounded + woundedFinal, finalNumber);
-                        var woundedAdjust = desiredWounded - now.Wounded;
+                        woundedAdjust = desiredWounded - now.Wounded;
                         if (woundedAdjust != 0)
                             main.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
                         restored += Math.Max(fallen, 0);
@@ -684,8 +696,28 @@ namespace TrainingBattles
                         main.MemberRoster.AddToCounts(character, 0, false, 0, xpAdjust);
                     xpKeptFromDrill += kept;
                     if (xpAdjust > 0) xpRestored += xpAdjust;
+
+                    if (casualties > 0 || xpAdjust != 0 || fallen != 0)
+                    {
+                        report.AppendLine(character.Name + " | "
+                            + pair.Value.Number + "/" + pair.Value.Wounded + "/" + pair.Value.Xp + " | "
+                            + now.Number + "/" + now.Wounded + "/" + now.Xp + " | "
+                            + fallen + " | " + newWounded + " | " + casualties + " | "
+                            + saveChance.ToString("0.00") + " | " + woundedFinal + " | "
+                            + woundedAdjust + " | " + xpAdjust);
+                    }
                 }
             }
+            report.AppendLine("TOTALS: casualties " + casualtiesTotal + " | wake wounded " + woundedTotal
+                + " | dead restored " + restored + " | xp kept " + xpKeptFromDrill + " | xp restored " + xpRestored);
+            try
+            {
+                System.IO.Directory.CreateDirectory(ModConfig.ConfigDirectory);
+                System.IO.File.WriteAllText(
+                    System.IO.Path.Combine(ModConfig.ConfigDirectory, "last_drill_report.txt"),
+                    report.ToString());
+            }
+            catch { }
 
             // 3. The drill leaves its honest marks.
             if (_config.DisorganizedAfterTraining)
