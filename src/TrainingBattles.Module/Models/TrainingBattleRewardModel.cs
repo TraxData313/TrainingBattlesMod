@@ -85,6 +85,13 @@ namespace TrainingBattles.Models
             return !Training && base.CanTroopBeTakenPrisoner(troop);
         }
 
+        public override float GetMainPartyMemberScatterChance()
+        {
+            // On a real defeat some of the player's men scatter and desert — after a lost DRILL
+            // they just dust themselves off. (Found via Anton's defeat playtest.)
+            return Training ? 0f : base.GetMainPartyMemberScatterChance();
+        }
+
         public override void GetCaptureMemberChancesForWinnerParties(MapEvent endedMapEvent, MBReadOnlyList<MapEventParty> winnerParties, out MBList<KeyValuePair<MapEventParty, float>> woundedMemberChances, out MBList<KeyValuePair<MapEventParty, float>> healthyMemberChances)
         {
             if (Training)

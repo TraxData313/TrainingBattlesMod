@@ -1,21 +1,21 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] Playtest round 2 (all fixes DEPLOYED 2026.07.23 — restart the game):
-    1. THE UPGRADE-XP BUG IS FIXED (root cause found in the game's own code: stack XP is
-       clamped to men × upgrade cost, so battle deaths destroyed the fallen men's stored
-       upgrade progress; the aftermath now restores XP absolutely — pre-battle pool + kept
-       share of earnings — after the men are back). VERIFY with the battle sisters: waiting
-       upgrades before ≈ waiting upgrades after + new ones from the drill's kept XP.
-    2. Hotkey is now G by default (T belongs to the vanilla combat log; configs carrying the
-       old T default migrate to G automatically — a hand-picked key is honored).
-    3. MCM tooltips shortened so they fit.
-    4. NEW: "Send the men in — watch it resolve from the hill" — the vanilla send-troops
-       auto-resolve view (live casualty ticker, Break In available). Verify: the aftermath
-       (men restored, XP kept, disorganized, cooldown) runs after the simulation ends —
-       the muster menu should briefly reappear with the summary and close itself.
-    Still open from round 1: companions on the opposing half; losing on purpose (must never
-    reach "taken prisoner"); surgeon Medicine visibly reducing wounded.
+- [ ] Playtest round 3 (build ready; installs itself the moment the game is closed — a
+    watcher retries the deploy every 30s. If in doubt, run tools\deploy.ps1 by hand with
+    the game closed, then restart the game):
+    1. The aftermath is now IMMEDIATE and menu-independent — the instant the fight is
+       decided (fought, hill-watched, or captured) the training wraps itself up; vanilla's
+       "capture opponent / leave" screen should no longer stick around, and RETREATING from
+       the mission now honestly ends the drill (no re-attack screen, no swinging at air).
+    2. The summary line now prints "Drill XP kept: N (and M upgrade XP restored)" — THE
+       verification for the battle-sisters upgrade bug. Check waiting upgrades before vs
+       after on both the fought path AND the hill-watch path.
+    3. Defeat: no member scatter, no gold loss, and the captured→released flash should be
+       gone (the aftermath cuts in before the capture wrap).
+    4. Round 2 items if not yet seen: hotkey now G; MCM tooltips fit; hill-watch works.
+    Still open from round 1: companions on the opposing half; surgeon Medicine visibly
+    reducing wounded.
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
     Choose one of the companions sent across to LEAD the other party (and with none picked,
     it fights leaderless, like a party without its lord). Findings so far: `MobileParty.

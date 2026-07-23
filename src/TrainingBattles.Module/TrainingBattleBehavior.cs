@@ -54,6 +54,8 @@ namespace TrainingBattles
         private MobileParty? _opponentParty;
         private TroopRoster? _mainSnapshot;        // main party AFTER the split, before the fight
         private TroopRoster? _opponentSnapshot;    // opponent party before the fight
+        private TroopRoster? _prisonSnapshot;      // main party's prisoners before the fight — to spot
+                                                   // own men who ended up "captured" by the drill
         private bool _checkResults;
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
         private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
@@ -222,14 +224,31 @@ namespace TrainingBattles
             if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null) return;
             if (!(Game.Current?.GameStateManager?.ActiveState is MapState mapState)) return;
 
-            // The auto-resolve road exits our menu before the fight, so nothing re-inits it when the
-            // dust settles — once our map event has truly ended and no menu is up, re-enter the
-            // muster menu; its init runs the aftermath.
-            if (_aftermathReady && _checkResults && !mapState.AtMenu)
+            // Finalize the training the moment it is truly decided — WITHOUT waiting for (or
+            // trusting) vanilla's wrap-up menus. Vanilla owns every non-happy path (the
+            // auto-resolve wrap, retreat, defeat: capture menus, member scatter, re-attack
+            // screens); politely waiting for them left the aftermath late or lost (Anton's
+            // second playtest). Two triggers:
+            if (_checkResults && TaleWorlds.MountAndBlade.Mission.Current == null)
             {
-                _aftermathReady = false;
-                try { GameMenu.ActivateGameMenu(MenuId); } catch { }
-                return;
+                // (a) Our map event has ended (fought out, auto-resolved, or captured) — run the
+                //     aftermath NOW; PlayerEncounter.Finish inside it tears down whatever wrap
+                //     menu vanilla managed to push.
+                if (_aftermathReady)
+                {
+                    FinishTrainingBattle();
+                    return;
+                }
+                // (b) The player bailed out of the mission (retreat) — the event is still alive
+                //     and vanilla shows its re-attack encounter menu. A drill you walk away from
+                //     is a drill that is over: finalize with the casualties so far.
+                var encounter = PlayerEncounter.Current;
+                if (encounter != null && encounter.BattleSimulation == null && mapState.AtMenu
+                    && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != MenuId)
+                {
+                    FinishTrainingBattle();
+                    return;
+                }
             }
 
             // The picker closed last frame — now that the map state is truly back, re-enter the
@@ -440,6 +459,7 @@ namespace TrainingBattles
             _pickedTeam = null;
             _mainSnapshot = main.MemberRoster.CloneRosterData();
             _opponentSnapshot = opponent.MemberRoster.CloneRosterData();
+            _prisonSnapshot = main.PrisonRoster.CloneRosterData();
             TrainingActive = true;
             _checkResults = true;
             _aftermathReady = false;
@@ -515,6 +535,7 @@ namespace TrainingBattles
             _opponentParty = null;
             _mainSnapshot = null;
             _opponentSnapshot = null;
+            _prisonSnapshot = null;
         }
 
         // ------------------------------ the aftermath ------------------------------
@@ -539,8 +560,10 @@ namespace TrainingBattles
 
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;
+            var prisonSnapshot = _prisonSnapshot;
             _mainSnapshot = null;
             _opponentSnapshot = null;
+            _prisonSnapshot = null;
             _opponentParty = null;
 
             // 1. Everyone comes home: survivors of the opposing half (and anyone who somehow ended
@@ -549,6 +572,27 @@ namespace TrainingBattles
             {
                 MergePartyBackIntoMain(opponent);
                 DestroyOpponentParty(opponent);
+            }
+
+            // 1b. A won field battle makes the losers' wounded the winner's PRISONERS in vanilla.
+            //     The reward model forbids that during training, but if any of our own slipped into
+            //     the prisoner wagons anyway, walk them back to the ranks — only the ones the drill
+            //     added (delta vs. the pre-battle prisoner snapshot; real prisoners stay prisoners).
+            if (prisonSnapshot != null && mainSnapshot != null && opponentSnapshot != null)
+            {
+                var prisonBefore = ToDictionary(prisonSnapshot);
+                var ours = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
+                foreach (var el in main.PrisonRoster.GetTroopRoster())
+                {
+                    var character = el.Character;
+                    if (character == null || character.IsHero || !ours.ContainsKey(character)) continue;
+                    prisonBefore.TryGetValue(character, out var was);
+                    var extra = el.Number - was.Number;
+                    if (extra <= 0) continue;
+                    var extraWounded = Math.Min(Math.Max(el.WoundedNumber - was.Wounded, 0), extra);
+                    main.PrisonRoster.AddToCounts(character, -extra, false, -extraWounded);
+                    main.MemberRoster.AddToCounts(character, extra, false, extraWounded);
+                }
             }
 
             // 2. Nobody dies in training: the fallen return — some wounded, per the surgeon's own
@@ -560,6 +604,8 @@ namespace TrainingBattles
             //    is SET to its pre-battle pool plus the kept share of what the drill visibly earned.
             var restored = 0;
             var woundedTotal = 0;
+            var xpRestored = 0;
+            var xpKeptFromDrill = 0;
             if (mainSnapshot != null && opponentSnapshot != null)
             {
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
@@ -585,10 +631,13 @@ namespace TrainingBattles
                     // Visible earnings only — anything the clamp already ate mid-battle counts as
                     // unearned (conservative, never negative). Target = old pool + kept earnings.
                     var earned = Math.Max(0, now.Xp - pair.Value.Xp);
-                    var targetXp = pair.Value.Xp + AftermathMath.XpKept(earned, _config.XpKeptPercent);
+                    var kept = AftermathMath.XpKept(earned, _config.XpKeptPercent);
+                    var targetXp = pair.Value.Xp + kept;
                     var xpAdjust = targetXp - now.Xp;
                     if (xpAdjust != 0)
                         main.MemberRoster.AddToCounts(character, 0, false, 0, xpAdjust);
+                    xpKeptFromDrill += kept;
+                    if (xpAdjust > 0) xpRestored += xpAdjust;
                 }
             }
 
@@ -603,7 +652,8 @@ namespace TrainingBattles
                 + (restored > 0
                     ? restored + " fallen picked themselves up — " + woundedTotal + " carried to the wagons wounded."
                     : "Not a man stayed down.")
-                + (_config.XpKeptPercent < 100 ? " The lessons stick at " + _config.XpKeptPercent + "%." : "");
+                + " Drill XP kept: " + xpKeptFromDrill
+                + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".");
             InformationManager.DisplayMessage(new InformationMessage("Training over. " + summary));
 
             try { if (Campaign.Current?.CurrentMenuContext != null) GameMenu.ExitToLast(); } catch { }
