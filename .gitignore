@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+
+dist/
+
+# Droppings of TaleWorlds' Workshop uploader when run from the repo root
+steam_appid.txt
+steam_workshop_uploader.txt
