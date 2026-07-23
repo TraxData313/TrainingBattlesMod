@@ -1,6 +1,23 @@
 BUGS:
 
 NEXT UPDATE:
+- [ ] See and pick the battle terrain (training) — RESEARCHED, surprisingly easy
+    A big reason for the mod: practicing on the ACTUAL terrain you're standing on. The game
+    keeps a list (`GameSceneDataManager.SingleplayerBattleScenes`) of battle scenes per map
+    patch, and when several match it picks RANDOMLY — so the variants exist and are
+    enumerable. A custom `SceneModel` (stock model override, no Harmony) returns the
+    player's chosen scene when a choice is pending. See research doc §4.
+- [ ] Pick your ground when DEFENDING in real battles
+    The same terrain-variant picker offered in real battles when the player is the defender —
+    you chose where to stand and wait, so you should choose the ground. (Attacker keeps
+    vanilla behavior.) Probably its own toggle, and worth checking mod-compat carefully.
+    → Same `SceneModel` override as the training picker serves this for free; only the
+    "offer the choice at the right moment" hook differs.
+- [ ] Decide the shipping defaults before any public release: XpKept 100 vs 75, Wounded 10%
+    vs higher, and whether the surgeon's save should stack with the WoundedPercent knob
+    (today it does — the effective wounded rate is BELOW the knob when the doctor is good). DECIDED - 75%, 10%, keep doctor as is
+
+TESTS for the player:
 - [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —
     XP: "super" per Anton, wounded knob: 42 casualties → 3 wounded at 10% with the whole
     arithmetic confirmed in last_drill_report.txt, incl. +7.9k/+7.4k XP restored on two
@@ -10,9 +27,9 @@ NEXT UPDATE:
        flash, no member scatter.
     3. The earlier 22-KIA→7-wounded outlier: if a weird wounded count ever shows again,
        read Configs\TrainingBattles\last_drill_report.txt — it names the source.
-- [ ] Decide the shipping defaults before any public release: XpKept 100 vs 75, Wounded 10
-    vs higher, and whether the surgeon's save should stack with the WoundedPercent knob
-    (today it does — the effective wounded rate is BELOW the knob when the doctor is good).
+
+
+POST V1 or NOT FULLY DECIDED:
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
     Choose one of the companions sent across to LEAD the other party (and with none picked,
     it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
@@ -29,26 +46,6 @@ NEXT UPDATE:
     "vanilla encounter menu" redesign: spawn the party visibly, let the vanilla encounter
     flow own attack/send-troops/leave, and move our aftermath fully onto MapEventEnded
     (the listener already exists since round 2). Pairs naturally with the commander task.
-- [ ] "Try to escape" option — PROBABLY NOT NEEDED, discuss
-    In vanilla that option exists when someone TRAPS you and you try to break away (speed
-    check, possible running battle). In a drill nobody chases you — "Cancel training" is
-    the honest escape, free and always available. If the wish is to PRACTICE escaping (see
-    the mechanics fire), that needs the opponent to chase the player on the map — which is
-    the map-parties redesign above. Parked until that lands.
-
-POST V1 or NOT FULLY DECIDED:
-- [ ] See and pick the battle terrain (training) — RESEARCHED, surprisingly easy
-    A big reason for the mod: practicing on the ACTUAL terrain you're standing on. The game
-    keeps a list (`GameSceneDataManager.SingleplayerBattleScenes`) of battle scenes per map
-    patch, and when several match it picks RANDOMLY — so the variants exist and are
-    enumerable. A custom `SceneModel` (stock model override, no Harmony) returns the
-    player's chosen scene when a choice is pending. See research doc §4.
-- [ ] Pick your ground when DEFENDING in real battles
-    The same terrain-variant picker offered in real battles when the player is the defender —
-    you chose where to stand and wait, so you should choose the ground. (Attacker keeps
-    vanilla behavior.) Probably its own toggle, and worth checking mod-compat carefully.
-    → Same `SceneModel` override as the training picker serves this for free; only the
-    "offer the choice at the right moment" hook differs.
 - [ ] Training while leading an ARMY (V1 blocks it with an honest message) — split across
     the whole army's parties, or at least allow the main party to drill beside the army.
 - [ ] Garrison training at owned castles/towns
