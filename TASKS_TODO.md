@@ -1,19 +1,18 @@
 BUGS:
+- [ ] The player and companions get their health decreased when getting injured - I want to prevent that, maybe return up to X by default 90% of thei health
+- [ ] When I hold TAB when I'm leaving the scouting map I dont see the leaving bar and text, but when I hold it I leave ok, like in normal battle
 
 NEXT UPDATE:
+- [ ] Can you by default split the group in half, only if it is easy - each companion and troop gets 50/50 to end up in our or the opposite team (without the player of course)
+- [ ] When I press G if i have to wait for the next drill to unlock, can you add how much time to wait I have remaining
+- [ ] Now the opposite training side gets a random bandit colors - can I chose a default one, that is orange, with some white Cross banner on it, and be able to change that from the Mod configs
 - [ ] Pay for the Training Battle it should be X mod configurable daily salaries for the soldiers involved. Also could you research how much it would cost if I had had to have the perk where I can buy equipment and give it to them for XP in salaries?
-- [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
-    follow-AI so the ride has an escort; needs agent-AI/order plumbing, own session.
-- [ ] DECIDE (Anton): should the real-defense ground choice also use the WIDER same-terrain
-    pool? Today it stays strict (only scenes truly claiming the map patch — with vanilla
-    data that is at most ONE, so the defend option effectively never shows). Widening gives
-    the choice back but lets you defend on ground you are not literally standing on.
 
 TESTS for the player:
 - [ ] NEW (2026.07.23 afternoon): scouting + the widened survey + the deployment preview:
     1. "Ride out and scout a battlefield" in the muster menu: does the mission open, do you
        spawn ON YOUR DEPLOYMENT LINE (facing the enemy's, distance message shown), horse
-       present, does Tab (or escape menu) bring you back to the muster menu with nothing lost?
+       present, does Tab (or escape menu) bring you back to the muster menu with nothing lost? DONE
     2. THE DEPLOY PROMISE: scout a map, note where your line stands — then drill on the same
        map from the same spot: the deployment screen's lines should match the scouted spot.
        (Both now run the game's deterministic patch-based deployment; if they DON'T match,
@@ -25,18 +24,16 @@ TESTS for the player:
     5. The one-map mystery is solved (data truth: each patch has at most one scene) — but
        verify battle_terrain_a isn't ALSO showing at, say, steppe or desert spots: the list
        should change with the country you ride through.
-- [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —
-    XP: "super" per Anton, wounded knob: 42 casualties → 3 wounded at 10% with the whole
-    arithmetic confirmed in last_drill_report.txt, incl. +7.9k/+7.4k XP restored on two
-    fully wiped stacks; retreat/cancel end the drill cleanly):
-    1. Companions sent to the opposing half — do they fight, and come home clean?
-    2. LOSE on purpose with the current build — defeat must end at the summary, no capture
-       flash, no member scatter.
-    3. The earlier 22-KIA→7-wounded outlier: if a weird wounded count ever shows again,
-       read Configs\TrainingBattles\last_drill_report.txt — it names the source.
+- [ ] I don't know how to test a real deffence, not in a war right now, is there a way to generate an incoming party that attacks me and I defend window?
 
 
 POST V1 or NOT FULLY DECIDED:
+- [ ] Training against a custom-composed enemy
+    Instead of splitting your own army, spawn a mock enemy of chosen composition (culture,
+    tiers, counts) to drill against specific threats. (Idea parked — V1 is army-splitting.)
+    Maybe this option should be marked as developer option but it is good to test the defence/attack against other parties and if the user wants use it to see how they woldiers would fare agains an enemy army of diverse troops
+- [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
+    follow-AI so the ride has an escort; needs agent-AI/order plumbing, own session.
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
     Choose one of the companions sent across to LEAD the other party (and with none picked,
     it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
@@ -61,8 +58,5 @@ POST V1 or NOT FULLY DECIDED:
 - [ ] Naval training battles (War Sails)
     Divide the ships and the troops at sea and run mock naval battles — same rules (XP kept,
     wounded not dead, disorganized, cooldown). The scene API already carries the naval flag.
-- [ ] Training against a custom-composed enemy
-    Instead of splitting your own army, spawn a mock enemy of chosen composition (culture,
-    tiers, counts) to drill against specific threats. (Idea parked — V1 is army-splitting.)
 - [ ] A menu door besides the hotkey (e.g. a party-screen button or clan-screen entry), for
     players who never read hotkey hints.
