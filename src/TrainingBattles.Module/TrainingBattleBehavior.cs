@@ -55,6 +55,7 @@ namespace TrainingBattles
         private TroopRoster? _mainSnapshot;        // main party AFTER the split, before the fight
         private TroopRoster? _opponentSnapshot;    // opponent party before the fight
         private bool _checkResults;
+        private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
 
         public TrainingBattleBehavior(ModConfig config)
         {
@@ -169,7 +170,9 @@ namespace TrainingBattles
         private void CancelTraining()
         {
             // Nothing has touched the real rosters yet — dropping the pick is the whole cancel.
+            // (isLeave only styles the option; leaving the menu is on us.)
             _pickedTeam = null;
+            try { GameMenu.ExitToLast(); } catch { }
         }
 
         // ------------------------------ the hotkey door ------------------------------
@@ -179,6 +182,21 @@ namespace TrainingBattles
         {
             if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null) return;
             if (!(Game.Current?.GameStateManager?.ActiveState is MapState mapState)) return;
+
+            // The picker closed last frame — now that the map state is truly back, re-enter the
+            // muster menu so its text and options reflect the pick.
+            if (_returnToMenuPending)
+            {
+                _returnToMenuPending = false;
+                try
+                {
+                    if (mapState.AtMenu) GameMenu.SwitchToMenu(MenuId);
+                    else GameMenu.ActivateGameMenu(MenuId);
+                }
+                catch { /* worst case the player reopens the menu by hotkey */ }
+                return;
+            }
+
             if (mapState.AtMenu || mapState.MapConversationActive) return;
             if (InformationManager.IsAnyInquiryActive()) return;
             if (!Input.IsKeyReleased(ParseKey(_config.OpenMenuHotkey))) return;
@@ -222,12 +240,26 @@ namespace TrainingBattles
         private void OpenPicker()
         {
             // The screen works on a CLONE of the real roster: nothing leaves the party until the
-            // battle truly begins, so a quit or crash mid-pick can never lose a man.
-            _pickedTeam = null;
+            // battle truly begins, so a quit or crash mid-pick can never lose a man. A previous
+            // pick is remembered — it opens pre-loaded on the left, subtracted from the right.
             var left = TroopRoster.CreateDummyTroopRoster();
             var leftPrisoners = TroopRoster.CreateDummyTroopRoster();
             var right = MobileParty.MainParty.MemberRoster.CloneRosterData();
             var rightPrisoners = TroopRoster.CreateDummyTroopRoster();
+            if (_pickedTeam != null)
+            {
+                var live = ToDictionary(right);
+                foreach (var el in _pickedTeam.GetTroopRoster())
+                {
+                    if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
+                    if (!live.TryGetValue(el.Character, out var have)) continue;
+                    var take = Math.Min(el.Number, have.Number);
+                    if (take <= 0) continue;
+                    var takeWounded = Math.Min(Math.Min(el.WoundedNumber, have.Wounded), take);
+                    right.AddToCounts(el.Character, -take, false, -takeWounded);
+                    left.AddToCounts(el.Character, take, false, takeWounded);
+                }
+            }
             PartyScreenHelper.OpenScreenWithDummyRoster(
                 left, leftPrisoners, right, rightPrisoners,
                 new TextObject("{=TB_team_opponents}Training opponents"),
@@ -247,33 +279,64 @@ namespace TrainingBattles
 
         private static Tuple<bool, TextObject> PickerDoneCondition(TroopRoster leftMemberRoster, TroopRoster leftPrisonRoster, TroopRoster rightMemberRoster, TroopRoster rightPrisonRoster, int leftLimitNum, int rightLimitNum)
         {
-            if (leftMemberRoster == null || leftMemberRoster.TotalHealthyCount < 1)
-                return new Tuple<bool, TextObject>(false, new TextObject("{=TB_pick_need_opp}Send at least one healthy man to the opposing half."));
-            if (rightMemberRoster == null || rightMemberRoster.TotalHealthyCount < 1)
-                return new Tuple<bool, TextObject>(false, new TextObject("{=TB_pick_need_own}Keep at least one healthy soul on your side."));
-            return new Tuple<bool, TextObject>(true, TextObject.GetEmpty());
+            try
+            {
+                if (leftMemberRoster == null || leftMemberRoster.TotalHealthyCount < 1)
+                    return new Tuple<bool, TextObject>(false, new TextObject("{=TB_pick_need_opp}Send at least one healthy man to the opposing half."));
+                if (rightMemberRoster == null || rightMemberRoster.TotalHealthyCount < 1)
+                    return new Tuple<bool, TextObject>(false, new TextObject("{=TB_pick_need_own}Keep at least one healthy soul on your side."));
+                return new Tuple<bool, TextObject>(true, TextObject.GetEmpty());
+            }
+            catch
+            {
+                // A throwing condition must never lock the Done button shut.
+                return new Tuple<bool, TextObject>(true, TextObject.GetEmpty());
+            }
         }
 
         private void PickerClosed(PartyBase leftOwnerParty, TroopRoster leftMemberRoster, TroopRoster leftPrisonRoster, PartyBase rightOwnerParty, TroopRoster rightMemberRoster, TroopRoster rightPrisonRoster, bool fromCancel)
         {
-            if (!fromCancel && leftMemberRoster != null && leftMemberRoster.TotalManCount > 0)
-                _pickedTeam = leftMemberRoster.CloneRosterData();
-
-            // Back under the muster menu — re-enter it so the text and options reflect the pick.
+            // This fires MID state-transition (the party screen is still popping) — touch nothing of
+            // the menu here; just record the pick and let the next tick re-enter the muster menu.
             try
             {
-                if (Campaign.Current?.CurrentMenuContext != null) GameMenu.SwitchToMenu(MenuId);
-                else GameMenu.ActivateGameMenu(MenuId);
+                if (!fromCancel && leftMemberRoster != null && leftMemberRoster.TotalManCount > 0)
+                {
+                    _pickedTeam = leftMemberRoster.CloneRosterData();
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: opposing half set — " + _pickedTeam.TotalHealthyCount + " able men."));
+                }
+                else if (fromCancel)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: selection closed without changes."));
+                }
             }
-            catch { /* worst case the player reopens the menu by hotkey */ }
+            catch { }
+            _returnToMenuPending = true;
         }
 
         // ------------------------------ the battle ------------------------------
 
         private void BeginBattle(bool playerDefends)
         {
+            try { BeginBattleCore(playerDefends); }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the drill could not start (" + ex.Message + ")."));
+                AbortLiveBattle();
+            }
+        }
+
+        private void BeginBattleCore(bool playerDefends)
+        {
             var picked = _pickedTeam;
-            if (picked == null || picked.TotalHealthyCount < 1) return;
+            if (picked == null || picked.TotalHealthyCount < 1)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("Training Battles: divide the men first."));
+                return;
+            }
             if (!CooldownReady(out _)) return;
             if (!CanMusterNow(out var reason))
             {
