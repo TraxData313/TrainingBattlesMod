@@ -8,10 +8,11 @@ Guidance for Claude Code when working in this repository.
 their army into two teams through a picker GUI, choose a defender, and fight a mock battle
 against themselves on the real terrain of their current map position. Afterward nobody truly
 dies: the "dead" become wounded (the surgeon's Medicine skill softening it), earned XP is
-kept at a configurable percent, the army goes disorganized, and a cooldown (default 24h)
-gates the next drill. Later: previewing/picking between the possible battle maps for the
-current spot (also when defending real battles), garrison training at owned fiefs, and naval
-training battles.
+kept at a configurable percent (default 75), the army goes disorganized, and a cooldown
+(default 24h) gates the next drill. Since 2026.07.23 the player can also CHOOSE the
+battlefield: among the scene variants the game would pick from at random, both for training
+drills and when DEFENDING real field battles (own toggle, attacker keeps vanilla). Later:
+garrison training at owned fiefs, and naval training battles.
 
 ## Who does what — and how we work
 
@@ -58,8 +59,15 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
   TrainingBattleBehavior.cs   THE HEART: muster menu, picker flow, battle recipe, aftermath,
                               cooldown, stale-party recovery — read its class doc first
+  BattleSceneCatalog.cs       enumerates the battlefield variants for a position (vanilla's
+                              own candidate chain) + the shared "Choose the ground" inquiry
+  DefendGroundBehavior.cs     "Survey the ground" on vanilla's encounter menu when the
+                              player DEFENDS a real field battle (toggleable)
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners while TrainingActive)
+  Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else
+                              delegates down the BaseModel chain (a DECORATOR — AddModel<T>
+                              hands us the previously registered SceneModel, mod-compatible)
   Mcm/                        McmBridge + settings — the ImmersiveAI soft-dependency pattern
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)

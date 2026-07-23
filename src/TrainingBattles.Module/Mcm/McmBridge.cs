@@ -65,6 +65,7 @@ namespace TrainingBattles.Mcm
             s.WoundedPercent = c.WoundedPercent;
             s.DisorganizedAfterTraining = c.DisorganizedAfterTraining;
             s.CooldownHours = c.CooldownHours;
+            s.ChooseGroundWhenDefending = c.ChooseGroundWhenDefending;
             SelectOrAdd(s.OpenMenuHotkey, c.OpenMenuHotkey);
         }
 
@@ -75,6 +76,7 @@ namespace TrainingBattles.Mcm
             c.WoundedPercent = s.WoundedPercent;
             c.DisorganizedAfterTraining = s.DisorganizedAfterTraining;
             c.CooldownHours = s.CooldownHours;
+            c.ChooseGroundWhenDefending = s.ChooseGroundWhenDefending;
             c.OpenMenuHotkey = s.OpenMenuHotkey.SelectedValue ?? c.OpenMenuHotkey;
         }
 

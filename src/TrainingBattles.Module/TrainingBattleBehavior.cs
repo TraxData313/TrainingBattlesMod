@@ -57,6 +57,7 @@ namespace TrainingBattles
         private TroopRoster? _opponentSnapshot;    // opponent party before the fight
         private TroopRoster? _prisonSnapshot;      // main party's prisoners before the fight — to spot
                                                    // own men who ended up "captured" by the drill
+        private string? _chosenSceneId;            // the battlefield the player picked for the drill
         private bool _checkResults;
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
         private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
@@ -106,6 +107,7 @@ namespace TrainingBattles
             // Fresh session: no picked team, no live battle — whatever the previous session left.
             TrainingActive = false;
             _pickedTeam = null;
+            _chosenSceneId = null;
             _opponentParty = null;
             _mainSnapshot = null;
             _opponentSnapshot = null;
@@ -122,6 +124,9 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_pick",
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
+            starter.AddGameMenuOption(MenuId, "training_ground",
+                "{=TB_opt_ground}Survey the ground — choose the battlefield",
+                GroundCondition, _ => ChooseGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
                 "{=TB_opt_attack}Begin — your half attacks",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
@@ -153,7 +158,9 @@ namespace TrainingBattles
                 var yours = MobileParty.MainParty.MemberRoster.TotalHealthyCount - _pickedTeam.TotalHealthyCount;
                 return "The two halves stand ready on the field: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
-                     + " with you. Choose your side of the exercise — or call it off.";
+                     + " with you."
+                     + (_chosenSceneId != null ? " The ground is chosen: " + _chosenSceneId + "." : "")
+                     + " Choose your side of the exercise — or call it off.";
             }
             if (!CooldownReady(out var remaining))
             {
@@ -179,6 +186,51 @@ namespace TrainingBattles
                 args.Tooltip = new TextObject("{=TB_tip_few}You need at least two healthy souls to hold a drill.");
             }
             return true;
+        }
+
+        private bool GroundCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            var candidates = TrainingGroundCandidates();
+            if (candidates.Count == 0) return false;
+            if (candidates.Count == 1)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_one_ground}Only one battlefield fits this ground: "
+                    + BattleSceneCatalog.Describe(candidates[0]));
+            }
+            else
+            {
+                args.Tooltip = new TextObject(_chosenSceneId == null
+                    ? "{=TB_tip_ground}See the " + candidates.Count + " battlefields that fit this ground and pick where the drill is fought."
+                    : "{=TB_tip_ground_set}Ground chosen: " + _chosenSceneId + ". Survey again to change it.");
+            }
+            return true;
+        }
+
+        private void ChooseGround()
+        {
+            var candidates = TrainingGroundCandidates();
+            if (candidates.Count < 2) return;
+            BattleSceneCatalog.ShowPicker(candidates, _chosenSceneId, sceneId =>
+            {
+                _chosenSceneId = sceneId;
+                // Re-init the muster menu so its text shows (or drops) the chosen ground.
+                try { GameMenu.SwitchToMenu(MenuId); } catch { }
+            });
+        }
+
+        private static List<SingleplayerBattleSceneData> TrainingGroundCandidates()
+        {
+            try
+            {
+                return BattleSceneCatalog.CandidatesAt(
+                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter());
+            }
+            catch
+            {
+                return new List<SingleplayerBattleSceneData>();
+            }
         }
 
         private bool BeginCondition(MenuCallbackArgs args)
@@ -214,6 +266,7 @@ namespace TrainingBattles
             // Nothing has touched the real rosters yet — dropping the pick is the whole cancel.
             // (isLeave only styles the option; leaving the menu is on us.)
             _pickedTeam = null;
+            _chosenSceneId = null;
             try { GameMenu.ExitToLast(); } catch { }
         }
 
@@ -472,6 +525,27 @@ namespace TrainingBattles
             _aftermathReady = false;
             _pendingPlayerWon = null;
 
+            // Arm the chosen battlefield (if the player picked one and it still fits where the
+            // party now stands). The scene model gives it out on the next scene query — which is
+            // OUR OpenBattleMission call below, or, on the send-troops road, a Break In from the
+            // simulation. It self-clears on read and at map-event end, so nothing leaks.
+            if (_chosenSceneId != null)
+            {
+                var stillFits = false;
+                foreach (var scene in TrainingGroundCandidates())
+                    if (scene.SceneID == _chosenSceneId) { stillFits = true; break; }
+                if (stillFits)
+                {
+                    Models.TrainingBattlesSceneModel.PendingSceneId = _chosenSceneId;
+                }
+                else
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: the chosen battlefield no longer fits this ground — fate picks instead."));
+                }
+                _chosenSceneId = null;
+            }
+
             // The vanilla forced-battle recipe (Company of Trouble quest); a throw here is caught by
             // LaunchTraining and unwinds honestly: men home, party gone, no cooldown burned.
             PlayerEncounter.Start();
@@ -543,6 +617,7 @@ namespace TrainingBattles
             _mainSnapshot = null;
             _opponentSnapshot = null;
             _prisonSnapshot = null;
+            Models.TrainingBattlesSceneModel.PendingSceneId = null;
         }
 
         // ------------------------------ the aftermath ------------------------------
@@ -589,6 +664,7 @@ namespace TrainingBattles
             TrainingActive = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            Models.TrainingBattlesSceneModel.PendingSceneId = null; // never read = never armed again
 
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;

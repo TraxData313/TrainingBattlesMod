@@ -13,12 +13,12 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 2;
+        public int ConfigVersion { get; set; } = 3;
 
         /// <summary>How much of the experience earned in a training battle the troops KEEP,
-        /// as a percent (0..100). Default 100 for the testing period (Anton's call, 2026.07.23) —
-        /// revisit before a public release whether 75 is the better shipping default.</summary>
-        public int XpKeptPercent { get; set; } = 100;
+        /// as a percent (0..100). Default 75 — the decided shipping default (Anton, 2026.07.23);
+        /// the testing period ran at 100.</summary>
+        public int XpKeptPercent { get; set; } = 75;
 
         /// <summary>Of ALL the drill's casualties (the "dead" and the battle-wounded alike) whom the
         /// surgeon could not patch up on the spot, this percent (0..100) wake up truly WOUNDED; the
@@ -37,6 +37,12 @@ namespace TrainingBattles
         /// <summary>The campaign-map key that opens the training muster menu. Default "G"
         /// ("T" was the v1 default until it turned out vanilla uses T for the combat log).</summary>
         public string OpenMenuHotkey { get; set; } = "G";
+
+        /// <summary>When the player DEFENDS a real field battle, the encounter menu offers a
+        /// choice among the battlefield variants the game would otherwise pick from at random —
+        /// you chose where to stand and wait, so you choose the ground. The attacker always gets
+        /// vanilla's pick. Default true.</summary>
+        public bool ChooseGroundWhenDefending { get; set; } = true;
 
         // ------------------------------------------------------------------
 
@@ -97,7 +103,11 @@ namespace TrainingBattles
             // still carrying that default follow to "G"; a key set by hand later is honored.
             if (ConfigVersion < 2 && string.Equals(OpenMenuHotkey?.Trim(), "T", StringComparison.OrdinalIgnoreCase))
                 OpenMenuHotkey = "G";
-            ConfigVersion = 2;
+            // v2 ran the testing period at XpKept 100; the decided shipping default is 75. A
+            // config still on the old default follows; any other value is a hand pick and stays.
+            if (ConfigVersion < 3 && XpKeptPercent == 100)
+                XpKeptPercent = 75;
+            ConfigVersion = 3;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

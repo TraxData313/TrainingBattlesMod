@@ -22,9 +22,9 @@ namespace TrainingBattles.Mcm
         public override string FormatType => "json2";
 
         [SettingPropertyInteger("XP kept (%)", 0, 100, "0'%'", Order = 0, RequireRestart = false,
-            HintText = "Share of battle XP the troops keep from a drill. Default 100.")]
+            HintText = "Share of battle XP the troops keep from a drill. Default 75.")]
         [SettingPropertyGroup("Aftermath", GroupOrder = 0)]
-        public int XpKeptPercent { get; set; } = 100;
+        public int XpKeptPercent { get; set; } = 75;
 
         [SettingPropertyInteger("Wounded among the fallen (%)", 0, 100, "0'%'", Order = 1, RequireRestart = false,
             HintText = "Drill casualties your surgeon cannot save wake wounded at this rate; the rest shrug it off. Medicine skill helps. Default 10.")]
@@ -41,9 +41,14 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Pacing", GroupOrder = 1)]
         public int CooldownHours { get; set; } = 24;
 
+        [SettingPropertyBool("Choose ground when defending", Order = 0, RequireRestart = false,
+            HintText = "When you DEFEND a real field battle, the encounter menu offers a choice among the battlefield variants the game would pick from at random. Default on.")]
+        [SettingPropertyGroup("Battlefield", GroupOrder = 2)]
+        public bool ChooseGroundWhenDefending { get; set; } = true;
+
         [SettingPropertyDropdown("Open-menu key", Order = 0, RequireRestart = false,
             HintText = "Campaign-map key for the training muster. Default G (T is the vanilla combat log).")]
-        [SettingPropertyGroup("Controls", GroupOrder = 2)]
+        [SettingPropertyGroup("Controls", GroupOrder = 3)]
         public Dropdown<string> OpenMenuHotkey { get; set; } = HotkeyChoices("G");
 
         private static Dropdown<string> HotkeyChoices(string selected)

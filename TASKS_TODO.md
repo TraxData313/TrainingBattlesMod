@@ -1,23 +1,18 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] See and pick the battle terrain (training) — RESEARCHED, surprisingly easy
-    A big reason for the mod: practicing on the ACTUAL terrain you're standing on. The game
-    keeps a list (`GameSceneDataManager.SingleplayerBattleScenes`) of battle scenes per map
-    patch, and when several match it picks RANDOMLY — so the variants exist and are
-    enumerable. A custom `SceneModel` (stock model override, no Harmony) returns the
-    player's chosen scene when a choice is pending. See research doc §4.
-- [ ] Pick your ground when DEFENDING in real battles
-    The same terrain-variant picker offered in real battles when the player is the defender —
-    you chose where to stand and wait, so you should choose the ground. (Attacker keeps
-    vanilla behavior.) Probably its own toggle, and worth checking mod-compat carefully.
-    → Same `SceneModel` override as the training picker serves this for free; only the
-    "offer the choice at the right moment" hook differs.
-- [ ] Decide the shipping defaults before any public release: XpKept 100 vs 75, Wounded 10%
-    vs higher, and whether the surgeon's save should stack with the WoundedPercent knob
-    (today it does — the effective wounded rate is BELOW the knob when the doctor is good). DECIDED - 75%, 10%, keep doctor as is
 
 TESTS for the player:
+- [ ] NEW (2026.07.23): the ground pickers, both doors:
+    1. Training: "Survey the ground" in the muster menu — does the list show sensible
+       variants, does the fight open on the chosen one, does "As fate wills" go back to
+       random? (The option hides when only one scene fits the patch — ride somewhere else.)
+    2. Defending a real battle: get attacked in the field, look for "Survey the ground"
+       in the encounter menu (defender only), pick a scene, Fight — chosen ground? Then
+       once more but auto-resolve/get away instead: the choice must NOT leak into any
+       later battle.
+    3. Mod-compat sanity: with other mods installed the option order in the encounter
+       menu may shift — cosmetic only, but worth a glance.
 - [ ] Remaining playtest items (the core loop is VERIFIED WORKING as of 2026.07.23 —
     XP: "super" per Anton, wounded knob: 42 casualties → 3 wounded at 10% with the whole
     arithmetic confirmed in last_drill_report.txt, incl. +7.9k/+7.4k XP restored on two
