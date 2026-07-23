@@ -6,8 +6,9 @@ A training mod for *Mount & Blade II: Bannerlord*. Divide your army into two tea
 troop-picking GUI, choose which side defends, and run a full mock battle on the very terrain
 you're standing on — then walk away with the experience and (almost) all of your men.
 
-**Status: early — the ideas are written down, the code is being built. See
-[TASKS_TODO.md](TASKS_TODO.md) for the plan.**
+**Status: the V1 core is built and installed for testing — divide, fight, nobody dies, XP
+kept, disorganized, cooldown, MCM menu. First playtest pending; see
+[TASKS_TODO.md](TASKS_TODO.md) for the checklist and the dreams beyond.**
 
 ## What it will do
 

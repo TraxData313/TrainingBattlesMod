@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>TrainingBattles.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same JSON library the game and most mods already ship -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

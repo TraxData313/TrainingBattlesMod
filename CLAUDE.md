@@ -46,21 +46,35 @@ real opinions, push back, propose things.
 - A training battle must never permanently cost the player: no troop deaths (wounded
   instead), no prisoner loss, no loot loss, no relation/crime side effects.
 
-## Repository layout (planned — mirror ImmersiveAI)
+## Repository layout (real since 2026.07.23 — V1 core built, awaiting first playtest)
 
 ```
 src/TrainingBattles.Core/     netstandard2.0 — pure logic, fully unit-tested:
-                              team split rules, XP-keep math, dead→wounded math
-                              (Medicine-scaled), cooldown math
-src/TrainingBattles.Module/   net472 — the Bannerlord module: SubModule, campaign behavior,
-                              map menu entry, picker GUI (Gauntlet), the mock battle event,
-                              aftermath application, MCM settings
-tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core
-module/                       SubModule.xml + any GUI prefabs, copied on deploy
+  AftermathMath.cs            per-fallen two-roll pipeline (surgeon save → wounded share),
+                              XP kept/removed split
+  TrainingCooldown.cs         the once-per-N-hours clock (0 = unlimited)
+src/TrainingBattles.Module/   net472 — the Bannerlord module:
+  SubModule.cs                entry point: config, behavior, reward model, MCM bind, hotkey tick
+  ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
+  TrainingBattleBehavior.cs   THE HEART: muster menu, picker flow, battle recipe, aftermath,
+                              cooldown, stale-party recovery — read its class doc first
+  Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
+                              prisoners while TrainingActive)
+  Mcm/                        McmBridge + settings — the ImmersiveAI soft-dependency pattern
+tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
+module/SubModule.xml          manifest (optional MCM dependency declared)
 tools/deploy.ps1              build + install as "Training Battles (dev)" into the game's
-                              Modules folder (own module id, safe beside a Workshop copy)
-tools/package.ps1             clean dist layout + Workshop zip
+                              Modules folder (module id TrainingBattles.Dev, safe beside a
+                              future Workshop copy)
 ```
+
+Flow in one breath: hotkey (default `T`) on the open map → muster menu (`training_battle_menu`)
+→ "Divide the men" opens the party screen over a CLONE of the roster (nothing leaves the real
+party until battle truly begins) → Begin attack/defend moves the picked men into a temp
+bandit-component "Training Opponents" party and runs the Company-of-Trouble recipe → after the
+mission the menu's re-init runs the aftermath (merge home, resurrect the fallen via
+AftermathMath + the game's surgeon math, scale XP, disorganize, stamp cooldown) → summary
+message, menu exits.
 
 Conventions carried over from ImmersiveAI: **Core = pure and unit-tested, Module = game
 glue**; raw game-API research goes through ilspycmd/decompilation of the real game DLLs when
