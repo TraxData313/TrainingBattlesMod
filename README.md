@@ -2,6 +2,8 @@
 - Split up your boys in two teams and do a drill battle
 - Pick your battle ground (and time) before the drills and before the real battles
 
+![Training Battles](Screenshots/preview_thumbnail.jpg)
+
 A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
 ## Pillar 1 — Training battles
@@ -17,11 +19,20 @@ A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 - **Disorganized** after - they had to form up etc
 - **Cooldown** - you have to wait before you can do another drill (24 in game hours by default)
 
+![The muster menu](Screenshots/20260724114356_1.jpg)
+*The muster menu (hotkey `G` on the map): set the ground and the hour, divide the men, pick your side — or just send them in and watch from the hill.*
+
+![A drill in full swing](Screenshots/20260724115152_1.jpg)
+*Your two halves meet on the real terrain of your map position. Nobody truly dies.*
+
 **Mock enemy** *(optional, off by default)* — compose a phantom enemy force from **every
 troop in the game**, all cultures in one picker screen, any mix, up to 1000 men — and drill
 the whole company against it. The phantoms never touch your roster and vanish afterward;
 your own men follow the normal training rules. The test bench for "how would we fare
 against X?".
+
+![Composing a mock enemy](Screenshots/20260724115022_1.jpg)
+*Composing a mock enemy: every troop in the game, 500 of each on the shelf, any mix up to 1000 men.*
 
 
 ## Pillar 2 — Scouting & choosing your ground
@@ -34,6 +45,12 @@ What a real general does before the battle: know the field — and pick the hour
 - **Scouted lines = drilled lines** — drills use the same deterministic deployment as the scout, so what you scouted is what you get. In a *real* battle the ground holds, but the enemy's true approach direction may turn the field around
 - **Same tools in REAL battles** *(per-side toggles, both on by default)* — the encounter menu offers the same options (hour, scout, battlefield) when defending **or** attacking. Both armies stand frozen, so the scouted lines and facings are **exact** — and no time passes while you ride
 - **Rule of thumb** — scout from the muster to *learn* the battlefields, scout from the attack screen to *plan the actual fight*
+
+![The same tools in a real battle](Screenshots/20260724115425_1.jpg)
+*A real encounter: choose the hour, select the battlefield, or ride out and scout it alone — the armies stand where they stand, so the lines you see are the coming battle's true ones.*
+
+![Choose the ground](Screenshots/20260724114502_1.jpg)
+*Choose the ground: the map patch's own scene plus every battlefield of the local terrain type.*
 
 
 ## Looking for…?
@@ -54,6 +71,9 @@ Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\c
 - **Drill knobs** — XP kept %, wounded %, hero health restored %, cooldown hours, drill pay (days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
 - **Ground & time knobs** — time of day for battles, the real-battle scout toggles (defending and attacking separately)
 - **Misc** — the mock-enemy toggle, the hotkey (default `G` on the campaign map)
+
+![The MCM settings page](Screenshots/20260724120934_1.jpg)
+*Every knob in MCM — sliders for the aftermath, the pacing and the battlefield tools.*
 
 
 ## Freely given
