@@ -146,22 +146,28 @@ namespace TrainingBattles
         /// then refreshes whichever menu asked. Cancel changes nothing.</summary>
         public static void ShowTimeOfDayPicker(ModConfig config, Action onDecided)
         {
+            // "— your pick" marks the STANDING SETTING, never the hour outside: Anton read the
+            // old "— current" as "the current time of day" and filed the pinned-noon sky as a
+            // sync bug (2026.07.24) — so the true clock is now spelled out on the clock entry.
+            var nowHour = CampaignTime.Now.GetHourOfDay;
             var elements = new List<InquiryElement>
             {
                 new InquiryElement(-1,
-                    Models.AtmospherePresets.Label(-1) + (config.BattleTimeOfDay < 0 ? " — current" : ""),
+                    Models.AtmospherePresets.Label(-1) + " (now " + nowHour.ToString("00") + ":00)"
+                        + (config.BattleTimeOfDay < 0 ? " — your pick" : ""),
                     null, true, "Battles are fought whenever they happen — vanilla's honest clock."),
             };
             foreach (var hour in ModConfig.SupportedBattleHours)
             {
                 elements.Add(new InquiryElement(hour,
-                    Models.AtmospherePresets.Label(hour) + (config.BattleTimeOfDay == hour ? " — current" : ""),
+                    Models.AtmospherePresets.Label(hour) + (config.BattleTimeOfDay == hour ? " — your pick" : ""),
                     null, true, "Every battle — drills, field battles, sieges, sea — opens at this hour."));
             }
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "Choose the time of day",
                 "Pin the hour every battle is fought at — an immersion trade for a field you can "
-                + "actually see. \"" + Models.AtmospherePresets.Label(-1) + "\" returns to the true clock.",
+                + "actually see. The pick is a standing setting: it holds for every later battle "
+                + "until changed. \"" + Models.AtmospherePresets.Label(-1) + "\" returns to the true clock.",
                 elements, isExitShown: true, 1, 1, "Choose", "Cancel",
                 picked =>
                 {

@@ -70,7 +70,7 @@ namespace TrainingBattles
             args.optionLeaveType = GameMenuOption.LeaveType.Wait;
             if (!GroundToolsAllowed(out _)) return false;
             args.Tooltip = new TextObject("{=TB_tip_time}Pin the hour every battle is fought at — "
-                + "drills, field battles, sieges, sea battles. Currently: "
+                + "drills, field battles, sieges, sea battles. Your standing pick: "
                 + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".");
             return true;
         }

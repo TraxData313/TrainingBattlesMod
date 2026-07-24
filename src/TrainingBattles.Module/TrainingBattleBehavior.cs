@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using Helpers;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
+using TaleWorlds.CampaignSystem.CampaignBehaviors;
 using TaleWorlds.CampaignSystem.CharacterDevelopment;
 using TaleWorlds.CampaignSystem.Encounters;
 using TaleWorlds.CampaignSystem.GameMenus;
@@ -90,6 +92,11 @@ namespace TrainingBattles
         private readonly Dictionary<Hero, int> _heroHpBefore = new Dictionary<Hero, int>();
                                                    // heroes' health walking INTO the drill — the
                                                    // restore ceiling (training is not a hospital)
+        private readonly Dictionary<Hero, List<PartyRole>> _heroRolesBefore = new Dictionary<Hero, List<PartyRole>>();
+                                                   // every hero's party roles (scout, surgeon...)
+                                                   // walking in — the engine WIPES a hero's roles
+                                                   // the moment they change party, so the opposing
+                                                   // half's officers would come home demoted
         private Dictionary<(ItemObject, ItemModifier?), int>? _itemSnapshot;
                                                    // the baggage train before the fight — anything
                                                    // ABOVE it afterward is drill loot and is removed,
@@ -161,6 +168,9 @@ namespace TrainingBattles
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
             RecoverStaleOpponentParties();
             RescueStuckFugitiveCompanions();
+            // Saves touched by pre-fix drills carry stale "separated after a battle" tracker
+            // entries — this sweep also cleans them on load, not just after a drill.
+            SweepCompanionSeparationTracker();
             AddMenus(starter);
         }
 
@@ -1004,6 +1014,12 @@ namespace TrainingBattles
                 return;
             }
 
+            // Who holds which party role, BEFORE anyone crosses over: the engine wipes a hero's
+            // roles the instant they change party (Hero.SetPartyBelongedTo →
+            // RemoveAllPartyRolesOfHero), and the losing half's fugitive path wipes them too —
+            // the aftermath hands the roles back once everyone is home.
+            SnapshotPartyRoles();
+
             if (mock != null)
             {
                 // The phantoms muster fresh from the rolls — no man and no XP leaves the real
@@ -1017,6 +1033,7 @@ namespace TrainingBattles
                 {
                     DestroyOpponentParty(opponent);
                     _mockEnemyTeam = null;
+                    _heroRolesBefore.Clear(); // nobody crossed — nothing to hand back
                     InformationManager.DisplayMessage(new InformationMessage("Training Battles: the mock enemy could not be formed."));
                     return;
                 }
@@ -1048,6 +1065,7 @@ namespace TrainingBattles
                     // Nothing (or everything) crossed over — put it all back and stand down.
                     MergePartyBackIntoMain(opponent);
                     DestroyOpponentParty(opponent);
+                    RestorePartyRoles(); // any hero who crossed and merged back was already demoted
                     _pickedTeam = null;
                     InformationManager.DisplayMessage(new InformationMessage("Training Battles: the halves could not be formed."));
                     return;
@@ -1260,6 +1278,51 @@ namespace TrainingBattles
             _heroHpBefore.Clear();
         }
 
+        /// <summary>Every hero's party roles (scout, engineer, quartermaster, surgeon — and War
+        /// Sails' first mate and navigator) before the drill. The engine wipes a hero's roles the
+        /// moment they leave the party (Hero.SetPartyBelongedTo → RemoveAllPartyRolesOfHero,
+        /// verified in the decompiled corpus), and a losing half's companions can lose them again
+        /// through the fugitive scatter — either way the officer would come home demoted.</summary>
+        private void SnapshotPartyRoles()
+        {
+            _heroRolesBefore.Clear();
+            try
+            {
+                var main = MobileParty.MainParty;
+                foreach (var el in main.MemberRoster.GetTroopRoster())
+                {
+                    var hero = el.Character?.HeroObject;
+                    if (hero == null) continue;
+                    var roles = main.GetHeroPartyRoles(hero);
+                    if (roles.Count > 0) _heroRolesBefore[hero] = roles;
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>Hands every hero back the roles they held walking in — call only AFTER the
+        /// merge home and the scattered-hero walk-back, so the engine sees them in the party.
+        /// Re-setting a role a hero never lost is a harmless same-name overwrite, and a hero's own
+        /// old role set can never trip the game's roles-per-hero cap.</summary>
+        private void RestorePartyRoles()
+        {
+            try
+            {
+                var main = MobileParty.MainParty;
+                foreach (var pair in _heroRolesBefore)
+                {
+                    var hero = pair.Key;
+                    if (hero == null || !hero.IsAlive || hero.PartyBelongedTo != main) continue;
+                    foreach (var role in pair.Value)
+                    {
+                        try { main.SetHeroPartyRole(hero, role); } catch { }
+                    }
+                }
+            }
+            catch { }
+            _heroRolesBefore.Clear();
+        }
+
         /// <summary>Every hero from the drill who is alive but no longer riding with the main party
         /// (vanilla scattered them as fugitives — "Regrouping" on the clan screen) returns to the
         /// ranks at once. Training scatters nobody.</summary>
@@ -1282,6 +1345,34 @@ namespace TrainingBattles
                             "Training Battles: " + hero.Name + " rejoined the company — nobody scatters after a drill."));
                     }
                     catch { }
+                }
+            }
+            catch { }
+            SweepCompanionSeparationTracker();
+        }
+
+        /// <summary>Vanilla's PlayerTrackCompanionBehavior files every fugitive companion into a
+        /// save-persisted "scattered" dictionary and announces them in every settlement they sit in
+        /// ("Tracking: …separated from you after a battle…"). Walking a hero home through
+        /// AddHeroToPartyAction is NOT one of its removal paths (only hire/fire, teleport and
+        /// party-creation are), so drill-scattered companions who are already back in the ranks
+        /// would keep triggering the popup — Anton got one per companion at a village gate
+        /// (2026.07.24). A tracked hero RIDING WITH the main party is stale by definition; this
+        /// sweep drops exactly those, via reflection into the behavior's private dictionary
+        /// (read-only otherwise; no Harmony, fails silently if TaleWorlds renames the field).</summary>
+        private static void SweepCompanionSeparationTracker()
+        {
+            try
+            {
+                var tracker = Campaign.Current?.GetCampaignBehavior<PlayerTrackCompanionBehavior>();
+                if (tracker == null) return;
+                var field = typeof(PlayerTrackCompanionBehavior).GetField("_scatteredCompanions",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (field?.GetValue(tracker) is not Dictionary<Hero, CampaignTime> scattered) return;
+                foreach (var hero in new List<Hero>(scattered.Keys))
+                {
+                    if (hero != null && hero.PartyBelongedTo == MobileParty.MainParty)
+                        scattered.Remove(hero);
                 }
             }
             catch { }
@@ -1313,6 +1404,7 @@ namespace TrainingBattles
                 }
             }
             catch { }
+            SweepCompanionSeparationTracker();
         }
 
         /// <summary>The baggage train, itemized — keyed by item AND modifier so a "fine" sword the
@@ -1386,6 +1478,7 @@ namespace TrainingBattles
             }
             _opponentIsMockEnemy = false;
             RestoreOpponentClanLook();
+            RestorePartyRoles(); // the officers keep their posts through an aborted drill
             // A drill that never happened is a drill nobody gets paid for.
             if (_chargedCost > 0)
             {
@@ -1535,6 +1628,13 @@ namespace TrainingBattles
             //     straight back into the ranks.
             RecoverScatteredHeroes(mainSnapshot);
             RecoverScatteredHeroes(opponentSnapshot);
+
+            // 1c-bis. …and with their posts: the engine stripped every crossing (and every
+            //     scattered) hero of their party roles — scout, engineer, quartermaster, surgeon —
+            //     the moment they left the party. Now that everyone is back in the ranks, each
+            //     hero gets back exactly the roles they held walking in (Anton's playtest catch,
+            //     2026.07.24: the opposing half's scout came home unassigned).
+            RestorePartyRoles();
 
             // 1d. No spoils from sparring: anything the baggage train gained over the pre-fight
             //     snapshot is drill loot (whoever's pipeline granted it) and is quietly removed.
