@@ -1,37 +1,21 @@
 # Training Battles
-
-**Drill your army against itself. Scout the ground like a real general. Fight where —
-and when — you choose to fight.**
+- Split up your boys in two teams and do a drill battle
+- Pick your battle ground (and time) before the drills and before the real battles
 
 A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
 ## Pillar 1 — Training battles
 
-Split your army into two halves through a troop-picking GUI, choose which half you command
-(attacking or defending), and fight a full mock battle on the very terrain you're standing
-on — or watch it resolve from the hill via the send-troops simulation.
 
-**Nobody really dies.** Every casualty of a drill — the "killed" and the hurt alike —
-walks the same path afterward:
-
-1. **He gets back up.** Training deaths are not real; every man returns to the roster.
-2. **The surgeon sees him first.** The game's own Medicine-driven save — a better doctor
-   sends more men off without a scratch.
-3. **Only the rest roll for a wound.** Of the men the surgeon could *not* patch, a
-   configurable share (default 10%) wake up truly wounded for a while; the others shrug
-   it off.
-
-So a drill with 20 casualties typically ends with one or two wounded — fewer with a good
-doctor — and **zero dead**. The men keep a configurable share of the XP they earned
-(default 75%), the party goes disorganized for a while, and a cooldown (default 24 in-game
-hours) gates the next drill. **No spoils in sparring**: the post-battle loot and prisoner
-screens simply never appear after a drill — nothing is looted, nobody is captured, no
-renown or relations are touched. War as a school, not a funeral. **Cancel training** is
-always available before the fight and leaves the campaign exactly as it was.
-
-**The drill pay** (configurable, default one day's wages per soldier on the field) goes for
-equipment — javelins, arrows, upkeep after the battle — and rewards to keep the good
-fighters motivated. Set it to 0 to drill for free.
+- **Split your army** into two halves through a troop-picking GUI, choose which half you command
+- **Pay** for the drill - broken javs, arrows, rewards, they cost money... (1 daily wage by default)
+- **Fight** on the battlefield (attacking or defending) or auto resolve
+- **Level up** your soldiers - keep the XP (75% by default)
+- the **KIA** -> might get Wounded. Some really get injured (default to about 10%), further reduced by how good your surgeon is
+- the **Wounded** -> they all get up OK
+- **No loot** - no loot is preserved after (works even with Bannerloot mod)
+- **Disorganized** after - they had to form up etc
+- **Cooldown** - you have to wait before you can do another drill (24 in game hours by default)
 
 **Mock enemy** *(optional, off by default)* — compose a phantom enemy force from **every
 troop in the game**, all cultures in one picker screen, any mix, up to 1000 men — and drill
@@ -39,74 +23,39 @@ the whole company against it. The phantoms never touch your roster and vanish af
 your own men follow the normal training rules. The test bench for "how would we fare
 against X?".
 
+
 ## Pillar 2 — Scouting & choosing your ground
 
 What a real general does before the battle: know the field — and pick the hour.
 
-- **Choose the time of day** — pin the hour **every** battle opens at (morning, noon,
-  afternoon, evening, night — or the honest campaign clock, the default). It applies to
-  drills, real field battles, siege assaults and sea battles alike, and it's the first
-  option on every menu, because a night battle you cannot see is no battle at all. An
-  admitted immersion trade — that's why it's a choice.
-- **Select the battlefield** — see every battlefield the game could put your fight on: the
-  map patch's own scene (marked *"this ground"*) plus every scene of the local terrain type
-  — and pick the one the fight is fought on.
-- **Ride out and scout** — enter any of those battlefields **alone**: no battle, no enemy,
-  no cost, no cooldown. You spawn **on your deployment line**, facing the enemy's, with the
-  distance called out — so you can judge both the terrain *and* the deploy before you ever
-  have to fight there. If the map is good but the lines are bad, take another map or move.
-- **The scouted lines are the drilled lines** — training battles and the scout preview use
-  the same deterministic deployment recipe (the game's own map-patch machinery), so what
-  you scouted is what you get. One honest caveat: that promise is for **drills**. In a
-  *real* battle the ground holds, but the enemy's **true approach direction** decides the
-  facing and which end is theirs — so a field scouted in advance from the muster may fight
-  "turned around" when the real enemy arrives from elsewhere.
-- **The same tools in REAL battles** *(toggleable per side, both on by default)* — when a
-  real field battle is about to start, the encounter menu offers the same options in the
-  same order — choose the hour, scout, select the battlefield — defending **or** attacking.
-  **This is where you scout when you want 100% certainty**: with an army actually facing
-  you, both sides stand frozen on the map, so the attacker's true approach direction is
-  already known — the lines, ends, and facings you scout are precisely the ones the battle
-  will use. No time passes; the fight waits for your return. Rule of thumb: scout from the
-  muster to *learn* the battlefields, scout from the attack screen to *plan the actual
-  fight*.
+- **Choose the time of day** — morning, noon, afternoon, evening, night, or the campaign clock (default). Applies to drills, real field battles, sieges and sea battles alike
+- **Select the battlefield** — pick from every battlefield the game could use here: the map patch's own scene (marked *"this ground"*) plus every scene of the local terrain type
+- **Ride out and scout** — walk any of those battlefields **alone**: no battle, no cost, no cooldown. You spawn on your deployment line, facing the enemy's, distance called out
+- **Scouted lines = drilled lines** — drills use the same deterministic deployment as the scout, so what you scouted is what you get. In a *real* battle the ground holds, but the enemy's true approach direction may turn the field around
+- **Same tools in REAL battles** *(per-side toggles, both on by default)* — the encounter menu offers the same options (hour, scout, battlefield) when defending **or** attacking. Both armies stand frozen, so the scouted lines and facings are **exact** — and no time passes while you ride
+- **Rule of thumb** — scout from the muster to *learn* the battlefields, scout from the attack screen to *plan the actual fight*
+
 
 ## The knobs
 
-Every parameter lives in a JSON config
-(`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod
-Configuration Menu (MCM)** — XP kept %, wounded %, hero health restored %, cooldown hours,
-drill pay (days of wages), disorganized toggle, auto-split-in-half toggle, the opponent
-half's banner (any banner-editor code), time of day for battles, the real-battle
-survey/scout toggles (defending and attacking separately), the mock-enemy toggle, and the
-hotkey (default `G` on the campaign map). MCM is a soft dependency — without it the config
-file alone runs the show.
+Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod Configuration Menu (MCM)**. MCM is a soft dependency — without it the config file alone runs the show.
 
-## Status
+- **Drill knobs** — XP kept %, wounded %, hero health restored %, cooldown hours, drill pay (days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
+- **Ground & time knobs** — time of day for battles, the real-battle scout toggles (defending and attacking separately)
+- **Misc** — the mock-enemy toggle, the hotkey (default `G` on the campaign map)
 
-**Playtested and working**: the whole drill loop (divide → fight or hill-watch → nobody
-dies, wounded filtered through the surgeon, XP banked, disorganized, cooldown), the
-mock-enemy drill, the no-loot guarantee (holds even alongside loot mods), the time-of-day
-pick for drills and real battles, and the real-battle ground tools. See
-[TASKS_TODO.md](TASKS_TODO.md) for what's next: a search box in the mock-enemy picker,
-the time-of-day option on the siege menus, scouting with companions, garrison training,
-naval training battles (War Sails).
 
 ## Freely given
 
-This work is **public domain** — no license, no strings, no permission to ask
-([The Unlicense](LICENSE)). Use it, share it, clone it, change it, sell it, do whatever you
-want with it. *"Freely you have received; freely give."*
+- **Public domain** — no license, no strings, no permission to ask ([The Unlicense](LICENSE)). Use it, share it, change it, sell it.
+- **Want to help?** Give feedback and report bugs
+- **No donations** — this is a hobby, done for fun and out of good will; I want to keep money out of it. *"For the love of money is the root of all evil."*
+- If you still insist on thanking me somehow — visit [my GitHub acc](https://github.com/TraxData313) and read the top pinned
 
----
 
 ## For developers
 
-Built by the same two-hands team as [Immersive AI](https://github.com/TraxData313/ImmersiveAI)
-— Anton dreams and playtests, Claude designs and writes the code — and follows the same
-conventions: ideas land in [TASKS_TODO.md](TASKS_TODO.md), finished work moves to
-[TASKS_DONE.md](TASKS_DONE.md) with a timestamp, and the deep documentation lives in
-[CLAUDE.md](CLAUDE.md).
+Same two-hands team as [Immersive AI](https://github.com/TraxData313/ImmersiveAI) — Anton dreams and playtests, Claude designs and writes the code. Ideas land in [TASKS_TODO.md](TASKS_TODO.md), finished work moves to [TASKS_DONE.md](TASKS_DONE.md), deep documentation lives in [CLAUDE.md](CLAUDE.md).
 
 | Project | Target | Purpose |
 |---|---|---|
