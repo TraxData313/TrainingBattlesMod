@@ -2,34 +2,25 @@ BUGS:
 
 
 NEXT UPDATE:
-
-
-
-POST V1 or NOT FULLY DECIDED:
+- [ ] Naval training battles (War Sails)
+    Divide the ships and the troops at sea and run mock naval battles — same rules (XP kept,
+    wounded not dead, disorganized, cooldown). The scene API already carries the naval flag.
 - [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
     the option before EVERY battle type). The CONFIG already applies everywhere (the
     MapWeatherModel decorator fires for any player map event — sieges and sea included);
     what's missing is only the menu entry on vanilla's siege menus (menu ids to research:
     the besiege/assault menus) and wherever naval encounters diverge from "encounter".
     The muster, the encounter menu and MCM all edit the same key already.
-- [ ] I want the other party to become as a real party, lead by one of the companions if there are any there, for the AI to assign the campanions as division leaders, if it normally does
-- [ ] When I divide the army to see as I am starting a fight against a party, an animation where I fight with a party, my party being the men I got and the other party the men they got in their orange banner
-- [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
-    Choose one of the companions sent across to LEAD the other party (and with none picked,
-    it fights leaderless, like a party without its lord). Findings so far: `MobileParty.
-    ChangePartyLeader(hero)` delegates to the party component; our bandit component likely
-    ignores it. `CustomPartyComponent` carries a real settable leader BUT changing its leader
-    also flips party OWNERSHIP to the leader — a player-clan hero owning the opponent party
-    risks flipping its MapFaction and breaking the hostile encounter (the whole battle rides
-    on the bandit clan's hostility). Plan: test `CustomPartyComponent` with clan=bandit-clan
-    + leader=companion in a sandbox save; check `MapFaction` stays bandit and the mission
-    gives the enemy side a real general. Deserves its own careful session — not rushed in.
-- [ ] Show the two halves as real parties on the map before the fight (Anton's ask)
-    After dividing, see the opposing half standing on the map (with its picked commander)
-    and start the fight by riding at it — the vanilla party-encounter feel. This is the
-    "vanilla encounter menu" redesign: spawn the party visibly, let the vanilla encounter
-    flow own attack/send-troops/leave, and move our aftermath fully onto MapEventEnded
-    (the listener already exists since round 2). Pairs naturally with the commander task.
+
+
+NEXT UPDATEs or NOT FULLY DECIDED:
+- [ ] Garrison training at owned castles/towns
+    Run training battles with the garrison of a castle/town the player owns — practice siege
+    defense/assault on your own walls, maybe garrison vs. party mock sieges.
+- [ ] A menu door besides the hotkey (e.g. a party-screen button or clan-screen entry), for
+    players who never read hotkey hints.
+- [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
+    follow-AI so the ride has an escort; needs agent-AI/order plumbing, own session.
 - [ ] Training while leading an ARMY (V1 blocks it with an honest message) — RESEARCH NOTES
     READY (2026.07.23). The two vanilla wires that make armies hard: (1) PartyBase.
     MapEventSide's setter CASCADES the event side to every AttachedParties member the moment
@@ -50,13 +41,3 @@ POST V1 or NOT FULLY DECIDED:
     - TIER C (hard, parked): split the ARMY against itself — Tier B's per-party aftermath PLUS
       multi-party roster division and a real enemy command structure; overlaps the companion-
       commander research below.
-- [ ] Garrison training at owned castles/towns
-    Run training battles with the garrison of a castle/town the player owns — practice siege
-    defense/assault on your own walls, maybe garrison vs. party mock sieges.
-- [ ] Naval training battles (War Sails)
-    Divide the ships and the troops at sea and run mock naval battles — same rules (XP kept,
-    wounded not dead, disorganized, cooldown). The scene API already carries the naval flag.
-- [ ] A menu door besides the hotkey (e.g. a party-screen button or clan-screen entry), for
-    players who never read hotkey hints.
-- [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
-    follow-AI so the ride has an escort; needs agent-AI/order plumbing, own session.
