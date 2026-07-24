@@ -1,15 +1,5 @@
 BUGS:
-- [ ] VERIFY in playtest (both fixed 2026.07.24 evening, see TASKS_DONE): (a) time of day —
-    NOT a sync bug: config.json had noon PINNED (BattleTimeOfDay: 12; pick "Campaign clock"
-    in the picker once to go back to the true clock); the picker's "— current" mislabel that
-    caused the confusion is now "— your pick" + the clock entry shows the live hour;
-    (b) party roles (scout etc.) — real bug, the engine strips a hero's roles the moment they
-    change party; drills now snapshot roles at launch and hand them back in the aftermath.
-    Test: assign all four roles, put those companions in the OPPOSING half, drill, lose one
-    drill on purpose (fugitive path), check the clan screen roles after each.
-    (c) "Tracking: …separated after a battle…" village popups (stale vanilla tracker entries
-    from pre-fix drills) — swept on load and after every drill since 2026.07.24 evening;
-    verify villages go quiet after ONE game restart on the fixed build.
+
 
 NEXT UPDATE:
 - [ ] Naval training battles (War Sails)
