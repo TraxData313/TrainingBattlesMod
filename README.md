@@ -36,6 +36,17 @@ What a real general does before the battle: know the field — and pick the hour
 - **Rule of thumb** — scout from the muster to *learn* the battlefields, scout from the attack screen to *plan the actual fight*
 
 
+## Looking for…?
+
+If one of these searches brought you here — yes, this is that mod:
+
+- a mod to **pick the battlefield** / **choose where you fight** before a battle
+- a mod to **scout the battlefield before the battle** — walk it on foot, see the real deployment lines
+- a mod to **change the time of day of battles** — fight at **night**, dawn, noon or evening
+- a mod to **preview the deployment** before committing to an attack
+- a mod for **practice battles** / **sparring** — train your troops with no deaths and no losses
+
+
 ## The knobs
 
 Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod Configuration Menu (MCM)**. MCM is a soft dependency — without it the config file alone runs the show.
