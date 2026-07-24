@@ -57,14 +57,19 @@ What a real general does before the battle: know the field — and pick the hour
   have to fight there. If the map is good but the lines are bad, take another map or move.
 - **The scouted lines are the drilled lines** — training battles and the scout preview use
   the same deterministic deployment recipe (the game's own map-patch machinery), so what
-  you scouted is what you get.
+  you scouted is what you get. One honest caveat: that promise is for **drills**. In a
+  *real* battle the ground holds, but the enemy's **true approach direction** decides the
+  facing and which end is theirs — so a field scouted in advance from the muster may fight
+  "turned around" when the real enemy arrives from elsewhere.
 - **The same tools in REAL battles** *(toggleable per side, both on by default)* — when a
   real field battle is about to start, the encounter menu offers the same options in the
   same order — choose the hour, scout, select the battlefield — defending **or** attacking.
-  And here the scout preview is **exact**: both armies stand frozen on the map, so the
-  attacker's true approach direction is already known — the lines, ends, and facings you
-  scout are precisely the ones the battle will use. No time passes; the fight waits for
-  your return.
+  **This is where you scout when you want 100% certainty**: with an army actually facing
+  you, both sides stand frozen on the map, so the attacker's true approach direction is
+  already known — the lines, ends, and facings you scout are precisely the ones the battle
+  will use. No time passes; the fight waits for your return. Rule of thumb: scout from the
+  muster to *learn* the battlefields, scout from the attack screen to *plan the actual
+  fight*.
 
 ## The knobs
 
