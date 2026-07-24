@@ -169,18 +169,24 @@ namespace TrainingBattles
         private void AddMenus(CampaignGameStarter starter)
         {
             starter.AddGameMenu(MenuId, "{TRAINING_MENU_TEXT}", MenuInit);
+            // The tools come BEFORE the drills, in the same order on every door: the HOUR first
+            // (Anton's playtest call, 2026.07.24 — it's the thing he sets before anything else),
+            // then scout, then choose the ground — then the drills.
+            starter.AddGameMenuOption(MenuId, "training_time",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                TimeOfDayCondition, _ => ChooseTimeOfDay(() => GameMenu.SwitchToMenu(MenuId)));
+            starter.AddGameMenuOption(MenuId, "training_scout",
+                BattleSceneCatalog.ScoutBattlefieldOptionText,
+                ScoutCondition, _ => ScoutGround());
+            starter.AddGameMenuOption(MenuId, "training_ground",
+                BattleSceneCatalog.SelectBattlefieldOptionText,
+                GroundCondition, _ => ChooseGround());
             starter.AddGameMenuOption(MenuId, "training_pick",
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
             starter.AddGameMenuOption(MenuId, "training_mock_enemy",
                 "{=TB_opt_mock}Compose a mock enemy to drill against",
                 MockEnemyCondition, _ => OpenMockEnemyComposer());
-            starter.AddGameMenuOption(MenuId, "training_ground",
-                BattleSceneCatalog.SelectBattlefieldOptionText,
-                GroundCondition, _ => ChooseGround());
-            starter.AddGameMenuOption(MenuId, "training_scout",
-                BattleSceneCatalog.ScoutBattlefieldOptionText,
-                ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_begin_attack",
                 "{=TB_opt_attack4}Begin — {TB_BEGIN_ATTACK}{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
@@ -210,11 +216,13 @@ namespace TrainingBattles
 
         private string BuildMenuText()
         {
+            // The pay line, in one breath — what it costs AND what it buys (Anton, 2026.07.24:
+            // "for equipment and for rewards for the good fighters", short).
             var cost = ComputeTrainingCost();
             var costText = cost > 0
-                ? " It will cost " + cost + " denars ("
+                ? " Drill pay: " + cost + " denars ("
                     + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
-                    + " a man) to gather the training materials and pay the men for the drill."
+                    + " a man) — for equipment (javelins, arrows, upkeep after the battle) and rewards to keep the good fighters motivated."
                 : "";
             if (_pickedTeam != null && _pickedTeam.TotalManCount > 0)
             {
@@ -235,21 +243,25 @@ namespace TrainingBattles
             }
             // The muster is the mod's front door — it should SAY what a commander can do here,
             // with the real numbers from the config, not make the player guess. Only the features
-            // switched on get a paragraph.
+            // switched on get a paragraph — and each keeps to two or three short sentences
+            // (Anton, 2026.07.24: the old text had grown too tall for the menu).
             var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
-                + "Nobody dies in training: the men keep " + _config.XpKeptPercent + "% of the experience they earn, and of the fallen "
-                + "about " + _config.WoundedPercent + "% wake up truly wounded — a better surgeon saves more of them before that roll."
-                + (_config.TrainingCostWages > 0 ? " Training materials and the men's drill pay cost "
-                    + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
-                    + " a man — about " + ComputeTrainingCost() + " denars right now." : "")
-                + (_config.DisorganizedAfterTraining ? " The party is disorganized for a while after the drill." : "")
-                + (_config.CooldownHours > 0 ? " One drill per " + _config.CooldownHours + " hours." : "");
-            var mock = "MOCK ENEMY — compose an enemy force of any culture and any strength, and drill "
-                + "the whole company against it. The enemy are phantoms: nothing of yours crosses over, "
-                + "and your own men follow the training rules above.";
-            var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground, stand where "
-                + "your line would form and see where the enemy's would, so you can judge the field before a "
-                + "chasing army — or your own next stand — chooses it for you.";
+                + "Nobody dies: the men keep " + _config.XpKeptPercent + "% of the XP they earn, and only about "
+                + _config.WoundedPercent + "% of the fallen wake up wounded (a better surgeon saves more)."
+                + costText
+                + (_config.DisorganizedAfterTraining || _config.CooldownHours > 0
+                    ? " " + (_config.DisorganizedAfterTraining ? "Disorganized for a while after" : "")
+                        + (_config.DisorganizedAfterTraining && _config.CooldownHours > 0 ? "; " : "")
+                        + (_config.CooldownHours > 0
+                            ? (_config.DisorganizedAfterTraining ? "one" : "One") + " drill per " + _config.CooldownHours + " hours"
+                            : "")
+                        + "."
+                    : "");
+            var mock = "MOCK ENEMY — muster a phantom force from any troops in the game and drill "
+                + "the whole company against it. Nothing of yours crosses over; your own men follow "
+                + "the training rules above.";
+            var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground "
+                + "and see where both lines would form, before a battle chooses it for you.";
             var anyDrill = _config.EnableSplitTraining || _config.EnableMockEnemyTraining;
             if (anyDrill && !CooldownReady(out var remaining))
             {
@@ -289,15 +301,26 @@ namespace TrainingBattles
         }
 
         /// <summary>The battlefield line of the muster text — always visible, updating the moment
-        /// the player picks a different ground in "Select the battlefield".</summary>
+        /// the player picks a different ground in "Select the battlefield". The pinned battle
+        /// hour rides on the same line, so the two choices read as one sentence of intent.</summary>
         private string DescribeChosenGround()
         {
+            string ground;
             if (_chosenSceneId == null)
-                return "Battlefield: as fate wills — the ground you stand on decides.";
-            foreach (var scene in TrainingGroundPool(out _))
-                if (scene.SceneID == _chosenSceneId)
-                    return "Battlefield: " + BattleSceneCatalog.Describe(scene) + " (your choice).";
-            return "Battlefield: " + _chosenSceneId + " (your choice).";
+                ground = "Battlefield: as fate wills — the ground you stand on decides.";
+            else
+            {
+                ground = "Battlefield: " + _chosenSceneId + " (your choice).";
+                foreach (var scene in TrainingGroundPool(out _))
+                    if (scene.SceneID == _chosenSceneId)
+                    {
+                        ground = "Battlefield: " + BattleSceneCatalog.Describe(scene) + " (your choice).";
+                        break;
+                    }
+            }
+            if (_config.BattleTimeOfDay >= 0)
+                ground += " Battles fought at " + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + " (your choice).";
+            return ground;
         }
 
         /// <summary>"in 20 hours and 15 minutes", "in 45 minutes" — the honest clock, not "about N hours".</summary>
@@ -354,9 +377,9 @@ namespace TrainingBattles
             }
             else
             {
-                args.Tooltip = new TextObject("{=TB_tip_mock}Pick a culture and build its force man by man — "
-                    + "a phantom enemy to test the whole company against. Your men follow the normal training "
-                    + "rules; the phantoms vanish afterward. Run it twice to mix cultures.");
+                args.Tooltip = new TextObject("{=TB_tip_mock2}Build a phantom force from every troop in the "
+                    + "game — any cultures, any mix — and test the whole company against it. Your men follow "
+                    + "the normal training rules; the phantoms vanish afterward.");
             }
             return true;
         }
@@ -394,6 +417,25 @@ namespace TrainingBattles
                 _chosenSceneId = sceneId;
                 // Re-init the muster menu so its text shows (or drops) the chosen ground.
                 try { GameMenu.SwitchToMenu(MenuId); } catch { }
+            });
+        }
+
+        private bool TimeOfDayCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Wait;
+            args.Tooltip = new TextObject("{=TB_tip_time}Pin the hour every battle is fought at — "
+                + "drills, field battles, sieges, sea battles. Currently: "
+                + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".");
+            return true;
+        }
+
+        /// <summary>The one battle-hour dialog; the encounter menu door calls this too, so the
+        /// choice looks and behaves identically everywhere.</summary>
+        internal void ChooseTimeOfDay(Action refreshMenu)
+        {
+            BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
+            {
+                try { refreshMenu(); } catch { }
             });
         }
 
@@ -436,9 +478,10 @@ namespace TrainingBattles
             });
         }
 
-        private static void LaunchScout(string sceneId)
+        private void LaunchScout(string sceneId)
         {
-            try { ScoutMission.Open(sceneId); }
+            // The pinned battle hour rides along, so the preview lighting is the drill's own.
+            try { ScoutMission.Open(sceneId, _config.BattleTimeOfDay); }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
@@ -784,68 +827,28 @@ namespace TrainingBattles
 
         // ------------------------------ the mock enemy (developer) ------------------------------
 
-        /// <summary>Step one of the composer: pick the enemy's culture. Main cultures first, then
-        /// any other culture that fields a troop tree (looters, sea raiders, the bandit clans...).</summary>
+        /// <summary>The composer: ONE party screen over every fighting man the game knows — no
+        /// culture door first (Anton, 2026.07.24: pick from everything at once; mixing cultures is
+        /// then just picking). The pool side is a synthetic supply of every culture's troop tree,
+        /// main cultures first, each tree in tier order. Everything stays a dummy roster — nothing
+        /// here can touch the real party. Done with an empty left side clears the pick.</summary>
         private void OpenMockEnemyComposer()
-        {
-            List<CultureObject> cultures;
-            try
-            {
-                cultures = new List<CultureObject>();
-                foreach (var culture in TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
-                {
-                    if (culture != null && TroopTreeOf(culture).Count > 0) cultures.Add(culture);
-                }
-                cultures.Sort((a, b) => a.IsMainCulture != b.IsMainCulture
-                    ? (a.IsMainCulture ? -1 : 1)
-                    : string.Compare(a.Name?.ToString(), b.Name?.ToString(), StringComparison.Ordinal));
-            }
-            catch
-            {
-                cultures = new List<CultureObject>();
-            }
-            if (cultures.Count == 0)
-            {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    "Training Battles: no culture offers a troop tree to compose from."));
-                return;
-            }
-            var elements = new List<InquiryElement>();
-            foreach (var culture in cultures)
-            {
-                var label = (culture.Name?.ToString() ?? culture.StringId)
-                    + (culture.IsMainCulture ? "" : " (bandits)");
-                elements.Add(new InquiryElement(culture, label, null, true,
-                    TroopTreeOf(culture).Count + " troop types"));
-            }
-            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
-                "Compose a mock enemy",
-                "Whose banners shall the phantoms carry? Pick a culture, then build its force man by man."
-                + (_mockEnemyTeam != null ? " (The current composition opens pre-loaded — add another culture's men to mix.)" : ""),
-                elements, isExitShown: true, 1, 1, "Choose", "Cancel",
-                picked =>
-                {
-                    if (picked != null && picked.Count > 0 && picked[0].Identifier is CultureObject culture)
-                        OpenMockEnemyPicker(culture);
-                },
-                _ => { }), pauseGameActiveState: true);
-        }
-
-        /// <summary>Step two: the same party screen the split drill uses, but the pool side is a
-        /// synthetic supply of the culture's whole troop tree. Everything stays a dummy roster —
-        /// nothing here can touch the real party. Done with an empty left side clears the pick.</summary>
-        private void OpenMockEnemyPicker(CultureObject culture)
         {
             var left = TroopRoster.CreateDummyTroopRoster();
             var leftPrisoners = TroopRoster.CreateDummyTroopRoster();
             var pool = TroopRoster.CreateDummyTroopRoster();
             var rightPrisoners = TroopRoster.CreateDummyTroopRoster();
-            foreach (var troop in TroopTreeOf(culture))
+            foreach (var troop in AllTroopsOfTheWorld())
                 pool.AddToCounts(troop, MockPoolPerTroop);
+            if (pool.Count == 0)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: no culture offers a troop tree to compose from."));
+                return;
+            }
             if (_mockEnemyTeam != null)
             {
-                // The previous composition opens pre-loaded — edit it, or add this culture's men
-                // on top (running the composer once per culture is how a mixed force is built).
+                // The previous composition opens pre-loaded — edit it or clear it.
                 foreach (var el in _mockEnemyTeam.GetTroopRoster())
                 {
                     if (el.Character == null) continue;
@@ -855,12 +858,36 @@ namespace TrainingBattles
             PartyScreenHelper.OpenScreenWithDummyRoster(
                 left, leftPrisoners, pool, rightPrisoners,
                 new TextObject("{=TB_mock_team}Mock enemy"),
-                new TextObject((culture.Name?.ToString() ?? "Troop") + " muster rolls"),
+                new TextObject("{=TB_mock_pool}The world's muster rolls"),
                 MockEnemyMaxMen,
                 pool.TotalManCount + left.TotalManCount,
                 MockPickerDoneCondition,
                 MockPickerClosed,
                 (character, _, _, _) => true);
+        }
+
+        /// <summary>Every fighting man of every culture that fields a troop tree — main cultures
+        /// first (alphabetical), the bandit cultures after, each culture's tree in tier order.</summary>
+        private static List<CharacterObject> AllTroopsOfTheWorld()
+        {
+            var result = new List<CharacterObject>();
+            try
+            {
+                var cultures = new List<CultureObject>();
+                foreach (var culture in TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
+                {
+                    if (culture != null) cultures.Add(culture);
+                }
+                cultures.Sort((a, b) => a.IsMainCulture != b.IsMainCulture
+                    ? (a.IsMainCulture ? -1 : 1)
+                    : string.Compare(a.Name?.ToString(), b.Name?.ToString(), StringComparison.Ordinal));
+                var seen = new HashSet<CharacterObject>();
+                foreach (var culture in cultures)
+                    foreach (var troop in TroopTreeOf(culture))
+                        if (seen.Add(troop)) result.Add(troop);
+            }
+            catch { }
+            return result;
         }
 
         /// <summary>The culture's fighting men: breadth-first over the upgrade tree from the
@@ -1114,7 +1141,8 @@ namespace TrainingBattles
             // The patch-aware record makes deployment DETERMINISTIC (same lines every drill, and
             // the same lines the scout ride previews). The old string overload carried no patch
             // data, and without it the game picks a random spawn path and pivot per battle.
-            CampaignMission.OpenBattleMission(ScoutMission.CreatePatchAwareRecord(sceneId));
+            // The pinned battle hour (if any) rides in the record's atmosphere.
+            CampaignMission.OpenBattleMission(ScoutMission.CreatePatchAwareRecord(sceneId, _config.BattleTimeOfDay));
         }
 
         private MobileParty? CreateOpponentParty(bool mockEnemy)
@@ -1406,7 +1434,20 @@ namespace TrainingBattles
                 if (mapEvent != null && !mapEvent.IsFinalized && !mapEvent.HasWinner)
                     mapEvent.SetOverrideWinner(mapEvent.PlayerSide);
                 for (var i = 0; i < 3 && PlayerEncounter.Current != null; i++)
+                {
+                    // No spoils screens after sparring: the reward model already keeps vanilla
+                    // from minting item loot, and emptying the receive-rosters between passes
+                    // keeps the encounter's Loot* states from opening a screen over whatever
+                    // some other mod slipped in ahead of this pass.
+                    try
+                    {
+                        PlayerEncounter.Current.RosterToReceiveLootItems.Clear();
+                        PlayerEncounter.Current.RosterToReceiveLootMembers.Clear();
+                        PlayerEncounter.Current.RosterToReceiveLootPrisoners.Clear();
+                    }
+                    catch { }
                     PlayerEncounter.Update();
+                }
             }
             catch { }
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }

@@ -50,13 +50,15 @@ namespace TrainingBattles
         /// carrying the current map patch and the fixed approach direction, exactly like vanilla's
         /// real field battles (MenuHelper.EncounterAttackConsequence), so deployment is computed
         /// deterministically and the scouted lines are the drilled lines.</summary>
-        public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId)
-            => CreatePatchAwareRecord(sceneId, AssumedEncounterDirection);
+        public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId, int timeOfDayOverride = -1)
+            => CreatePatchAwareRecord(sceneId, AssumedEncounterDirection, timeOfDayOverride);
 
         /// <summary>Same record with an explicit approach direction — a REAL encounter's scout
         /// passes the true attacker-to-defender direction (vanilla's own formula), so the previewed
-        /// path ends are the coming battle's, not the drill's assumed ones.</summary>
-        public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId, Vec2 encounterDirection)
+        /// path ends are the coming battle's, not the drill's assumed ones.
+        /// <paramref name="timeOfDayOverride"/> (-1 = campaign clock) swaps the campaign atmosphere
+        /// for one of vanilla custom battle's fixed-hour presets — see <see cref="AtmosphereFor"/>.</summary>
+        public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId, Vec2 encounterDirection, int timeOfDayOverride = -1)
         {
             var position = MobileParty.MainParty.Position;
             var wrapper = Campaign.Current.MapSceneWrapper;
@@ -70,7 +72,7 @@ namespace TrainingBattles
                 NeedsRandomTerrain = false,
                 PlayingInCampaignMode = true,
                 RandomTerrainSeed = MBRandom.RandomInt(10000),
-                AtmosphereOnCampaign = Campaign.Current.Models.MapWeatherModel.GetAtmosphereModel(position),
+                AtmosphereOnCampaign = AtmosphereFor(position, timeOfDayOverride),
                 SceneHasMapPatch = true,
                 DecalAtlasGroup = 2,
                 PatchCoordinates = patch.normalizedCoordinates,
@@ -78,10 +80,21 @@ namespace TrainingBattles
             };
         }
 
+        /// <summary>The mission's sky: the campaign clock's own atmosphere — or, when the player
+        /// pinned the battle hour (ModConfig.BattleTimeOfDay), the same fixed preset vanilla's
+        /// CUSTOM BATTLE uses for that hour (see <see cref="Models.AtmospherePresets"/>).
+        /// Streamer-proofing: a drill should never be fought blind in the dark unless wanted.</summary>
+        private static AtmosphereInfo AtmosphereFor(CampaignVec2 position, int timeOfDayOverride)
+        {
+            return Models.AtmospherePresets.For(timeOfDayOverride)
+                ?? Campaign.Current.Models.MapWeatherModel.GetAtmosphereModel(position);
+        }
+
         /// <summary>The training/muster scout: assumed approach direction, the player previews the
-        /// defender's line (a drill later forms exactly these lines).</summary>
-        public static void Open(string sceneId)
-            => Open(sceneId, AssumedEncounterDirection, BattleSideEnum.Defender, realEncounter: false);
+        /// defender's line (a drill later forms exactly these lines). <paramref name="timeOfDayOverride"/>
+        /// is the pinned battle hour (-1 = campaign clock), so the preview lighting is the drill's.</summary>
+        public static void Open(string sceneId, int timeOfDayOverride = -1)
+            => Open(sceneId, AssumedEncounterDirection, BattleSideEnum.Defender, realEncounter: false, timeOfDayOverride);
 
         /// <summary>The REAL-encounter scout, launched from the encounter menu while the armies
         /// stand facing each other: the true approach direction and the player's true side, so the
@@ -92,9 +105,9 @@ namespace TrainingBattles
         public static void OpenForRealEncounter(string sceneId, BattleSideEnum playerSide, Vec2 encounterDirection)
             => Open(sceneId, encounterDirection, playerSide, realEncounter: true);
 
-        private static void Open(string sceneId, Vec2 encounterDirection, BattleSideEnum playerSide, bool realEncounter)
+        private static void Open(string sceneId, Vec2 encounterDirection, BattleSideEnum playerSide, bool realEncounter, int timeOfDayOverride = -1)
         {
-            var rec = CreatePatchAwareRecord(sceneId, encounterDirection);
+            var rec = CreatePatchAwareRecord(sceneId, encounterDirection, timeOfDayOverride);
             MissionState.OpenNew(MissionName, rec, _ => new MissionBehavior[]
             {
                 new MissionOptionsComponent(),

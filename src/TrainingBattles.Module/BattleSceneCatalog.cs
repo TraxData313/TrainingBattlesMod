@@ -25,6 +25,10 @@ namespace TrainingBattles
         /// <summary>See <see cref="SelectBattlefieldOptionText"/> — the scout ride's one name.</summary>
         public const string ScoutBattlefieldOptionText = "{=TB_opt_scout}Ride out and scout a battlefield";
 
+        /// <summary>The battle-hour option's one name (muster menu and encounter menu alike) —
+        /// it edits the single ModConfig.BattleTimeOfDay every battle type reads.</summary>
+        public const string ChooseTimeOfDayOptionText = "{=TB_opt_time}Choose the time of day";
+
         /// <summary>The shared picker-dialog titles, one per tool, same everywhere.</summary>
         public const string SelectPickerTitle = "Choose the ground";
         public const string ScoutPickerTitle = "Scout the ground";
@@ -132,6 +136,40 @@ namespace TrainingBattles
                 {
                     if (picked != null && picked.Count > 0)
                         onDecided(picked[0].Identifier as string);
+                },
+                _ => { }), pauseGameActiveState: true);
+        }
+
+        /// <summary>The one battle-hour dialog, shared by every door that offers "Choose the time
+        /// of day". Writes the pick straight into <see cref="ModConfig.BattleTimeOfDay"/> (the
+        /// single key drills, scouts and every real battle read) and saves; <paramref name="onDecided"/>
+        /// then refreshes whichever menu asked. Cancel changes nothing.</summary>
+        public static void ShowTimeOfDayPicker(ModConfig config, Action onDecided)
+        {
+            var elements = new List<InquiryElement>
+            {
+                new InquiryElement(-1,
+                    Models.AtmospherePresets.Label(-1) + (config.BattleTimeOfDay < 0 ? " — current" : ""),
+                    null, true, "Battles are fought whenever they happen — vanilla's honest clock."),
+            };
+            foreach (var hour in ModConfig.SupportedBattleHours)
+            {
+                elements.Add(new InquiryElement(hour,
+                    Models.AtmospherePresets.Label(hour) + (config.BattleTimeOfDay == hour ? " — current" : ""),
+                    null, true, "Every battle — drills, field battles, sieges, sea — opens at this hour."));
+            }
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                "Choose the time of day",
+                "Pin the hour every battle is fought at — an immersion trade for a field you can "
+                + "actually see. \"" + Models.AtmospherePresets.Label(-1) + "\" returns to the true clock.",
+                elements, isExitShown: true, 1, 1, "Choose", "Cancel",
+                picked =>
+                {
+                    if (picked == null || picked.Count == 0 || picked[0].Identifier is not int hour) return;
+                    config.BattleTimeOfDay = hour;
+                    config.Save();
+                    Mcm.McmBridge.TryPushBattleTimeOfDay(config); // the MCM menu shows the same truth
+                    onDecided();
                 },
                 _ => { }), pauseGameActiveState: true);
         }

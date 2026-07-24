@@ -49,16 +49,41 @@ namespace TrainingBattles
         private void OnSessionLaunched(CampaignGameStarter starter)
         {
             TrainingBattlesSceneModel.PendingSceneId = null;
-            // Indices 4/5 slot the options right before vanilla's "{ATTACK_TEXT}!" — cosmetic
+            // Indices 4/5/6 slot the options right before vanilla's "{ATTACK_TEXT}!" — cosmetic
             // only; wherever another mod pushes them, they still work.
-            // Same labels as the training muster's tools — one name per tool, everywhere
-            // (the shared constants in BattleSceneCatalog are the single source of the text).
-            starter.AddGameMenuOption("encounter", "training_battles_survey_ground",
-                BattleSceneCatalog.SelectBattlefieldOptionText,
-                SurveyGroundCondition, _ => SurveyGround(), isLeave: false, index: 4);
+            // Same labels AND same order as the training muster's tools — the HOUR first (Anton
+            // sets it before anything else; his 2026.07.24 playtest call), then scout, then
+            // ground (the shared constants in BattleSceneCatalog are the single source of the text).
+            starter.AddGameMenuOption("encounter", "training_battles_time_of_day",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                TimeOfDayCondition, _ => ChooseTimeOfDay(), isLeave: false, index: 4);
             starter.AddGameMenuOption("encounter", "training_battles_scout_ground",
                 BattleSceneCatalog.ScoutBattlefieldOptionText,
                 ScoutGroundCondition, _ => ScoutGround(), isLeave: false, index: 5);
+            starter.AddGameMenuOption("encounter", "training_battles_survey_ground",
+                BattleSceneCatalog.SelectBattlefieldOptionText,
+                SurveyGroundCondition, _ => SurveyGround(), isLeave: false, index: 6);
+        }
+
+        private bool TimeOfDayCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Wait;
+            if (!GroundToolsAllowed(out _)) return false;
+            args.Tooltip = new TextObject("{=TB_tip_time}Pin the hour every battle is fought at — "
+                + "drills, field battles, sieges, sea battles. Currently: "
+                + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".");
+            return true;
+        }
+
+        private void ChooseTimeOfDay()
+        {
+            BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
+            {
+                InformationManager.DisplayMessage(new InformationMessage(_config.BattleTimeOfDay < 0
+                    ? "Training Battles: battles follow the campaign clock again."
+                    : "Training Battles: battles will open at "
+                        + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + "."));
+            });
         }
 
         private void OnMapEventEnded(MapEvent mapEvent)

@@ -52,7 +52,7 @@ namespace TrainingBattles.Mcm
         public int CooldownHours { get; set; } = 24;
 
         [SettingPropertyInteger("Training cost (days of wages)", 0, 30, "0", Order = 1, RequireRestart = false,
-            HintText = "A drill costs this many days of wages for every soldier on the field. 0 = free. Default 1.")]
+            HintText = "A drill costs this many days of wages for every soldier on the field — for equipment (javelins, arrows, upkeep after the battle) and rewards to keep the good fighters motivated. 0 = free. Default 1.")]
         [SettingPropertyGroup("Pacing", GroupOrder = 2)]
         public int TrainingCostWages { get; set; } = 1;
 
@@ -80,6 +80,26 @@ namespace TrainingBattles.Mcm
             HintText = "The opposing half's banner, as a banner code (copy one from the game's banner editor with Ctrl+C). Default: orange field, white cross.")]
         [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
         public string OpponentBannerCode { get; set; } = ModConfig.DefaultOpponentBannerCode;
+
+        [SettingPropertyDropdown("Time of day for battles", Order = 4, RequireRestart = false,
+            HintText = "Pin the hour EVERY battle opens at — drills, field battles, sieges, sea battles (an immersion trade for a field you can see; night battles are unwatchable on many screens). Also changeable from the muster and encounter menus. Default: campaign clock.")]
+        [SettingPropertyGroup("Battlefield", GroupOrder = 3)]
+        public Dropdown<string> BattleTimeOfDay { get; set; } = TimeOfDayChoices(-1);
+
+        /// <summary>Labels in lockstep with ModConfig.SupportedBattleHours: index 0 is the campaign
+        /// clock, index i+1 is SupportedBattleHours[i] — McmBridge maps by this convention.</summary>
+        internal static Dropdown<string> TimeOfDayChoices(int selectedHour)
+        {
+            var labels = new string[ModConfig.SupportedBattleHours.Length + 1];
+            labels[0] = TrainingBattles.Models.AtmospherePresets.Label(-1);
+            var selected = 0;
+            for (var i = 0; i < ModConfig.SupportedBattleHours.Length; i++)
+            {
+                labels[i + 1] = TrainingBattles.Models.AtmospherePresets.Label(ModConfig.SupportedBattleHours[i]);
+                if (ModConfig.SupportedBattleHours[i] == selectedHour) selected = i + 1;
+            }
+            return new Dropdown<string>(labels, selected);
+        }
 
         [SettingPropertyDropdown("Open-menu key", Order = 0, RequireRestart = false,
             HintText = "Campaign-map key for the training muster. Default G (T is the vanilla combat log).")]

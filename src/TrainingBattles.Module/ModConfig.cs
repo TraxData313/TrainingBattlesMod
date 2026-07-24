@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 7;
+        public int ConfigVersion { get; set; } = 8;
 
         /// <summary>The split-army drill: divide your own company in two and fight yourself —
         /// THE CORE OF THE MOD, on by default and deliberately NOT in the MCM menu (Anton,
@@ -72,6 +72,21 @@ namespace TrainingBattles
             "11.223.223.1528.1528.764.764.1.0.0"
             + ".510.172.172.420.1700.764.764.0.0.0"
             + ".510.172.172.1700.420.764.764.0.0.0";
+
+        /// <summary>The hour EVERY battle is fought at — drills, the muster scout ride, and real
+        /// battles of every type (field, siege assault, sea): -1 follows the campaign clock (the
+        /// default); otherwise one of the game's own custom-battle hours — 6 (morning), 12 (noon),
+        /// 15 (afternoon), 18 (evening), 22 (night). An admitted immersion-breaker Anton wants
+        /// anyway (2026.07.24): players and streamers alike cannot see a thing in night battles.
+        /// Drills read it into their mission record; real battles get it through
+        /// <see cref="Models.TrainingBattlesMapWeatherModel"/>, which only overrides while a
+        /// player map event is opening its mission. Editable from the muster and encounter menus
+        /// ("Choose the time of day") as well as MCM — all write this one key.</summary>
+        public int BattleTimeOfDay { get; set; } = -1;
+
+        /// <summary>The hours vanilla's custom battle supports — each has a hand-made atmosphere
+        /// preset; any other hour would fall back to midnight lighting.</summary>
+        public static readonly int[] SupportedBattleHours = { 6, 12, 15, 18, 22 };
 
         /// <summary>In-game hours between training battles (0 = unlimited). Default 24.</summary>
         public int CooldownHours { get; set; } = 24;
@@ -173,7 +188,20 @@ namespace TrainingBattles
                 EnableSplitTraining = true;
             // v7 added ChooseGroundWhenAttacking (default true) and widened the real-battle
             // ground tools to the terrain pool — new key with a safe default, nothing to migrate.
-            ConfigVersion = 7;
+            // v8 added BattleTimeOfDay (-1 = campaign clock) — safe default, nothing to migrate;
+            // a hand-edited hour snaps to the nearest supported custom-battle hour.
+            if (BattleTimeOfDay != -1)
+            {
+                var best = -1;
+                var bestDistance = int.MaxValue;
+                foreach (var hour in SupportedBattleHours)
+                {
+                    var distance = Math.Abs(BattleTimeOfDay - hour);
+                    if (distance < bestDistance) { bestDistance = distance; best = hour; }
+                }
+                BattleTimeOfDay = best;
+            }
+            ConfigVersion = 8;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

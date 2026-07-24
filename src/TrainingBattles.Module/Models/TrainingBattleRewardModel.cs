@@ -60,6 +60,27 @@ namespace TrainingBattles.Models
             return Training ? 0 : base.CalculatePlunderedGoldAmountFromDefeatedParty(defeatedParty);
         }
 
+        /// <summary>Nobody rifles the baggage of his own quartermaster: with no winner in the
+        /// chance list, MapEvent.LootDefeatedPartyItems never distributes the defeated party's
+        /// inventory — so nothing enters RosterToReceiveLootItems and the post-battle loot
+        /// screen (PlayerEncounter.DoLootInventory) simply never opens. Players seeing a full
+        /// loot screen before the "returned" message read it as a dupe bug (Anton, 2026.07.24).</summary>
+        public override MBList<KeyValuePair<MapEventParty, float>> GetLootItemChancesForWinnerParties(MBReadOnlyList<MapEventParty> winnerParties, PartyBase defeatedParty)
+        {
+            return Training
+                ? new MBList<KeyValuePair<MapEventParty, float>>()
+                : base.GetLootItemChancesForWinnerParties(winnerParties, defeatedParty);
+        }
+
+        /// <summary>Same door for the fallen's gear: an empty chance list makes
+        /// MapEvent.LootDefeatedPartyCasualties skip every body untouched.</summary>
+        public override MBReadOnlyList<KeyValuePair<MapEventParty, float>> GetLootCasualtyChances(MBReadOnlyList<MapEventParty> winnerParties, PartyBase defeatedParty)
+        {
+            return Training
+                ? new MBList<KeyValuePair<MapEventParty, float>>()
+                : base.GetLootCasualtyChances(winnerParties, defeatedParty);
+        }
+
         public override EquipmentElement GetLootedItemFromTroop(CharacterObject character, float targetValue)
         {
             return Training ? default : base.GetLootedItemFromTroop(character, targetValue);

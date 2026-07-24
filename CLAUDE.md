@@ -94,6 +94,15 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else
                               delegates down the BaseModel chain (a DECORATOR — AddModel<T>
                               hands us the previously registered SceneModel, mod-compatible)
+  Models/TrainingBattlesMapWeatherModel.cs  the battle-HOUR gate (config BattleTimeOfDay, -1 =
+                              campaign clock): same decorator pattern over MapWeatherModel —
+                              every battle mission's sky is filled via GetAtmosphereModel, so
+                              overriding that one call (only while a player map event is live,
+                              never while TrainingActive) pins the hour for field/siege/sea
+                              battles using vanilla custom battle's own TOD_* presets; also
+                              home of the shared AtmospherePresets table (drill records and
+                              the muster scout use it directly). Edited from the muster menu,
+                              the encounter menu and MCM — all write the one config key
   Mcm/                        McmBridge + settings — the ImmersiveAI soft-dependency pattern
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)
@@ -145,8 +154,11 @@ before deploying or the DLL is locked.
   troops' shield heraldry from the faction's banner — recoloring the opponents means dressing
   the lender bandit CLAN too, and clan colors PERSIST IN SAVES (restore data must ride SyncData).
 - The battle commit we drive via `PlayerEncounter.Update()` settles XP AND LOOT in one guarded
-  pass — our reward model zeroes vanilla's loot rolls, but Harmony loot mods hook that same
-  commit, so the aftermath diffs the pre-fight ItemRoster snapshot and removes anything gained.
+  pass — our reward model empties BOTH loot-chance lists (`GetLootItemChancesForWinnerParties`,
+  `GetLootCasualtyChances`), which skips vanilla's distribution loops entirely, so
+  `RosterToReceiveLootItems` stays empty and the post-battle loot screens never open. Harmony
+  loot mods hook that same commit anyway, so the aftermath still diffs the pre-fight ItemRoster
+  snapshot and removes anything gained.
 - Vanilla makes the losing side's UNCAPTURED heroes FUGITIVE at map-event end ("Regrouping" on
   the clan screen) and REMOVES them from the roster — a no-capture guard reroutes companions
   into exactly that hole; the aftermath must walk snapshot-heroes home explicitly.

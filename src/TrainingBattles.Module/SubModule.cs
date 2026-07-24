@@ -31,6 +31,9 @@ namespace TrainingBattles
                 // The ground-choice gate: hands out the player's chosen battlefield, else
                 // delegates to whichever SceneModel was registered before (BaseModel chain).
                 starter.AddModel(new Models.TrainingBattlesSceneModel());
+                // The battle-hour gate: when the player pinned a time of day, every REAL battle
+                // mission (field, siege, sea) opens under that sky; weather itself is untouched.
+                starter.AddModel(new Models.TrainingBattlesMapWeatherModel(config));
             }
         }
 

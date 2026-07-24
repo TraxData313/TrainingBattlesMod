@@ -2,6 +2,24 @@ BUGS:
 
 
 NEXT UPDATE:
+- [ ] Remaining checks from the 2026.07.24 batch (Anton's same-day playtest CONFIRMED the
+    big ones: no loot after drills and mock drills — even WITH BannerLoot installed, its
+    screen never appeared, so killing vanilla's loot at the source starved the loot mod
+    too; and a normal real battle still loots/behaves fully vanilla). Still unchecked:
+    1. The pinned hour on a SIEGE assault and a NAVAL battle (the weather-model gate
+       covers them by design; just confirm in play).
+    2. The mock composer's one-screen all-troops pool: is the vanilla sort bar enough to
+       find troops comfortably, or does the search-box task below get promoted?
+- [ ] Search + filters (e.g. by tier) inside the mock-enemy picker (Anton 2026.07.24).
+    The vanilla party screen offers its own sort control but no free-text search in the
+    dummy-roster flow; adding one means a custom PartyVM/Gauntlet layer — own session.
+    First playtest the all-troops pool: vanilla sort may already be enough.
+- [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
+    the option before EVERY battle type). The CONFIG already applies everywhere (the
+    MapWeatherModel decorator fires for any player map event — sieges and sea included);
+    what's missing is only the menu entry on vanilla's siege menus (menu ids to research:
+    the besiege/assault menus) and wherever naval encounters diverge from "encounter".
+    The muster, the encounter menu and MCM all edit the same key already.
 - [ ] Playtest the real-battle ground tools with the LUDA SAVE (Anton has a save just before
     Luda's party closes in to attack). What to check, in order of risk:
     1. THE BIG ONE — "Ride out and scout a battlefield" from the encounter menu, then LEAVE the ride

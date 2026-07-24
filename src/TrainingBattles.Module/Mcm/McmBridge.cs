@@ -58,6 +58,21 @@ namespace TrainingBattles.Mcm
             return true;
         }
 
+        /// <summary>Mirrors a battle-hour pick made from a GAME MENU into the MCM dropdown, so the
+        /// two editors never show different truths. No-op (and MCM-type-free) while unbound.</summary>
+        public static void TryPushBattleTimeOfDay(ModConfig live)
+        {
+            if (!_bound || live == null) return;
+            try { PushBattleTimeOfDay(live); } catch { }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void PushBattleTimeOfDay(ModConfig live)
+        {
+            var s = TrainingBattlesMcmSettings.Instance;
+            if (s != null) s.BattleTimeOfDay = TrainingBattlesMcmSettings.TimeOfDayChoices(live.BattleTimeOfDay);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void PushConfigToMenu(TrainingBattlesMcmSettings s, ModConfig c)
         {
@@ -73,6 +88,9 @@ namespace TrainingBattles.Mcm
             s.OpponentBannerCode = c.OpponentBannerCode;
             s.ChooseGroundWhenDefending = c.ChooseGroundWhenDefending;
             s.ChooseGroundWhenAttacking = c.ChooseGroundWhenAttacking;
+            // Rebuild rather than select: the dropdown's index convention (0 = clock, i+1 =
+            // SupportedBattleHours[i]) lives in TimeOfDayChoices — one authority for both sides.
+            s.BattleTimeOfDay = TrainingBattlesMcmSettings.TimeOfDayChoices(c.BattleTimeOfDay);
             SelectOrAdd(s.OpenMenuHotkey, c.OpenMenuHotkey);
         }
 
@@ -92,6 +110,10 @@ namespace TrainingBattles.Mcm
                 ? c.OpponentBannerCode : s.OpponentBannerCode;
             c.ChooseGroundWhenDefending = s.ChooseGroundWhenDefending;
             c.ChooseGroundWhenAttacking = s.ChooseGroundWhenAttacking;
+            var hourIndex = s.BattleTimeOfDay?.SelectedIndex ?? 0;
+            c.BattleTimeOfDay = hourIndex > 0 && hourIndex <= ModConfig.SupportedBattleHours.Length
+                ? ModConfig.SupportedBattleHours[hourIndex - 1]
+                : -1;
             c.OpenMenuHotkey = s.OpenMenuHotkey.SelectedValue ?? c.OpenMenuHotkey;
         }
 
