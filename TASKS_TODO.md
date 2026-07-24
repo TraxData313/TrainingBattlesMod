@@ -5,7 +5,6 @@ NEXT UPDATE:
 
 
 
-
 POST V1 or NOT FULLY DECIDED:
 - [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
     the option before EVERY battle type). The CONFIG already applies everywhere (the

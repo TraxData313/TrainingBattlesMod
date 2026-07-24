@@ -216,67 +216,91 @@ namespace TrainingBattles
 
         private string BuildMenuText()
         {
-            // The pay line, in one breath — what it costs AND what it buys (Anton, 2026.07.24:
-            // "for equipment and for rewards for the good fighters", short).
-            var cost = ComputeTrainingCost();
-            var costText = cost > 0
-                ? " Drill pay: " + cost + " denars ("
-                    + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
-                    + " a man) — for equipment (javelins, arrows, upkeep after the battle) and rewards to keep the good fighters motivated."
-                : "";
+            // Three short lines — Battlefield / Time / Drill — the whole state at a glance
+            // (Anton, 2026.07.24: brief, real numbers, no empty big words; the options'
+            // tooltips carry the longer explanations).
+            string head;
             if (_pickedTeam != null && _pickedTeam.TotalManCount > 0)
             {
                 var yours = MobileParty.MainParty.MemberRoster.TotalHealthyCount - _pickedTeam.TotalHealthyCount;
-                return "The two halves stand ready on the field: " + _pickedTeam.TotalHealthyCount
+                head = "The two halves stand ready: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
-                     + " with you. " + DescribeChosenGround() + costText
-                     + " Choose your side of the exercise — or call it off.";
+                     + " with you. Choose your side — or call it off.";
             }
-            if (_mockEnemyTeam != null && _mockEnemyTeam.TotalManCount > 0)
+            else if (_mockEnemyTeam != null && _mockEnemyTeam.TotalManCount > 0)
             {
-                return "The mock enemy stands ready: " + _mockEnemyTeam.TotalHealthyCount
+                head = "The mock enemy stands ready: " + _mockEnemyTeam.TotalHealthyCount
                      + " " + DescribeMockEnemyCultures(_mockEnemyTeam) + " men opposite, "
                      + MobileParty.MainParty.MemberRoster.TotalHealthyCount
-                     + " with you — phantoms for the drill, your own ranks untouched. "
-                     + DescribeChosenGround() + costText
-                     + " Choose your side of the exercise — or call it off.";
+                     + " with you — phantoms, your own ranks untouched. Choose your side — or call it off.";
             }
-            // The muster is the mod's front door — it should SAY what a commander can do here,
-            // with the real numbers from the config, not make the player guess. Only the features
-            // switched on get a paragraph — and each keeps to two or three short sentences
-            // (Anton, 2026.07.24: the old text had grown too tall for the menu).
-            var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
-                + "Nobody dies — the fallen get back up: the surgeon patches most of them (Medicine helps), "
-                + "and of the rest only about " + _config.WoundedPercent + "% wake up wounded. "
-                + "The men keep " + _config.XpKeptPercent + "% of the XP they earn."
-                + costText
-                + (_config.DisorganizedAfterTraining || _config.CooldownHours > 0
-                    ? " " + (_config.DisorganizedAfterTraining ? "Disorganized for a while after" : "")
-                        + (_config.DisorganizedAfterTraining && _config.CooldownHours > 0 ? "; " : "")
-                        + (_config.CooldownHours > 0
-                            ? (_config.DisorganizedAfterTraining ? "one" : "One") + " drill per " + _config.CooldownHours + " hours"
-                            : "")
-                        + "."
-                    : "");
-            var mock = "MOCK ENEMY — muster a phantom force from any troops in the game and drill "
-                + "the whole company against it. Nothing of yours crosses over; your own men follow "
-                + "the training rules above.";
-            var scout = "SCOUT — ride out alone to any battlefield of this country: walk the ground "
-                + "and see where both lines would form, before a battle chooses it for you.";
-            var anyDrill = _config.EnableSplitTraining || _config.EnableMockEnemyTraining;
-            if (anyDrill && !CooldownReady(out var remaining))
+            else
             {
-                return "The men are still worn from the last drill — ready to muster again in "
-                     + FormatRemaining(remaining) + ". Scouting needs no rest.{newline} {newline}" + scout;
+                head = "Battlefield setup and Training Battles";
             }
-            var sections = new List<string>();
-            if (_config.EnableSplitTraining) sections.Add(drill);
-            if (_config.EnableMockEnemyTraining) sections.Add(mock);
-            sections.Add(scout);
-            var text = "You call the company to a training muster.";
-            foreach (var section in sections) text += "{newline} {newline}" + section;
-            if (anyDrill) text += "{newline} {newline}" + DescribeChosenGround();
+            var text = head + "{newline} {newline}" + BattlefieldLine() + "{newline} {newline}" + TimeOfDayLine();
+            if (_config.EnableSplitTraining || _config.EnableMockEnemyTraining)
+                text += "{newline} {newline}" + DrillSetupLine();
             return text;
+        }
+
+        /// <summary>"Battlefield: <name> (default — this ground)" or "(your pick)" — updates the
+        /// moment the player picks a different ground. The default is shown by NAME when it is
+        /// knowable (one local candidate — the usual case, each map patch is claimed by at most
+        /// one scene in this game version); only a true multi-candidate patch says "random".</summary>
+        private string BattlefieldLine()
+        {
+            var pool = TrainingGroundPool(out var localCount);
+            if (_chosenSceneId != null)
+            {
+                var name = _chosenSceneId;
+                foreach (var scene in pool)
+                    if (scene.SceneID == _chosenSceneId) { name = BattleSceneCatalog.Describe(scene); break; }
+                return "Battlefield - " + name + " (your pick).";
+            }
+            if (localCount == 1)
+                return "Battlefield - " + BattleSceneCatalog.Describe(pool[0]) + " (default — this ground).";
+            return "Battlefield - random on this kind of ground (default).";
+        }
+
+        private string TimeOfDayLine() =>
+            _config.BattleTimeOfDay >= 0
+                ? "Time - " + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + " (your pick)."
+                : "Time - the campaign clock (default).";
+
+        /// <summary>The whole drill contract in one line: wounded math, surgeon, XP, cost,
+        /// disorganized, cooldown — each piece only when it actually applies.</summary>
+        private string DrillSetupLine()
+        {
+            var line = "Training battle - " + _config.WoundedPercent + "% of the fallen wake wounded"
+                + SurgeonNote() + ". " + _config.XpKeptPercent + "% XP kept.";
+            var cost = ComputeTrainingCost();
+            if (cost > 0)
+                line += " " + cost + " denars (" + _config.TrainingCostWages
+                      + FormatDaysWages(_config.TrainingCostWages)
+                      + " a man) for training equipment and troop rewards.";
+            if (_config.DisorganizedAfterTraining)
+                line += " Party becomes disorganized.";
+            if (!CooldownReady(out var remaining))
+                line += " Next drill in " + FormatRemaining(remaining) + ".";
+            else if (_config.CooldownHours > 0)
+                line += " One drill per " + _config.CooldownHours + " hours.";
+            return line;
+        }
+
+        /// <summary>", cut further by Surgeon Aeron (Medicine 80)" — the party's effective surgeon
+        /// by name, so the player sees WHO is softening the wounded roll and how good they are.</summary>
+        private static string SurgeonNote()
+        {
+            try
+            {
+                var surgeon = MobileParty.MainParty?.EffectiveSurgeon;
+                if (surgeon != null)
+                    return ", cut further by Surgeon " + surgeon.Name
+                         + " (Medicine " + surgeon.GetSkillValue(DefaultSkills.Medicine) + ")";
+            }
+            catch { }
+            return ", cut further by the surgeon's Medicine";
         }
 
         /// <summary>"Khuzait", or "mixed" when the composer was run more than once across
@@ -299,29 +323,6 @@ namespace TrainingBattles
             {
                 return "unknown";
             }
-        }
-
-        /// <summary>The battlefield line of the muster text — always visible, updating the moment
-        /// the player picks a different ground in "Select the battlefield". The pinned battle
-        /// hour rides on the same line, so the two choices read as one sentence of intent.</summary>
-        private string DescribeChosenGround()
-        {
-            string ground;
-            if (_chosenSceneId == null)
-                ground = "Battlefield: as fate wills — the ground you stand on decides.";
-            else
-            {
-                ground = "Battlefield: " + _chosenSceneId + " (your choice).";
-                foreach (var scene in TrainingGroundPool(out _))
-                    if (scene.SceneID == _chosenSceneId)
-                    {
-                        ground = "Battlefield: " + BattleSceneCatalog.Describe(scene) + " (your choice).";
-                        break;
-                    }
-            }
-            if (_config.BattleTimeOfDay >= 0)
-                ground += " Battles fought at " + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + " (your choice).";
-            return ground;
         }
 
         /// <summary>"in 20 hours and 15 minutes", "in 45 minutes" — the honest clock, not "about N hours".</summary>
