@@ -11,14 +11,23 @@ Split your army into two halves through a troop-picking GUI, choose which half y
 (attacking or defending), and fight a full mock battle on the very terrain you're standing
 on — or watch it resolve from the hill via the send-troops simulation.
 
-**Nobody really dies.** Afterward the fallen wake up: your surgeon's Medicine saves most on
-the spot, a configurable share of the rest (default 10%) are wounded, and the others shrug
-it off. The men keep a configurable share of the XP they earned (default 75%), the party
-goes disorganized for a while, and a cooldown (default 24 in-game hours) gates the next
-drill. **No spoils in sparring**: the post-battle loot and prisoner screens simply never
-appear after a drill — nothing is looted, nobody is captured, no renown or relations are
-touched. War as a school, not a funeral. **Cancel training** is always available before
-the fight and leaves the campaign exactly as it was.
+**Nobody really dies.** Every casualty of a drill — the "killed" and the hurt alike —
+walks the same path afterward:
+
+1. **He gets back up.** Training deaths are not real; every man returns to the roster.
+2. **The surgeon sees him first.** The game's own Medicine-driven save — a better doctor
+   sends more men off without a scratch.
+3. **Only the rest roll for a wound.** Of the men the surgeon could *not* patch, a
+   configurable share (default 10%) wake up truly wounded for a while; the others shrug
+   it off.
+
+So a drill with 20 casualties typically ends with one or two wounded — fewer with a good
+doctor — and **zero dead**. The men keep a configurable share of the XP they earned
+(default 75%), the party goes disorganized for a while, and a cooldown (default 24 in-game
+hours) gates the next drill. **No spoils in sparring**: the post-battle loot and prisoner
+screens simply never appear after a drill — nothing is looted, nobody is captured, no
+renown or relations are touched. War as a school, not a funeral. **Cancel training** is
+always available before the fight and leaves the campaign exactly as it was.
 
 **The drill pay** (configurable, default one day's wages per soldier on the field) goes for
 equipment — javelins, arrows, upkeep after the battle — and rewards to keep the good

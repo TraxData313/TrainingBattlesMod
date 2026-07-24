@@ -246,8 +246,9 @@ namespace TrainingBattles
             // switched on get a paragraph — and each keeps to two or three short sentences
             // (Anton, 2026.07.24: the old text had grown too tall for the menu).
             var drill = "DRILL — divide the men, choose a side, and fight a mock battle on this very ground. "
-                + "Nobody dies: the men keep " + _config.XpKeptPercent + "% of the XP they earn, and only about "
-                + _config.WoundedPercent + "% of the fallen wake up wounded (a better surgeon saves more)."
+                + "Nobody dies — the fallen get back up: the surgeon patches most of them (Medicine helps), "
+                + "and of the rest only about " + _config.WoundedPercent + "% wake up wounded. "
+                + "The men keep " + _config.XpKeptPercent + "% of the XP they earn."
                 + costText
                 + (_config.DisorganizedAfterTraining || _config.CooldownHours > 0
                     ? " " + (_config.DisorganizedAfterTraining ? "Disorganized for a while after" : "")
@@ -353,10 +354,10 @@ namespace TrainingBattles
             }
             else
             {
-                args.Tooltip = new TextObject("{=TB_tip_pick}A mock battle against your own men: they keep "
-                    + _config.XpKeptPercent + "% of the XP they earn, about " + _config.WoundedPercent
-                    + "% of the fallen wake wounded (a better doctor lowers that), nobody dies"
-                    + (_config.DisorganizedAfterTraining ? ", and the party is disorganized for a while after." : "."));
+                args.Tooltip = new TextObject("{=TB_tip_pick2}A mock battle against your own men. Nobody dies: "
+                    + "the fallen get back up — the surgeon patches most (Medicine helps), and of the rest only about "
+                    + _config.WoundedPercent + "% wake up wounded. XP kept: " + _config.XpKeptPercent + "%"
+                    + (_config.DisorganizedAfterTraining ? "; the party is disorganized for a while after." : "."));
             }
             return true;
         }
