@@ -10,7 +10,7 @@
     </GetItem>
     <UpdateItem>
         <ModuleFolder Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\dist\TrainingBattles"/>
-        <ChangeNotes Value="v1.0.0 - First release." />
+        <ChangeNotes Value="v1.0.1 - Bugfixes from the first day's field reports: companions who fought on the opposing half (or scattered after a lost drill) now return with their party roles intact (scout, engineer, quartermaster, surgeon); no more 'Tracking: separated after a battle' popups in settlements for companions already riding with you (stale entries are cleaned from your save on load); the time-of-day picker now shows the live campaign clock and marks your pinned hour as 'your pick' so a standing pin is never mistaken for the current time." />
         <Tags>
             <Tag Value="Utility" />
             <Tag Value="Native" />
