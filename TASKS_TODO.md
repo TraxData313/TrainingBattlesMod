@@ -2,55 +2,17 @@ BUGS:
 
 
 NEXT UPDATE:
-- [ ] Remaining checks from the 2026.07.24 batch (Anton's same-day playtest CONFIRMED the
-    big ones: no loot after drills and mock drills — even WITH BannerLoot installed, its
-    screen never appeared, so killing vanilla's loot at the source starved the loot mod
-    too; and a normal real battle still loots/behaves fully vanilla). Still unchecked:
-    1. The pinned hour on a SIEGE assault and a NAVAL battle (the weather-model gate
-       covers them by design; just confirm in play).
-    2. The mock composer's one-screen all-troops pool: is the vanilla sort bar enough to
-       find troops comfortably, or does the search-box task below get promoted?
-- [ ] Search + filters (e.g. by tier) inside the mock-enemy picker (Anton 2026.07.24).
-    The vanilla party screen offers its own sort control but no free-text search in the
-    dummy-roster flow; adding one means a custom PartyVM/Gauntlet layer — own session.
-    First playtest the all-troops pool: vanilla sort may already be enough.
+
+
+
+
+POST V1 or NOT FULLY DECIDED:
 - [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
     the option before EVERY battle type). The CONFIG already applies everywhere (the
     MapWeatherModel decorator fires for any player map event — sieges and sea included);
     what's missing is only the menu entry on vanilla's siege menus (menu ids to research:
     the besiege/assault menus) and wherever naval encounters diverge from "encounter".
     The muster, the encounter menu and MCM all edit the same key already.
-- [ ] Playtest the real-battle ground tools with the LUDA SAVE (Anton has a save just before
-    Luda's party closes in to attack). What to check, in order of risk:
-    1. THE BIG ONE — "Ride out and scout a battlefield" from the encounter menu, then LEAVE the ride
-       (hold Tab): the encounter menu must come back with Attack!/Try to get away intact and
-       the map event unharmed (the mission-under-a-menu shape vanilla's pre-battle
-       conversation uses; ours is the first non-conversation tenant). If the menu comes back
-       wrong or the fight auto-starts, the scout option gets pulled from real encounters.
-    2. "Select the battlefield" as DEFENDER: pick a non-local scene, Attack!, confirm the battle
-       opens on the picked scene; also confirm walking away (Try to get away) clears the pick.
-    3. Scout precision: scout, note the lines, then fight — the real deployment should match
-       the scouted lines exactly (same ends, same facing).
-    4. The same two options when the PLAYER attacks someone (toggle "when attacking").
-    5. ARMY battles (Anton's ask, VERIFIED IN CODE 2026.07.23 — every army road leads to the
-       same "encounter" menu our options live on: "Attack army" on the army_encounter menu
-       is just SwitchToMenu("encounter"), and join_encounter's help-a-side does
-       PlayerEncounter.JoinBattle then SwitchToMenu("encounter"); the side gate, the scene
-       query and the direction formula — AttackerSide.LeaderParty, i.e. the army leader —
-       are all army-agnostic, so no code was needed). Confirm in play: survey+scout appear
-       when the player's ARMY fights a field battle, as leader and as a mere member, and
-       the chosen scene sticks. Note: as an army MEMBER the tools still show (the player
-       fights the mission either way) — if that feels like overreach, an "army leader only"
-       gate is a one-line decision.
-- [ ] Finish playtesting the mock-enemy drill. CONFIRMED by Anton (2026.07.23): a mock battle
-    works end-to-end — loot and the phantom troops disappeared as expected; and with the dev
-    toggle off the V1 default menu is scout-only, as designed. STILL UNTESTED: a deliberate
-    DEFEAT against the mock enemy (the capture/scatter guards on the losing path), mixing two
-    cultures (run the composer twice), and a skim of last_drill_report.txt after a mock drill
-    to confirm the XP/wounded arithmetic only touched our side.
-
-
-POST V1 or NOT FULLY DECIDED:
 - [ ] I want the other party to become as a real party, lead by one of the companions if there are any there, for the AI to assign the campanions as division leaders, if it normally does
 - [ ] When I divide the army to see as I am starting a fight against a party, an animation where I fight with a party, my party being the men I got and the other party the men they got in their orange banner
 - [ ] Pick the commander of the opposing half (Anton's ask) — RESEARCH NOTES READY
