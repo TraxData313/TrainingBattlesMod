@@ -1,0 +1,27 @@
+<Tasks>
+    <CreateItem/>
+    <UpdateItem>
+        <!-- First-time Steam Workshop upload. Run with Steam open and logged in:
+               TaleWorlds.MountAndBlade.SteamWorkshop.exe "<this file's full path>"
+             (exe lives in the game's bin\Win64_Shipping_Client).
+             CAUTION, uploader quirks (decompiled 2026.07.13, see WORKSHOP-UPLOAD.md): the root
+             <Tasks> element must be the FIRST node of this file - an <?xml?> declaration or a
+             comment above/beside it makes the tool parse ZERO tasks and exit as if successful.
+             Comments are only safe HERE, inside UpdateItem (and inside GetItem). The item TITLE
+             is read from the module's SubModule.xml <Name>, not from this file. The tool ends by
+             writing steam_workshop_uploader.txt to the working directory and crashing on a
+             harmless press-any-key read when run non-interactively - judge success by "Item
+             created. Item ID is ..." + "Uploading done!" in the output, not the exit code.
+             NEVER run this file again after the item exists - use WorkshopUpdate.xml. -->
+        <ModuleFolder Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\dist\TrainingBattles"/>
+        <ItemDescription Value="Drill your army against itself: split your men into two teams through a picker screen, choose your side, and fight a mock battle on the real terrain of your map position. Nobody truly dies - the fallen wake up wounded (your surgeon softens the rest), the troops keep the XP they earned, and a cooldown gates the next drill. Plus the general's toolkit for drills AND real field battles: choose the battlefield, choose the hour, and ride out to scout any of those grounds alone - in a real encounter both armies stand frozen, so the lines you scout are the coming battle's true ones. Optional mock-enemy mode: compose a phantom force from every troop in the game and test your company against it. Configurable via MCM (optional) or config.json."/>
+        <Tags>
+            <Tag Value="Utility" />
+            <Tag Value="Native" />
+            <Tag Value="Singleplayer" />
+            <Tag Value="v1.4.7" />
+        </Tags>
+        <Image Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\Screenshots\preview_thumbnail.jpg"/>
+        <Visibility Value="Private"/>
+    </UpdateItem>
+</Tasks>

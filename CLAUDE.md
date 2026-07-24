@@ -107,8 +107,13 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)
 tools/deploy.ps1              build + install as "Training Battles (dev)" into the game's
-                              Modules folder (module id TrainingBattles.Dev, safe beside a
-                              future Workshop copy)
+                              Modules folder (module id TrainingBattles.Dev, safe beside
+                              the Workshop copy — enable only ONE at a time)
+tools/package.ps1             clean dist\TrainingBattles layout + versioned zip — what the
+                              Workshop uploader ships (real module id, no .Dev)
+tools/WORKSHOP-UPLOAD.md      the whole Steam release loop + the uploader's quirks;
+                              item 3770681619, updates go through WorkshopUpdate.xml
+                              (WorkshopCreate.xml already ran once — never again)
 ```
 
 Flow in one breath: hotkey (default `G`) on the open map → muster menu (`training_battle_menu`)

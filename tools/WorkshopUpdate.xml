@@ -1,0 +1,21 @@
+<Tasks>
+    <GetItem>
+        <!-- Updating the existing Workshop item: fill ItemId (the number in the item's page
+             URL) after the first upload, set ChangeNotes below, run package.ps1, then run
+             TaleWorlds.MountAndBlade.SteamWorkshop.exe with this file's full path (Steam open).
+             Same quirks as WorkshopCreate.xml: <Tasks> must be the file's first node, comments
+             only inside GetItem/UpdateItem, title comes from SubModule.xml <Name>, and the tool
+             ends on a harmless press-any-key crash - trust "Uploading done!" in the output. -->
+        <ItemId Value="3770681619"/>
+    </GetItem>
+    <UpdateItem>
+        <ModuleFolder Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\dist\TrainingBattles"/>
+        <ChangeNotes Value="v1.0.0 - First release." />
+        <Tags>
+            <Tag Value="Utility" />
+            <Tag Value="Native" />
+            <Tag Value="Singleplayer" />
+            <Tag Value="v1.4.7" />
+        </Tags>
+    </UpdateItem>
+</Tasks>
