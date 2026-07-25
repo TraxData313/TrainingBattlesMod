@@ -26,7 +26,10 @@ as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; 
 players simply don't drill). `EnableMockEnemyTraining` (default OFF, the one MCM "Features"
 toggle) adds the second drill mode: compose a phantom enemy of any culture/mix from
 synthetic troop pools and fight the whole company against it — the test bench for the
-battle pipeline. Later: garrison training at owned fiefs, and naval training battles.
+battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 (branch
+`naval-training`, awaiting playtest) — the fleet auto-splits proportional to crew, flagship
+stays with the player, every hull re-owned and re-healed afterward; the ship-divide GUI is
+the NEXT release's must (Anton). Later: garrison training at owned fiefs.
 
 ## Who does what — and how we work
 
@@ -68,6 +71,8 @@ src/TrainingBattles.Core/     netstandard2.0 — pure logic, fully unit-tested:
   AftermathMath.cs            per-fallen two-roll pipeline (surgeon save → wounded share),
                               XP kept/removed split
   TrainingCooldown.cs         the once-per-N-hours clock (0 = unlimited)
+  FleetSplitMath.cs           the sea drill's fleet division: greedy, proportional to each
+                              side's crew, flagship pinned to the player, both sides sail
 src/TrainingBattles.Module/   net472 — the Bannerlord module:
   SubModule.cs                entry point: config, behavior, reward model, MCM bind, hotkey tick
   ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
@@ -90,7 +95,12 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               walk-around views + the hold-Tab leave bar Camp lacks — read its
                               class doc before touching (the ViewCreatorModule scanner footgun)
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
-                              prisoners while TrainingActive)
+                              prisoners — and at sea: no ship transfers, no post-defeat hull
+                              damage, no figurehead loot — while TrainingActive). A DECORATOR
+                              over BaseModel like the other two models, NOT a Default* subclass:
+                              War Sails registers its own NavalDLCBattleRewardModel, and
+                              extending DefaultBattleRewardModel silently replaced it in every
+                              real battle (live bug in v1.0.1, fixed 2026.07.25)
   Models/TrainingBattlesSceneModel.cs  the ground-choice gate: one-shot PendingSceneId, else
                               delegates down the BaseModel chain (a DECORATOR — AddModel<T>
                               hands us the previously registered SceneModel, mod-compatible)
@@ -167,6 +177,21 @@ before deploying or the DLL is locked.
 - Vanilla makes the losing side's UNCAPTURED heroes FUGITIVE at map-event end ("Regrouping" on
   the clan screen) and REMOVES them from the roster — a no-capture guard reroutes companions
   into exactly that hole; the aftermath must walk snapshot-heroes home explicitly.
+- NEVER extend a Default*Model to override a game model — War Sails (module `NavalDLC`)
+  registers ~40 of its own models (its own BattleRewardModel among them), and AddModel
+  replaces by BASE type, so a Default* subclass silently strips the DLC's behavior from the
+  whole campaign. Always decorate: extend the abstract model, delegate everything to
+  BaseModel (AddModel hands over the previously registered model). All three of our models
+  do this now.
+- War Sails naval semantics: `MapEvent.IsNavalMapEvent` is just `!Position.IsOnLand` — start
+  an encounter at sea and the whole naval pipeline lights up; the only fork is
+  `CampaignMission.OpenNavalBattleMission`. A side with ZERO ships loses instantly, so give
+  the temp party hulls BEFORE StartBattle. "Sinking" (`DestroyShipAction`) only sets
+  `Ship.Owner = null` — the object survives; restore = re-own + re-heal. `Ship.Owner`'s
+  setter edits both parties' LIVE ship lists (copy before looping — the GetTroopRoster
+  lesson), and ship ownership PERSISTS IN SAVES (stale recovery must reclaim hulls). Naval
+  player battles are MULTI-ROUND with a disengage state ("naval_encounter_disengaged" menu)
+  — one more reason the finalize kills the event positively.
 
 ## Build & deploy
 
@@ -206,7 +231,9 @@ the narrative. The shape of V1:
   defeat path must never reach capture; XP-on-roster confirmation; loot residue.
 
 **Decompiled game source** (this exact game version): `..\reference\game-decompiled\`
-(CampaignSystem, SandBox, MountAndBlade). Regenerate: `ilspycmd -p -o <out> <dll>` with
+(CampaignSystem, SandBox, MountAndBlade, and since 2026.07.25 NavalDLC — War Sails' own
+module, home of every NavalDLC*Model). Regenerate: `ilspycmd -p -o <out> <dll>` with
 `$env:DOTNET_ROLL_FORWARD='LatestMajor'`; SandBox.dll is under
-`Modules\SandBox\bin\Win64_Shipping_Client`. Consult freely — it is the ground truth for
+`Modules\SandBox\bin\Win64_Shipping_Client`, NavalDLC.dll under
+`Modules\NavalDLC\bin\Win64_Shipping_Client`. Consult freely — it is the ground truth for
 this game version's APIs.

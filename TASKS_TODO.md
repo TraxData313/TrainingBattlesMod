@@ -2,9 +2,32 @@ BUGS:
 
 
 NEXT UPDATE:
-- [ ] Naval training battles (War Sails)
-    Divide the ships and the troops at sea and run mock naval battles — same rules (XP kept,
-    wounded not dead, disorganized, cooldown). The scene API already carries the naval flag.
+- [ ] Naval training battles (War Sails) — BUILT on branch `naval-training`, AWAITING PLAYTEST
+    (2026.07.25; see TASKS_DONE for the full narrative). PLAYTEST LIST, in order of risk:
+    1. The multi-round/disengage state machine: fight a sea drill to a clean win, a loss, a
+       retreat, and a cancel-of-auto-resolve — the finalize must kill the event every time
+       (naval battles re-run while both sides hold ships; "naval_encounter_disengaged" is the
+       new menu our bounded pops have never met).
+    2. The fleet comes home whole: hull/sail HP restored, sunk hulls back, nothing "captured",
+       figurehead untouched, fleet visuals right on the map after (SetNavalVisualAsDirty).
+    3. The split feels right (proportional to crew, flagship stays) and the muster preview
+       line matches what actually crosses.
+    4. Send-troops (hill-watch) at sea — the naval simulation path.
+    5. REGRESSION on land: one ordinary land drill, and one REAL naval battle WITHOUT
+       training (the reward model became a decorator — figurehead drops and ship loot must
+       still work for real sea fights; that was silently broken in v1.0.1).
+- [ ] Ship divide GUI — MUST for the next release (Anton, 2026.07.25)
+    A real picker for WHICH ships go to which side in the naval split drill (the V1 naval
+    solution auto-splits proportional to crew). No vanilla "divide the fleet" screen exists —
+    research candidates: the fleet management screen's roster machinery, or a custom
+    inquiry/Gauntlet list. Pairs with the men picker: divide the men, then divide the hulls.
+- [ ] Phantom FLEETS for the mock enemy at sea (blocked with an honest tooltip today):
+    conjure `new Ship(hull)` per culture for the mock party and dissolve them after —
+    the Ship ctor is public, hulls come from the object manager; decide the fleet recipe
+    (culture's shipyard list? player-mirrored?) with Anton first.
+- [ ] Sea scout ride (the muster scout hides at sea today, same rule as the real-encounter
+    door): walking a naval scene alone means standing on a deck — needs its own ship-spawn
+    mission shape, not the Camp walk-around.
 - [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
     the option before EVERY battle type). The CONFIG already applies everywhere (the
     MapWeatherModel decorator fires for any player map event — sieges and sea included);

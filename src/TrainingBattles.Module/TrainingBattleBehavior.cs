@@ -10,6 +10,7 @@ using TaleWorlds.CampaignSystem.CharacterDevelopment;
 using TaleWorlds.CampaignSystem.Encounters;
 using TaleWorlds.CampaignSystem.GameMenus;
 using TaleWorlds.CampaignSystem.GameState;
+using TaleWorlds.CampaignSystem.Naval;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Party.PartyComponents;
 using TaleWorlds.CampaignSystem.Roster;
@@ -97,6 +98,12 @@ namespace TrainingBattles
                                                    // walking in — the engine WIPES a hero's roles
                                                    // the moment they change party, so the opposing
                                                    // half's officers would come home demoted
+        private readonly List<(Ship Ship, float HitPoints, float SailHitPoints)> _fleetSnapshot
+            = new List<(Ship, float, float)>();    // every hull and its health walking into a sea
+                                                   // drill (empty = land drill). "Sinking" is
+                                                   // DestroyShipAction, which only sets Owner=null
+                                                   // — the Ship object survives, so restore =
+                                                   // re-own + re-heal
         private Dictionary<(ItemObject, ItemModifier?), int>? _itemSnapshot;
                                                    // the baggage train before the fight — anything
                                                    // ABOVE it afterward is drill loot and is removed,
@@ -165,6 +172,7 @@ namespace TrainingBattles
             _checkResults = false;
             _heroHpBefore.Clear();
             _chargedCost = 0;
+            _fleetSnapshot.Clear();
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
             RecoverStaleOpponentParties();
             RescueStuckFugitiveCompanions();
@@ -235,7 +243,8 @@ namespace TrainingBattles
                 var yours = MobileParty.MainParty.MemberRoster.TotalHealthyCount - _pickedTeam.TotalHealthyCount;
                 head = "The two halves stand ready: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
-                     + " with you. Choose your side — or call it off.";
+                     + " with you." + FleetSplitPreview(Math.Max(yours, 1))
+                     + " Choose your side — or call it off.";
             }
             else if (_mockEnemyTeam != null && _mockEnemyTeam.TotalManCount > 0)
             {
@@ -313,6 +322,38 @@ namespace TrainingBattles
             return ", cut further by the surgeon's Medicine";
         }
 
+        /// <summary>" The fleet divides with the men: 2 hulls opposite, 3 with you (the flagship
+        /// yours)." — the same split <see cref="SplitFleet"/> will actually make, computed on the
+        /// same inputs, so the muster text is a promise and not an estimate. Empty on land, with
+        /// a lone hull, or with no divided company yet.</summary>
+        private string FleetSplitPreview(int yourHealthyMen)
+        {
+            try
+            {
+                if (!MainPartyAtSea() || _pickedTeam == null) return string.Empty;
+                var ships = MobileParty.MainParty.Ships;
+                if (ships.Count < 2) return string.Empty;
+                var capacities = new List<int>(ships.Count);
+                var flagship = 0;
+                for (var i = 0; i < ships.Count; i++)
+                {
+                    capacities.Add(ships[i].TotalCrewCapacity);
+                    try { if (ships[i].FlagshipScore > ships[flagship].FlagshipScore) flagship = i; }
+                    catch { }
+                }
+                var crossing = FleetSplitMath.OpponentShips(capacities, flagship,
+                    yourHealthyMen, _pickedTeam.TotalHealthyCount);
+                var keep = ships.Count - crossing.Count;
+                return " The fleet divides with the men: "
+                    + crossing.Count + (crossing.Count == 1 ? " hull" : " hulls") + " opposite, "
+                    + keep + (keep == 1 ? " hull" : " hulls") + " with you (the flagship yours).";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
         /// <summary>"Khuzait", or "mixed" when the composer was run more than once across
         /// cultures — read straight off the composed roster, no extra state to go stale.</summary>
         private static string DescribeMockEnemyCultures(TroopRoster team)
@@ -363,6 +404,12 @@ namespace TrainingBattles
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_few}You need at least two healthy souls to hold a drill.");
             }
+            else if (MainPartyAtSea() && MobileParty.MainParty.Ships.Count < 2)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_one_hull}A sea drill needs a fleet to divide — "
+                    + "two hulls at the least, and you sail " + MobileParty.MainParty.Ships.Count + ".");
+            }
             else
             {
                 args.Tooltip = new TextObject("{=TB_tip_pick2}A mock battle against your own men. Nobody dies: "
@@ -386,6 +433,14 @@ namespace TrainingBattles
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_mock_none}Not a healthy soul to drill.");
+            }
+            else if (MainPartyAtSea())
+            {
+                // A phantom FLEET means conjuring hulls from nothing — its own feature, parked
+                // in TASKS_TODO. The split drill covers the sea until then.
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_mock_sea}Phantoms do not sail yet — make "
+                    + "port or drop anchor ashore to drill against a mock enemy.");
             }
             else
             {
@@ -455,6 +510,9 @@ namespace TrainingBattles
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
             if (TrainingGroundPool(out _).Count == 0) return false;
+            if (MainPartyAtSea()) return false; // no lone ride on open water — same rule as the
+                                                // real-encounter door; a sea-scout needs its own
+                                                // ship-walk mission (TASKS_TODO)
             if (Hero.MainHero?.IsWounded == true)
             {
                 args.IsEnabled = false;
@@ -501,12 +559,22 @@ namespace TrainingBattles
             }
         }
 
+        /// <summary>Sailing = sea drill. At muster time there IS no PlayerEncounter (CanMusterNow
+        /// forbids one), so IsNavalEncounter() would always say land — the party's own navigation
+        /// state is the truth here, exactly what MapEvent itself derives naval-ness from
+        /// (IsNavalMapEvent = the event position is not on land).</summary>
+        private static bool MainPartyAtSea()
+        {
+            try { return MobileParty.MainParty?.IsCurrentlyAtSea == true; }
+            catch { return false; }
+        }
+
         private static List<SingleplayerBattleSceneData> TrainingGroundPool(out int localCount)
         {
             try
             {
                 return BattleSceneCatalog.WiderPoolAt(
-                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter(), out localCount);
+                    MobileParty.MainParty.Position, MainPartyAtSea(), out localCount);
             }
             catch
             {
@@ -550,6 +618,22 @@ namespace TrainingBattles
                         ? "{=TB_tip_pick_first2}Divide the men first — or compose a mock enemy."
                         : "{=TB_tip_pick_first}Divide the men first.")
                     : "{=TB_tip_mock_first}Compose the mock enemy first.");
+                return true;
+            }
+            if (MainPartyAtSea() && mockDrill)
+            {
+                // Composed ashore, sailed out since — the phantoms have no hulls to ride.
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_mock_sea}Phantoms do not sail yet — make "
+                    + "port or drop anchor ashore to drill against a mock enemy.");
+                return true;
+            }
+            if (MainPartyAtSea() && MobileParty.MainParty.Ships.Count < 2)
+            {
+                // Divided ashore, sailed out since — a fleet of one cannot fight itself.
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_one_hull}A sea drill needs a fleet to divide — "
+                    + "two hulls at the least, and you sail " + MobileParty.MainParty.Ships.Count + ".");
                 return true;
             }
             if (costNow > 0 && (Hero.MainHero?.Gold ?? 0) < costNow)
@@ -997,6 +1081,26 @@ namespace TrainingBattles
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + reason));
                 return;
             }
+            // The sea's own gates, checked before anything is touched: a mock enemy has no hulls
+            // to sail (phantom fleets are the next patch's feature), and a fleet of one cannot
+            // fight itself. The menu conditions already say both — these catch a pick carried
+            // from shore out onto the water.
+            if (MainPartyAtSea())
+            {
+                if (mock != null)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: phantoms do not sail yet — drill the mock enemy ashore."));
+                    return;
+                }
+                if (MobileParty.MainParty.Ships.Count < 2)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: a sea drill needs at least two hulls to divide."));
+                    return;
+                }
+            }
+
             // The pay-chest is counted over the WHOLE company (both halves drill), before the split.
             var cost = ComputeTrainingCost();
             if (cost > 0 && (Hero.MainHero?.Gold ?? 0) < cost)
@@ -1071,6 +1175,15 @@ namespace TrainingBattles
                     return;
                 }
             }
+
+            // The sea drill divides the FLEET as the men were divided: proportional to each
+            // side's healthy crew, the flagship never crossing. Every hull's health is
+            // snapshotted first — the aftermath re-owns and re-heals them all, so a drill can
+            // sink nothing for keeps. (A dedicated "divide the ships" picker is the next
+            // release's must — this auto-split is V1's honest stand-in.)
+            _fleetSnapshot.Clear();
+            if (MainPartyAtSea() && mock == null)
+                SplitFleet(main, opponent);
 
             // The men are paid BEFORE the first bruise; an abort refunds the chest in full.
             if (cost > 0)
@@ -1154,15 +1267,23 @@ namespace TrainingBattles
                 return;
             }
 
+            // The map event is live now, so ITS naval verdict is the truth (IsNavalMapEvent =
+            // the event position is off land) — the scene query and the mission opener must
+            // agree with it, or a sea scene opens under the land opener (or worse, reversed).
+            var navalEvent = PlayerEncounter.IsNavalEncounter();
             var mapSceneWrapper = Campaign.Current.MapSceneWrapper;
             var position = MobileParty.MainParty.Position;
             var mapPatch = mapSceneWrapper.GetMapPatchAtPosition(in position);
-            var sceneId = Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, PlayerEncounter.IsNavalEncounter());
+            var sceneId = Campaign.Current.Models.SceneModel.GetBattleSceneForMapPatch(mapPatch, navalEvent);
             // The patch-aware record makes deployment DETERMINISTIC (same lines every drill, and
             // the same lines the scout ride previews). The old string overload carried no patch
             // data, and without it the game picks a random spawn path and pivot per battle.
             // The pinned battle hour (if any) rides in the record's atmosphere.
-            CampaignMission.OpenBattleMission(ScoutMission.CreatePatchAwareRecord(sceneId, _config.BattleTimeOfDay));
+            var record = ScoutMission.CreatePatchAwareRecord(sceneId, _config.BattleTimeOfDay);
+            if (navalEvent)
+                CampaignMission.OpenNavalBattleMission(record);
+            else
+                CampaignMission.OpenBattleMission(record);
         }
 
         private MobileParty? CreateOpponentParty(bool mockEnemy)
@@ -1187,6 +1308,94 @@ namespace TrainingBattles
             {
                 return null;
             }
+        }
+
+        // ------------------------------ the fleet ------------------------------
+
+        /// <summary>Divides the fleet for a sea drill, proportional to each side's healthy crew
+        /// (<see cref="FleetSplitMath"/>), the best hull — the flagship by the game's own
+        /// FlagshipScore — always staying with the player. Snapshots every hull's health FIRST:
+        /// "sunk" in this game is <c>DestroyShipAction</c>, which only unhooks the owner and
+        /// leaves the Ship object alive, so <see cref="RestoreFleet"/> can raise the whole fleet
+        /// afterward. Moving a hull is just writing <c>Ship.Owner</c> — the setter does the
+        /// roster bookkeeping on both parties.</summary>
+        private void SplitFleet(MobileParty main, MobileParty opponent)
+        {
+            // The Owner setter edits the party's LIVE ship list — copy before the loop, the
+            // same footgun as TroopRoster.GetTroopRoster.
+            var ships = new List<Ship>(main.Ships);
+            foreach (var ship in ships)
+                _fleetSnapshot.Add((ship, ship.HitPoints, ship.SailHitPoints));
+            var capacities = new List<int>(ships.Count);
+            var flagship = 0;
+            for (var i = 0; i < ships.Count; i++)
+            {
+                capacities.Add(ships[i].TotalCrewCapacity);
+                try { if (ships[i].FlagshipScore > ships[flagship].FlagshipScore) flagship = i; }
+                catch { }
+            }
+            var crossing = FleetSplitMath.OpponentShips(capacities, flagship,
+                main.MemberRoster.TotalHealthyCount, opponent.MemberRoster.TotalHealthyCount);
+            foreach (var index in crossing)
+                ships[index].Owner = opponent.Party;
+            // The event's shipless-side check and the mission's spawners read the party lists
+            // we just wrote; the at-sea flag is only the map visual's truth, set for tidiness.
+            try { opponent.IsCurrentlyAtSea = true; } catch { }
+            try { main.SetNavalVisualAsDirty(); } catch { }
+            InformationManager.DisplayMessage(new InformationMessage(
+                "Training Battles: the fleet divides with the men — "
+                + crossing.Count + (crossing.Count == 1 ? " hull" : " hulls") + " opposite, "
+                + (ships.Count - crossing.Count) + " under your banner."));
+        }
+
+        /// <summary>Every hull comes home whole: re-owned by the main party (whether it crossed
+        /// for the drill, was "captured", or "sank" — sinking only orphaned it) and healed back
+        /// to the health it sailed in with. Run BEFORE the temp party is destroyed, on every
+        /// exit road: the aftermath, the abort, and nowhere else — the stale-party recovery has
+        /// its own <see cref="ReclaimShips"/> (a crashed session has no snapshot to heal from).</summary>
+        private void RestoreFleet()
+        {
+            if (_fleetSnapshot.Count == 0) return;
+            try
+            {
+                foreach (var entry in _fleetSnapshot)
+                {
+                    var ship = entry.Ship;
+                    if (ship == null) continue;
+                    try
+                    {
+                        if (ship.Owner != PartyBase.MainParty) ship.Owner = PartyBase.MainParty;
+                        ship.HitPoints = entry.HitPoints;
+                        ship.SailHitPoints = entry.SailHitPoints;
+                    }
+                    catch { }
+                }
+                MobileParty.MainParty.SetNavalVisualAsDirty();
+            }
+            catch { }
+            _fleetSnapshot.Clear();
+        }
+
+        /// <summary>The crash road's fleet walk-back: hulls still owned by a stale temp party
+        /// (ship ownership rides in the save) return to the main party as they stand — hurt
+        /// hulls stay hurt, and a hull sunk in the lost session is truly gone; without a
+        /// persisted snapshot there is nothing honest to heal from.</summary>
+        private static void ReclaimShips(MobileParty party)
+        {
+            try
+            {
+                var ships = new List<Ship>(party.Ships); // Owner writes mutate the live list
+                if (ships.Count == 0) return;
+                foreach (var ship in ships)
+                {
+                    try { ship.Owner = PartyBase.MainParty; } catch { }
+                }
+                MobileParty.MainParty.SetNavalVisualAsDirty();
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: " + ships.Count + (ships.Count == 1 ? " hull" : " hulls")
+                    + " from the interrupted drill rejoined your fleet."));
+            }
+            catch { }
         }
 
         // ------------------------------ the training colors ------------------------------
@@ -1469,6 +1678,7 @@ namespace TrainingBattles
         private void AbortLiveBattle()
         {
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            RestoreFleet(); // hulls home and healed BEFORE their borrower party dissolves
             var opponent = _opponentParty;
             if (opponent != null)
             {
@@ -1559,6 +1769,7 @@ namespace TrainingBattles
             _chargedCost = 0; // the drill happened — the chest is spent
             Models.TrainingBattlesSceneModel.PendingSceneId = null; // never read = never armed again
             RestoreOpponentClanLook(); // the lender clan gets its own colors back
+            RestoreFleet(); // every hull re-owned and re-healed, sunk or "captured" or crossed
 
             var mainSnapshot = _mainSnapshot;
             var opponentSnapshot = _opponentSnapshot;
@@ -1905,6 +2116,7 @@ namespace TrainingBattles
                 foreach (var party in stale)
                 {
                     MergePartyBackIntoMain(party);
+                    ReclaimShips(party); // sea drills lend hulls too, and ownership rides the save
                     DestroyOpponentParty(party);
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: an interrupted drill was found — the men have returned to the company."));
@@ -1914,6 +2126,7 @@ namespace TrainingBattles
                     // Its men were never ours — merging them home would MINT free troops. The
                     // phantoms dissolve; only its prisoner wagons (ours, if anyone) walk back.
                     MergeMockPrisonersHome(party);
+                    ReclaimShips(party); // belt and braces — mock drills never lend hulls today
                     DestroyOpponentParty(party);
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: an interrupted mock drill was found — the phantom enemy has dissolved."));
