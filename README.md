@@ -1,5 +1,5 @@
 # Training Battles
-- Split up your boys in two teams and do a drill battle
+- Split up your boys in two teams and do a drill battle — on land or at sea (War Sails).
 - Pick your battle ground (and time) before the drills and before the real battles
 
 ![Training Battles](Screenshots/preview_thumbnail.jpg)
