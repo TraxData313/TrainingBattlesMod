@@ -1968,7 +1968,8 @@ namespace TrainingBattles
             //    the men come back FIRST (raising the clamp ceiling to full), then each stack's XP
             //    is SET to its pre-battle pool plus the kept share of what the drill visibly earned.
             var restored = 0;
-            var casualtiesTotal = 0;
+            var casualtiesTotal = 0;    // the truly dead — the wounded knob's whole input
+            var batteredTotal = 0;      // battle-wounded (KO'd or surgeon-saved) — healed, they were sparring
             var woundedTotal = 0;
             var xpRestored = 0;
             var xpKeptFromDrill = 0;
@@ -1990,18 +1991,25 @@ namespace TrainingBattles
                     if (character == null || character.IsHero) continue; // heroes never die here; game wounds them
                     after.TryGetValue(character, out var now);
 
-                    // EVERY casualty of the drill goes through the wounded filter — the truly dead
-                    // AND the battle-wounded. The game's own surgeon converts most mission "KIA"
-                    // into roster-wounded before we ever run (high Medicine = high conversion), so
-                    // filtering only the dead let vanilla's wounded sail past the WoundedPercent
-                    // knob entirely (Anton: 14 KIA at 10% → 14 wounded).
+                    // ONLY the truly DEAD go through the wounded filter; every battle-wounded
+                    // man is healed by the absolute wounded-target below (the round-9 negative
+                    // adjust) unless the filter re-wounds him. History of this line: round 9
+                    // fed the filter dead AND battle-wounded, because on a WIN the two together
+                    // approximate the men who actually dropped (vanilla's surgeon converts most
+                    // mission KIA to roster-wounded before we run — filtering only the dead let
+                    // 14 KIA at 10% come home as 14 wounded). But on a LOSS the entire beaten
+                    // side comes home roster-wounded (every man was downed or KO'd), so the
+                    // knob chewed on all 150 instead of the ~20 truly killed (Anton,
+                    // 2026.07.25, land and sea alike). The men the drill may leave wounded are
+                    // the men the battle would have PERMANENTLY cost — the dead; the KO'd were
+                    // sparring, they shrug it off.
                     var fallen = pair.Value.Number - now.Number;
                     var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
-                    var casualties = Math.Max(fallen, 0) + newWounded;
+                    var casualties = Math.Max(fallen, 0);
                     var saveChance = 0.0;
                     var woundedFinal = 0;
                     var woundedAdjust = 0;
-                    if (casualties > 0)
+                    if (casualties > 0 || newWounded > 0)
                     {
                         saveChance = SurgeonSaveChance(main.Party, character);
                         woundedFinal = AftermathMath.WoundedAmongFallen(
@@ -2015,6 +2023,7 @@ namespace TrainingBattles
                             main.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
                         restored += Math.Max(fallen, 0);
                         casualtiesTotal += casualties;
+                        batteredTotal += newWounded;
                         woundedTotal += woundedFinal;
                         CreditSurgeon(main, character, casualties);
                     }
@@ -2030,7 +2039,7 @@ namespace TrainingBattles
                     xpKeptFromDrill += kept;
                     if (xpAdjust > 0) xpRestored += xpAdjust;
 
-                    if (casualties > 0 || xpAdjust != 0 || fallen != 0)
+                    if (casualties > 0 || newWounded > 0 || xpAdjust != 0 || fallen != 0)
                     {
                         report.AppendLine(character.Name + " | "
                             + pair.Value.Number + "/" + pair.Value.Wounded + "/" + pair.Value.Xp + " | "
@@ -2062,8 +2071,9 @@ namespace TrainingBattles
             var summary = (opponentWasMock
                     ? (playerWon ? "You carried the field. " : "The mock enemy carried the field. ")
                     : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))
-                + (casualtiesTotal > 0
-                    ? casualtiesTotal + " men fell or were hurt — " + woundedTotal + " wake up wounded, the rest shrug it off."
+                + (casualtiesTotal > 0 || batteredTotal > 0
+                    ? casualtiesTotal + " fell and " + batteredTotal + " were battered — "
+                        + woundedTotal + " wake up wounded, the rest shrug it off."
                     : "Not a man stayed down.")
                 + " Drill XP kept: " + xpKeptFromDrill
                 + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".");
