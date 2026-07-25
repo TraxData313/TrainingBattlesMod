@@ -117,6 +117,10 @@ namespace TrainingBattles
                                                    // send-troops hill-watch alike (Anton's
                                                    // 2026.07.25 catch: auto-resolve had no side)
         private bool _checkResults;
+        private bool _battleRan;                   // the drill's mission (or hill-watch simulation)
+                                                   // truly started — gates the "finalize the moment
+                                                   // the battle closes" trigger so it can never fire
+                                                   // in the frames BEFORE the mission opens
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
         private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
         private bool? _pendingPlayerWon;           // winner captured at MapEventEnded, for flows where
@@ -174,6 +178,7 @@ namespace TrainingBattles
             _mainSnapshot = null;
             _opponentSnapshot = null;
             _checkResults = false;
+            _battleRan = false;
             _heroHpBefore.Clear();
             _chargedCost = 0;
             _fleetSnapshot.Clear();
@@ -720,8 +725,15 @@ namespace TrainingBattles
         /// <summary>Called every application tick from <see cref="SubModule"/>.</summary>
         internal void TickHotkey()
         {
-            if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null) return;
+            if (Campaign.Current == null || TaleWorlds.MountAndBlade.Mission.Current != null)
+            {
+                // A live mission while results are armed = the drill's battle truly running.
+                if (_checkResults && TaleWorlds.MountAndBlade.Mission.Current != null) _battleRan = true;
+                return;
+            }
             if (!(Game.Current?.GameStateManager?.ActiveState is MapState mapState)) return;
+            // The hill-watch counts as the battle running too (no mission ever opens on that road).
+            if (_checkResults && PlayerEncounter.Current?.BattleSimulation != null) _battleRan = true;
 
             // The FINAL loot sweep. The aftermath's own sweep runs before any loot SCREEN is
             // closed — and a loot screen grants its items only on close. So the snapshot stays
@@ -762,6 +774,19 @@ namespace TrainingBattles
                 var encounter = PlayerEncounter.Current;
                 if (encounter != null && mapState.AtMenu
                     && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != MenuId)
+                {
+                    FinishTrainingBattle();
+                    return;
+                }
+                // (c) The battle RAN and is now over (mission closed / simulation done) but the
+                //     encounter still lives mid-state — finalize on THIS first tick, before
+                //     vanilla's state machine can walk the defeat road at all. On land the
+                //     defeat wrap needs a menu and trigger (b) preempts it; at sea it moves
+                //     faster and took the player CAPTIVE ("defeated_and_taken_prisoner" →
+                //     captivity → our party-destroy read as "captors dispersed", plus a
+                //     "stranded at sea" flash — Anton's naval defeat, 2026.07.25).
+                if (encounter != null && _battleRan && encounter.BattleSimulation == null
+                    && !mapState.AtMenu)
                 {
                     FinishTrainingBattle();
                     return;
@@ -1754,6 +1779,7 @@ namespace TrainingBattles
             _lootSweepTicks = 0;
             TrainingActive = false;
             _checkResults = false;
+            _battleRan = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
             _opponentParty = null;
@@ -1768,6 +1794,7 @@ namespace TrainingBattles
         private void FinishTrainingBattle()
         {
             _checkResults = false;
+            _battleRan = false;
             var main = MobileParty.MainParty;
             var opponent = _opponentParty;
 
@@ -1789,8 +1816,17 @@ namespace TrainingBattles
             // send-troops menu armed — and a re-run from there is a pure vanilla battle.
             try
             {
+                // The player's side is DECLARED the winner UNCONDITIONALLY (the honest result
+                // was already read into playerWon above, and every reward channel is zeroed
+                // while training, so the stomp buys nothing and costs nothing) — because a
+                // defeated player walks vanilla's PlayerTotalDefeat road: the
+                // "defeated_and_taken_prisoner" menu takes the player CAPTIVE of the temp
+                // party, whose destruction then reads as "your captors dispersed", stranding
+                // the party shipless at sea for a beat (Anton's naval defeat, 2026.07.25).
+                // The old HasWinner check ("never stomp a real result") protected exactly the
+                // road we must close.
                 var mapEvent = MobileParty.MainParty.MapEvent;
-                if (mapEvent != null && !mapEvent.IsFinalized && !mapEvent.HasWinner)
+                if (mapEvent != null && !mapEvent.IsFinalized)
                     mapEvent.SetOverrideWinner(mapEvent.PlayerSide);
                 for (var i = 0; i < 3 && PlayerEncounter.Current != null; i++)
                 {
@@ -1810,6 +1846,16 @@ namespace TrainingBattles
             }
             catch { }
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            // The belt to the winner-stomp's suspenders: if the defeat road was somehow faster
+            // and the player already sits in the temp party's prisoner wagon, the captivity
+            // ends here — quietly, before the captor party is destroyed, so no "your captors
+            // have been dispersed" theater and no shipless "stranded at sea" flash.
+            try
+            {
+                if (Hero.MainHero != null && Hero.MainHero.IsPrisoner)
+                    EndCaptivityAction.ApplyByReleasedAfterBattle(Hero.MainHero);
+            }
+            catch { }
             try
             {
                 // Pop whatever wrap/encounter menus linger (bounded — never spin).
