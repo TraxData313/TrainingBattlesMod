@@ -937,13 +937,18 @@ namespace TrainingBattles
             if (_siegeSettlement != null) return false; // you can walk your own walls any day
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
             if (TrainingGroundPool(out _).Count == 0) return false;
-            if (MainPartyAtSea()) return false; // no lone ride on open water — same rule as the
-                                                // real-encounter door; a sea-scout needs its own
-                                                // ship-walk mission (TASKS_TODO)
+            if (MainPartyAtSea() && MobileParty.MainParty.Ships.Count == 0)
+                return false; // a sea scout rides the flagship — no hull, no ride
             if (Hero.MainHero?.IsWounded == true)
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_scout_wounded}You are wounded — scouting means riding.");
+            }
+            else if (MainPartyAtSea())
+            {
+                args.Tooltip = new TextObject("{=TB_tip_scout_sea}Take the flagship out alone — no battle, "
+                    + "no cost, no clock. Sail the water the pickers name, row with the men, and hold Tab "
+                    + "to make for home when you have seen enough.");
             }
             else
             {
@@ -978,7 +983,14 @@ namespace TrainingBattles
         private void LaunchScout(string sceneId)
         {
             // The effective battle hour rides along, so the preview lighting is the drill's own.
-            try { ScoutMission.Open(sceneId, Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)); }
+            // At sea the ride is the FLAGSHIP's (SeaScoutMission — its own naval mission shape);
+            // ashore it is the horse's (ScoutMission). Same doors, same hour, same freedom.
+            try
+            {
+                var hour = Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config);
+                if (MainPartyAtSea()) SeaScoutMission.Open(sceneId, hour);
+                else ScoutMission.Open(sceneId, hour);
+            }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
@@ -2084,8 +2096,8 @@ namespace TrainingBattles
                 // is the one vanilla itself uses for an inside defense); the assault event is
                 // raised by the same StartBattleAction an AI assault uses, and the player
                 // JOINS the defense — PlayerEncounter.JoinBattle, the join_siege_event road.
-                _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, opponent);
-                TbLog.Info("siege", "siege event up | besieger: the opposing half");
+                _drillSiegeEvent = CreateDrillSiegeAroundOpponent(siege, opponent);
+                TbLog.Info("siege", "siege event up | besieger: the opposing half (camp-swapped)");
                 StartBattleAction.ApplyStartAssaultAgainstWalls(opponent, siege);
                 mapEvent = siege.Party.MapEvent;
                 TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL"));
@@ -2172,6 +2184,70 @@ namespace TrainingBattles
                 }
             }
             return result;
+        }
+
+        /// <summary>The DEFEND road's siege wrapper. A LEADERLESS party cannot found a siege:
+        /// BesiegerCamp.AddSiegePartyInternal resolves the siege's leader HERO and dereferences
+        /// it unguarded — our hero-less temp bandit party NRE'd there, and worse, the SiegeEvent
+        /// constructor stamps Settlement.SiegeEvent BEFORE that line, so the failed launch left
+        /// a half-built ghost siege on the castle that crashed the campaign minutes later
+        /// (crash round 2, 2026.07.25 21:32). So: the siege is FOUNDED by the hero-led MAIN
+        /// party (the exact shape the attack road already proved), and the camp's membership is
+        /// then swapped to the temp party by direct field writes — the temp party ends up
+        /// member, leader-party and faction of the camp (so the mission-end engine writeback's
+        /// attackerLeader.SiegeEvent resolves through it, and the defenders' hostility checks
+        /// read the bandit faction), while the main party walks free. Field writes deliberately
+        /// skip the property setters: the leader arithmetic that cannot handle a hero-less
+        /// party, and the remove-path that would finalize an emptied camp.</summary>
+        private SiegeEvent CreateDrillSiegeAroundOpponent(Settlement siege, MobileParty opponent)
+        {
+            var main = MobileParty.MainParty;
+            var lastAttacker = siege.LastAttackerParty; // founding a siege stamps this — restore below
+            var siegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
+            try
+            {
+                var camp = siegeEvent.BesiegerCamp;
+                var campOnParty = typeof(MobileParty).GetField("_besiegerCamp", BindingFlags.Instance | BindingFlags.NonPublic);
+                var partiesField = typeof(BesiegerCamp).GetField("_besiegerParties", BindingFlags.Instance | BindingFlags.NonPublic);
+                var leaderField = typeof(BesiegerCamp).GetField("_leaderParty", BindingFlags.Instance | BindingFlags.NonPublic);
+                var factionField = typeof(BesiegerCamp).GetField("_faction", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (campOnParty == null || partiesField == null || leaderField == null || factionField == null)
+                    throw new InvalidOperationException("the siege camp's fields moved — game update?");
+                if (!(partiesField.GetValue(camp) is System.Collections.IList parties))
+                    throw new InvalidOperationException("the camp's party list is not a list");
+                campOnParty.SetValue(main, null);
+                parties.Remove(main);
+                if (!parties.Contains(opponent)) parties.Add(opponent);
+                leaderField.SetValue(camp, opponent);
+                factionField.SetValue(camp, opponent.MapFaction);
+                campOnParty.SetValue(opponent, camp);
+                try { siege.LastAttackerParty = lastAttacker; } catch { }
+                TbLog.Info("siege", "camp swapped to the opposing half | camp leader "
+                    + (camp.LeaderParty?.Name?.ToString() ?? "NULL"));
+                return siegeEvent;
+            }
+            catch
+            {
+                // The swap failed — tear the WHOLE siege down before rethrowing; a half-built
+                // siege left on the settlement is exactly what crashed round 2.
+                try { siegeEvent.FinalizeSiegeEvent(); } catch { }
+                try { if (siege.SiegeEvent != null) siege.FinalizeSiegeEvent(); } catch { }
+                try { siege.LastAttackerParty = lastAttacker; } catch { }
+                throw;
+            }
+        }
+
+        /// <summary>The last net under every siege-drill exit: if the drill's settlement STILL
+        /// carries a SiegeEvent (a launch that died inside vanilla's own constructor leaves a
+        /// half-built one — Settlement.SiegeEvent is stamped before the constructor finishes,
+        /// while our _drillSiegeEvent never got assigned), tear it down. Idempotent.</summary>
+        private void DismantleGhostSiege()
+        {
+            var siege = _siegeSettlement;
+            if (siege?.SiegeEvent == null) return;
+            TbLog.Info("siege", "ghost siege found at " + siege.Name + " — dismantling");
+            try { siege.SiegeEvent.FinalizeSiegeEvent(); } catch { }
+            try { if (siege.SiegeEvent != null) siege.FinalizeSiegeEvent(); } catch { }
         }
 
         /// <summary>Sets the map event's private _keepSiegeEvent flag the moment the event is
@@ -2271,13 +2347,19 @@ namespace TrainingBattles
                 var stale = new List<SiegeEvent>();
                 foreach (var siegeEvent in Campaign.Current.SiegeEventManager.SiegeEvents)
                 {
-                    var leader = siegeEvent?.BesiegerCamp?.LeaderParty;
-                    if (leader?.StringId == null) continue;
-                    var trainingBesieger = leader.StringId.StartsWith(OpponentPartyIdPrefix, StringComparison.Ordinal)
-                        || leader.StringId.StartsWith(MockEnemyPartyIdPrefix, StringComparison.Ordinal);
+                    if (siegeEvent == null) continue;
+                    var leader = siegeEvent.BesiegerCamp?.LeaderParty;
+                    var trainingBesieger = leader?.StringId != null
+                        && (leader.StringId.StartsWith(OpponentPartyIdPrefix, StringComparison.Ordinal)
+                            || leader.StringId.StartsWith(MockEnemyPartyIdPrefix, StringComparison.Ordinal));
                     var selfSiege = leader == MobileParty.MainParty
                         && siegeEvent.BesiegedSettlement?.OwnerClan == Clan.PlayerClan;
-                    if (trainingBesieger || selfSiege) stale.Add(siegeEvent);
+                    // A LEADERLESS siege on a player-owned settlement is a drill ghost — a
+                    // launch that died inside vanilla's own constructor left it half-built
+                    // (crash round 2); no vanilla siege ever stands leaderless.
+                    var ghost = leader == null
+                        && siegeEvent.BesiegedSettlement?.OwnerClan == Clan.PlayerClan;
+                    if (trainingBesieger || selfSiege || ghost) stale.Add(siegeEvent);
                 }
                 foreach (var siegeEvent in stale)
                 {
@@ -2915,10 +2997,15 @@ namespace TrainingBattles
         /// no aftermath, no cooldown.</summary>
         private void AbortLiveBattle()
         {
-            try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            // Finish(false): a failed CASTLE launch must not also throw the player out of
+            // their own castle (crash round 2's insult on top of injury); the field and sea
+            // drills never sit inside a settlement, so nothing changes for them.
+            try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(false); } catch { }
             DismantleDrillSiege(); // a half-born siege drill strikes its camp before anything else
+            DismantleGhostSiege(); // ...and one that died inside vanilla's own constructor too
             RestoreWalls();
             _friendPartySnapshots.Clear(); // nobody fought — nothing to walk back
+            var abortedSiege = _siegeSettlement;
             _siegeSettlement = null;
             RestoreFleet(); // hulls home and healed BEFORE their borrower party dissolves
             var opponent = _opponentParty;
@@ -2959,6 +3046,18 @@ namespace TrainingBattles
             _opponentSnapshot = null;
             _prisonSnapshot = null;
             Models.TrainingBattlesSceneModel.PendingSceneId = null;
+            // A castle launch that failed leaves the player standing in their own castle with
+            // the settlement encounter closed — re-open it the vanilla way so the castle menu
+            // (and the Leave option) work again.
+            if (abortedSiege != null && MobileParty.MainParty?.CurrentSettlement == abortedSiege)
+            {
+                try
+                {
+                    if (PlayerEncounter.Current == null)
+                        EncounterManager.StartSettlementEncounter(MobileParty.MainParty, abortedSiege);
+                }
+                catch { }
+            }
         }
 
         // ------------------------------ the aftermath ------------------------------
@@ -3034,6 +3133,7 @@ namespace TrainingBattles
             // The siege drill's campaign shell comes down BEFORE the menu pops — finalize may
             // push vanilla's "the attackers left" menu, and the pops then clear it.
             DismantleDrillSiege();
+            DismantleGhostSiege();
             RestoreWalls();
             try
             {

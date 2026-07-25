@@ -15,6 +15,7 @@ If one of these searches brought you here — yes, this is that mod:
 - a mod to **pick the battlefield** / **choose where you fight** before a battle
 - a mod to **scout the battlefield before the battle** — walk it on foot, see the real deployment lines
 - a mod to **preview the deployment** before committing to an attack
+- a mod to **free sail your ship** — take the **flagship** out with your crew and scout the sea lanes (War Sails)
 
 
 A mod for *Mount & Blade II: Bannerlord* built on two pillars:
@@ -23,7 +24,7 @@ A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
 
 - **Split your army** into two halves through a troop-picking GUI, choose which half you command
-- **At sea too (War Sails)** — drill while sailing: the fleet divides with the men (proportional to crew, your flagship stays yours), and every hull comes back afterward — sunk, damaged or "captured", training costs no ships
+- **At sea too (War Sails)** — drill while sailing: the fleet divides with the men (proportional to crew, your flagship stays yours) — or divide it **at your word** through the ship-divide window, sending exactly the hulls you choose opposite. Every hull comes back afterward — sunk, damaged or "captured", training costs no ships
 - **Pay** for the drill - broken javs, arrows, rewards, they cost money... (1 daily wage by default, 2 at sea)
 - **Fight** on the battlefield (attacking or defending) or auto resolve — one side choice governs both roads
 - **Level up** your soldiers - keep a share of the XP, scaled by your **Quartermaster** (the **First Mate** at sea) — a great one even earns bonus XP
@@ -43,7 +44,8 @@ A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 troop in the game**, all cultures in one picker screen, any mix, up to 1000 men — and drill
 the whole company against it. The phantoms never touch your roster and vanish afterward;
 your own men follow the normal training rules. The test bench for "how would we fare
-against X?".
+against X?". At sea the mock enemy **sails**: lay down the phantom fleet — any culture's
+hulls, fitted as well as you please — and its ships vanish with its men.
 
 ![Composing a mock enemy](Screenshots/20260724115022_1.jpg)
 *Composing a mock enemy: every troop in the game, 500 of each on the shelf, any mix up to 1000 men.*
@@ -56,6 +58,7 @@ What a real general does before the battle: know the field — and pick the hour
 - **Choose the time of day** — morning, noon, afternoon, evening, night, or the campaign clock (default). Applies to drills, real field battles, sieges and sea battles alike
 - **Select the battlefield** — pick from every battlefield the game could use here: the map patch's own scene (marked *"this ground"*) plus every scene of the local terrain type
 - **Ride out and scout** — walk any of those battlefields **alone**: no battle, no cost, no cooldown. You spawn on your deployment line, facing the enemy's, distance called out
+- **Scout the sea too (War Sails)** — afloat, the same option takes your **flagship** out instead: you and your crew alone on the chosen water. Sail her, row with the men, learn the sea lane — no battle, no cost, no clock, and the hull comes home without a scratch. A free sail, nothing more — by design
 - **Scouted lines = drilled lines** — drills use the same deterministic deployment as the scout, so what you scouted is what you get. In a *real* battle the ground holds, but the enemy's true approach direction may turn the field around
 - **Same tools in REAL battles** *(per-side toggles, both on by default)* — the encounter menu offers the same options (hour, scout, battlefield) when defending **or** attacking. Both armies stand frozen, so the scouted lines and facings are **exact** — and no time passes while you ride
 - **Out-scout to earn it** — in a real battle, picking the ground or a non-daylight hour must be earned: your **Scout** against the enemy's best — nearly as good when defending, clearly better when attacking (the **Navigator** at sea). The campaign clock and full daylight are always free. The lone scout ride is never gated

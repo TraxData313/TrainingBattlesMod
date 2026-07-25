@@ -116,6 +116,26 @@ aftermath's own frame window kept the training colors it spawned with), and sess
 runs a blanket visual-dirty over every bandit-clan party (any historically stale icon heals
 on load). If orange persists past this, compare the sighting time with the [clan] ledger.
 
+CRASH ROUND 2 (2026.07.25 21:32, defend road — the step logging paid off: full stack in the
+ledger): `BesiegerCamp.AddSiegePartyInternal` NREs for a LEADERLESS besieger —
+`GetLeaderOfSiegeEvent(...)` returns the single party's `LeaderHero` (null for our bandit
+temp party) and dereferences it unguarded. A leaderless party cannot found a siege, ever.
+Worse: `SiegeEvent`'s constructor stamps `Settlement.SiegeEvent = this` BEFORE that line, so
+the failed launch left a half-built GHOST siege on the castle (our `_drillSiegeEvent` never
+got assigned — nothing dismantled it) which crashed the campaign a few moments later; and
+AbortLiveBattle's `Finish()` (default forcePlayerOut=true) threw Anton out of his own gate.
+FIXES: (1) `CreateDrillSiegeAroundOpponent` — the defend road's siege is FOUNDED by the
+hero-led MAIN party (the shape the attack road proved), then the camp's membership is
+SWAPPED to the temp party by direct field writes (`MobileParty._besiegerCamp`,
+`BesiegerCamp._besiegerParties/_leaderParty/_faction`) — skipping the leader arithmetic that
+cannot handle hero-less parties and the remove-path that would finalize an emptied camp;
+`Settlement.LastAttackerParty` (stamped by the founding) is restored; a failed swap tears
+the whole siege down before rethrowing. (2) `DismantleGhostSiege` — any SiegeEvent still on
+the drill's settlement is torn down on EVERY exit road (abort + aftermath), and the on-load
+sweep now also finalizes any LEADERLESS siege on a player-owned settlement (no vanilla siege
+stands leaderless). (3) Abort uses `Finish(false)` (nobody gets ejected by a failed launch)
+and re-opens the castle's settlement encounter so the menu works again.
+
 PLAYTEST RISKS (in rough order of worry):
 1. ATTACK road novelties: same-faction garrison forced onto the enemy side (agent hostility
    flags?), LeaveSettlement/EnterSettlement mid-menu, `AddInsideSettlementParties` may push a
@@ -130,11 +150,77 @@ PLAYTEST RISKS (in rough order of worry):
 5. The hour door: the drill uses EffectiveBattleHour through the same MapWeatherModel
    decorator; verify a siege drill at night actually opens dark.
 
-## Sea scout ride
+## Sea scout ride — BUILT 2026.07.25, awaiting playtest
 
-The muster scout hides at sea today (same rule as the real-encounter door): walking a naval
-scene alone means standing on a deck — needs its own ship-spawn mission shape, not the Camp
-walk-around.
+The flagship free sail: at sea the muster's scout option now rides the FLAGSHIP instead of
+hiding — player + as many healthy men as the deck takes, alone on the chosen naval scene,
+hold Tab home. Zero cost, zero clock, zero XP BY DESIGN (Anton: "just a free relaxing
+ride"). Files: `SeaScoutMission.cs` (mission + SeaScoutRideLogic), `SeaScoutMissionViews.cs`
+(view set), the ScoutCondition/LaunchScout fork in TrainingBattleBehavior, NavalDLC(+.View)
+references in the csproj/props (soft-dependency — see below).
+
+HOW (the research that shaped it, verified in decompile): War Sails' NAVAL CUSTOM BATTLE
+(`..\reference\game-decompiled\NavalDLC.CustomBattle\`, decompiled this session, plus
+`NavalDLC.View\` and `NavalDLC.GauntletUI\`) proves the whole ship stack runs WITHOUT a
+MapEvent: `NavalMissionState.OpenNew` + `CustomBattleTroopSupplier` + plain
+`MBList<IShipOrigin>` (campaign `Ship : IShipOrigin` passes directly). The core ship chain
+(NavalShipsLogic/NavalAgentsLogic/DefaultNavalMissionLogic/spawn logic) has ZERO MapEvent
+references — the coupling lives only in the mission-method wrappers. The ride is that
+custom-battle recipe MINUS every battle part (no NavalBattleEndLogic, ShipRetreatLogic,
+ShipCollisionOutcomeLogic, AgentVictoryLogic, morale/order/scoreboard/deployment views),
+with an EMPTY attacker side — both teams exist (much of the stack indexes them) but nothing
+spawns opposite; every empty-side road audited: InitializeShipAssignments returns early,
+DeployBattleSide finds no framed plans, Team.ResetTactic self-guards on HasTeamAi — and
+`MissionTeamAITypeEnum.NoTeamAI` so no naval tactic ever queries the empty sea. The
+deployment PHASE is skipped: SeaScoutRideLogic hooks DeploymentMissionController's
+OnAfterSetupTeams and calls FinishDeployment (IsDeploymentFinished guards the double-call —
+FinishDeployment removes the controller mid-tick but the event still fires after). Crew are
+SYNTHETIC combatants (CustomBattleCombatant), so mission states never touch the campaign
+roster. Crew cap = the DLC's own `ShipDeploymentModel.GetMaximumDeployableTroopCountForTeam`.
+
+SOFT DEPENDENCY (the McmBridge discipline, now applied twice): NavalDLC.dll + NavalDLC.View
+.dll referenced at build, never shipped. HARD RULE for future edits: naval types ONLY in
+method bodies — never in a base class, interface, FIELD TYPE, or METHOD SIGNATURE of any
+class in the module assembly (assembly scans — view creator, savegame, MCM — must succeed
+without the DLC; SeaScoutRideLogic's skeleton is deliberately all-vanilla:
+DeploymentMissionController and campaign Ship are base-game types). The bodies can only run
+at sea, impossible without War Sails.
+
+HULL SAFETY (verified live): MissionShip PROXIES the campaign Ship — `HitPoints =>
+ShipOrigin.HitPoints`, damage flows through `ShipOrigin.OnShipDamaged` DURING the mission.
+So the ride snapshots the flagship's HP/sail-HP at Open and heals it home in
+SeaScoutRideLogic.OnRemoveBehavior (idempotent `_restored` flag; OnEndMission too) — the
+drill's RestoreFleet pledge in miniature.
+
+PLAYTEST WATCH-LIST:
+1. The empty attacker side actually booting (the one prototype unknown left; everything
+   audited but never run).
+2. The helm: ship control view + input on a campaign mission under our own mission name.
+3. Spawn spot: naval scenes' deployment frames for the defender formation (ship shouldn't
+   spawn beached or outside the boundary).
+4. Leave roads: hold-Tab bar at sea, escape-menu leave, boundary crossing at 30f.
+5. The muster menu returning cleanly after the ride (campaign frozen throughout, same as
+   the land scout).
+6. Pinned-hour presets at sea (AtmospherePresets have no NauticalInfo of their own; we set
+   UsesNavalSimulatedWater=1 after — check water looks right at a pinned night hour).
+
+XP TRUTH (Anton's "are the men gaining sea levels from the ride?"): NO ONE gains ANYTHING,
+in vanilla, from the ride — and sailing teaches far less than assumed even on the map:
+- Campaign map only, every 4th game hour while MOVING at sea
+  (`MobilePartyTrainingBehavior.CheckMovementSkills` → `NavalSkillLevellingManager
+  .OnTravelOnWater`): the NAVIGATOR alone gains Shipmaster XP = round(1.4 × party speed) —
+  roughly 40–70 XP per full day's sail. That's the whole passive-sailing economy.
+- The SCOUT gains zero at sea (CheckScouting explicitly skips `IsCurrentlyAtSea`); the
+  land rule "every main-party hero ticks Riding/Athletics" does NOT run at sea; regular
+  crew gains zero from sailing, ever (only battles + the usual daily-XP perks).
+- Other naval XP faucets: First Mate gains Boatswain from storm damage PREVENTED (0.1×)
+  and ship repairs (0.05× HP); Mariner comes only from hero hits in naval battles
+  (1× hit XP) + the VeteransWisdom perk (daily random naval skill dribble to companions).
+- Missions freeze campaign time → the ride grants nothing and costs nothing. TRULY free.
+DECIDED (Anton, 2026.07.25): the ride stays ZERO-XP — "just a free relaxing ride". If that
+ever changes, grant on leaving the ride (hero: `AddSkillXp`, scalable by an officer band à
+la ChancePercentForSkill; crew: `AddXpToTroop`) — but mind the farm: the ride is free and
+repeatable, so crew XP would mint free upgrades.
 
 ## Naval regression check (v1.1.0)
 

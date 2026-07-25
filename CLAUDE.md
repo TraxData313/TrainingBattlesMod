@@ -38,7 +38,9 @@ as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; 
 players simply don't drill). `EnableMockEnemyTraining` (default ON since v9 2026.07.25, the
 one MCM "Features" toggle) adds the second drill mode: compose a phantom enemy of any
 culture/mix from synthetic troop pools and fight the whole company against it — the test
-bench for the battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 —
+bench for the battle pipeline. The scout rides AT SEA too since 2026.07.25: the muster's
+scout option afloat takes the FLAGSHIP out alone (crew aboard, no battle, no XP, hull healed
+home — SeaScoutMission.cs). NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 —
 the fleet divides with the men (proportional to crew, flagship pinned) or AT THE PLAYER'S WORD
 since the same day's second stroke: the SHIP-DIVIDE window, the mod's first custom Gauntlet
 GUI (no Harmony — see `UI/` below). The mock enemy SAILS too: the phantom shipyard window lays
@@ -140,6 +142,15 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   ScoutMissionViews.cs        the scout's view set ("TrainingBattlesScout"): vanilla's Camp
                               walk-around views + the hold-Tab leave bar Camp lacks — read its
                               class doc before touching (the ViewCreatorModule scanner footgun)
+  SeaScoutMission.cs          the SEA scout ride (2026.07.25): the flagship sails a naval scene
+                              alone — player + crew aboard, no battle, no MapEvent, no XP, hull
+                              healed home on exit. The naval CUSTOM BATTLE recipe minus every
+                              battle part, empty attacker side, deployment phase auto-finished.
+                              READ ITS CLASS DOC FIRST — it is the NavalDLC soft-dependency
+                              contract (naval types in method bodies ONLY)
+  SeaScoutMissionViews.cs     the sea ride's view set ("TrainingBattlesSeaScout"): the land
+                              scout's core + the DLC's ship-control (helm) and ship-preload
+                              views, no battle HUD — same scanner footgun, same body-only rule
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners — and at sea: no ship transfers, no post-defeat hull
                               damage, no figurehead loot — while TrainingActive). A DECORATOR
@@ -249,8 +260,12 @@ before deploying or the DLL is locked.
   their governing SKILLS are DLC objects: NavalSkills registers "Mariner"/"Boatswain"/
   "Shipmaster" by string id, and the perk trees prove the mapping (Boatswain-tree perks carry
   PartyRole 14 = FirstMate, Shipmaster-tree PartyRole 15 = Navigator). Look the skills up via
-  `MBObjectManager.GetObject<SkillObject>(id)` — never reference NavalDLC.dll, and a miss
-  (no DLC) falls back to the land officer (the Officers.cs pattern).
+  `MBObjectManager.GetObject<SkillObject>(id)` — Officers.cs stays reference-free, and a miss
+  (no DLC) falls back to the land officer. AMENDED 2026.07.25: the sea scout ride DOES
+  reference NavalDLC.dll (+.View) at build — soft-dependency, never shipped, under the HARD
+  RULE in SeaScoutMission's class doc: naval types in METHOD BODIES ONLY, never in a base
+  class, interface, field type, or method signature anywhere in the module assembly, so
+  every no-DLC assembly scan (view creator, savegame, MCM) still succeeds.
 - War Sails naval semantics: `MapEvent.IsNavalMapEvent` is just `!Position.IsOnLand` — start
   an encounter at sea and the whole naval pipeline lights up; the only fork is
   `CampaignMission.OpenNavalBattleMission`. A side with ZERO ships loses instantly, so give
@@ -260,6 +275,16 @@ before deploying or the DLL is locked.
   lesson), and ship ownership PERSISTS IN SAVES (stale recovery must reclaim hulls). Naval
   player battles are MULTI-ROUND with a disengage state ("naval_encounter_disengaged" menu)
   — one more reason the finalize kills the event positively.
+- Naval missions run fine WITHOUT a MapEvent (the sea scout's find, proven by the DLC's own
+  custom battle — `NavalDLC.CustomBattle` decompiled beside the rest): NavalMissionState.
+  OpenNew + CustomBattleTroopSupplier + `MBList<IShipOrigin>` (campaign `Ship` implements
+  IShipOrigin directly); only the mission-METHOD wrappers touch MapEvent. But MissionShip
+  PROXIES its campaign Ship LIVE — `HitPoints => ShipOrigin.HitPoints`, damage flows through
+  `ShipOrigin.OnShipDamaged` DURING the mission, not at the end — any mission that borrows
+  real hulls must snapshot + re-heal on every exit road. Passive sailing XP is a CAMPAIGN
+  tick only (every 4th hour while moving at sea: the Navigator alone, Shipmaster ≈ 1.4 ×
+  party speed; crew never gain from sailing) — missions freeze the clock, so a free sail
+  teaches nothing by itself.
 - SIEGE drills (the castle update's finds): the siege MISSION runs on plain data
   (`OpenSiegeMissionWithDeployment` + `MissionSiegeWeapon.CreateCampaignWeapon`), but the
   mission-end engine writeback null-refs without a campaign `SiegeEvent` — create a real one

@@ -8,5 +8,9 @@
     <!-- Mod Configuration Menu (MCM v5), referenced but NOT shipped (its module provides it at runtime).
          Steam Workshop id 2859238197. Override in Directory.Build.props.user if yours lives elsewhere. -->
     <McmBinFolder>C:\Program Files (x86)\Steam\steamapps\workshop\content\261550\2859238197\bin\Win64_Shipping_Client</McmBinFolder>
+    <!-- War Sails (NavalDLC), referenced but NOT shipped — same soft-dependency shape as MCM.
+         Only the sea scout ride touches its types, and only when the party is at sea (impossible
+         without the DLC). Building does require War Sails installed. -->
+    <NavalDlcBinFolder>$(GameFolder)\Modules\NavalDLC\bin\Win64_Shipping_Client</NavalDlcBinFolder>
   </PropertyGroup>
 </Project>

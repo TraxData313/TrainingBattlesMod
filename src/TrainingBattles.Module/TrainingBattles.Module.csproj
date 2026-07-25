@@ -102,6 +102,19 @@
       <HintPath>$(GameFolder)\bin\Win64_Shipping_Client\TaleWorlds.ScreenSystem.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- War Sails: a SOFT RUNTIME dependency like MCM — referenced to compile the sea scout ride,
+         never shipped. Its types appear ONLY inside SeaScoutMission/SeaScoutMissionViews method
+         bodies (never in a base class, interface, field of a scanned type, or method signature),
+         so on a no-DLC install every assembly scan still succeeds and the code paths that would
+         JIT naval types are unreachable (you cannot BE at sea without War Sails). -->
+    <Reference Include="NavalDLC">
+      <HintPath>$(NavalDlcBinFolder)\NavalDLC.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="NavalDLC.View">
+      <HintPath>$(NavalDlcBinFolder)\NavalDLC.View.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>
