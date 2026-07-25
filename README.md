@@ -4,6 +4,19 @@
 
 ![Training Battles](Screenshots/preview_thumbnail.jpg)
 
+
+## Looking for…?
+
+If one of these searches brought you here — yes, this is that mod:
+
+- a mod for **practice battles** / **sparring** — train your troops with no deaths and no losses
+- a mod for **naval training battles** / practice **sea battles** with your own fleet (War Sails)
+- a mod to **change the time of day of battles** — fight at **full bright daylight**, bight, dawn, noon or evening
+- a mod to **pick the battlefield** / **choose where you fight** before a battle
+- a mod to **scout the battlefield before the battle** — walk it on foot, see the real deployment lines
+- a mod to **preview the deployment** before committing to an attack
+
+
 A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
 ## Pillar 1 — Training battles
@@ -54,17 +67,6 @@ What a real general does before the battle: know the field — and pick the hour
 *Choose the ground: the map patch's own scene plus every battlefield of the local terrain type.*
 
 
-## Looking for…?
-
-If one of these searches brought you here — yes, this is that mod:
-
-- a mod to **pick the battlefield** / **choose where you fight** before a battle
-- a mod to **scout the battlefield before the battle** — walk it on foot, see the real deployment lines
-- a mod to **change the time of day of battles** — fight at **night**, dawn, noon or evening
-- a mod to **preview the deployment** before committing to an attack
-- a mod for **practice battles** / **sparring** — train your troops with no deaths and no losses
-- a mod for **naval training battles** / practice **sea battles** with your own fleet (War Sails)
-
 
 ## The knobs
 
@@ -80,7 +82,7 @@ Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\c
 
 ## Freely given
 
-- **Public domain** — no license, no strings, no permission to ask ([The Unlicense](LICENSE)). Use it, share it, change it, sell it.
+- **Public domain** — no license, no strings, no permission to ask ([The Unlicense](LICENSE)). Use it, share it, change it.
 - **Want to help?** Give feedback and report bugs
 - **No donations** — this is a hobby, done for fun and out of good will; I want to keep money out of it. *"For the love of money is the root of all evil."*
 - If you still insist on thanking me somehow — visit [my GitHub acc](https://github.com/TraxData313) and read the top pinned
