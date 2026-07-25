@@ -33,11 +33,102 @@ Fleet recipe DECIDED by building the GUI: the player composes it hull by hull fr
 culture's shipyard list — no auto-mirror; revisit only if the playtest wants a "mirror my
 fleet" convenience button.
 
-## Siege drill equipment picker (future)
+## Castle siege drill — BUILT 2026.07.25, awaiting playtest
 
-When garrison/siege training lands, the equipment choice (engines, ladders?) gets its own
-VM + prefab over the same `UI\TrainingWindow` frame — that generality is why the window
-manager is separate from the ship VMs.
+Anton's castle update, decided in-session: garrison EMBRACED (vanilla conscripts every inside
+party onto the defense anyway — keeping them out is harder than protecting them), engine cost
+= vanilla `ManDayCost` × gold-per-man-day (default 20, MCM), engineer skill unlocks engine
+TIERS (0: ram always; 1: ballista+onager @50; 2: tower+fire variants @100; 3: trebuchet @150),
+CASTLES first (towns later, same code + own pay/cooldown + the Lord's Hall stage). Renown +
+influence added mid-session on Anton's ask: per-100-men rates (default 1.0/1.0, MCM 0..10),
+paid ONCE at the aftermath via GainRenownAction/ChangeClanInfluenceAction — never through the
+battle books, which stay zeroed while training. Castle-only for now; extending prestige to
+field/sea drills is UNDECIDED.
+
+The wires (all verified in the decompiled corpus):
+- Door: "castle" menu option (index 4), owner-clan castles only, per-castle 7-day clock
+  (`_castleCooldownData` "id=hours;..." SyncData string). Muster menu reused in "siege mode"
+  (`_siegeSettlement != null`): scout/ground/send-troops hidden, engineer bench option shown.
+- Encounter shape: stand down the settlement-visit encounter with `PlayerEncounter.Finish(false)`
+  (being inside IS an encounter), then a REAL `SiegeEvent` (StartSiegeEvent) — the siege
+  mission's engine-writeback (`CampaignMissionComponent.OnEndMission` →
+  `GetLeaderParty(Attacker).SiegeEvent.SetSiegeEngineStates...`) NULL-REFS without one, and
+  with the event's construction lists empty the writeback no-ops safely (it walks
+  DeployedSiegeEngines, not the mission list). Defend road: temp party besieges, player +
+  garrison inside. Attack road: LeaveSettlementAction(player) + EnterSettlementAction(temp,
+  castle) — a defender-side mobile party with CurrentSettlement==null silently FLIPS the
+  event to SiegeOutside (MapEvent.AddInvolvedPartyInternal), so the defenders must sit inside
+  BEFORE joining. `PlayerEncounter.StartBattle` makes the event Siege on its own (defender
+  IsFortification → StartSiegeMapEvent).
+- THE capture lock: MapEvent's private `_keepSiegeEvent` set by reflection the moment the
+  event exists (vanilla's own "siege continues" switch; public only via
+  FinishBattleAndKeepSiegeEvent which also ends the battle). With it, FinalizeEvent skips the
+  whole SiegeCompleted/AfterSiegeCompleted dispatch — no capture, no sack, no devastation, on
+  every exit road. Second lock: aftermath restores walls
+  (SetWallSectionHitPointsRatioAtIndex; mission never writes wall damage — only campaign
+  bombardment ticks do) and dismantles the siege via `SiegeEvent.FinalizeSiegeEvent()`
+  (resets CurrentSiegeState, clears Settlement.SiegeEvent, unhooks camps).
+- Garrison/militia/guest lords: snapshotted (CloneWithXp) + hero HP before battle; on the
+  ATTACK road they never auto-join (same faction as the attacker — vanilla's hostility check
+  refuses), so `SeatFriendliesOnTheWalls` sets `MapEventSide = DefenderSide` positively.
+  Aftermath walks each party back IN PLACE (`RestoreFriendlyParties`): same surgeon bands and
+  XP-kept rate (the MAIN party's officers — it is their drill), runs BEFORE the main pass and
+  CONSUMES its share of the `_battleDead` harvest so shared troop types are never judged twice.
+- Engineer bench: `UI\SiegeEquipVM` + `TrainingBattlesSiegeEquip.xml` over TrainingWindow
+  (FleetCompose's frame); both sides on one list; caps mirror the mission slots (1 ram, 2
+  towers, 4 ranged/side); mission engines minted directly via
+  `MissionSiegeWeapon.CreateCampaignWeapon` (attacker cat: Ram/Ballista/Onager/Tower/Fire*/
+  Trebuchet; defender: Ballista/Catapult/Fire* — vanilla's own defender list; ladders are
+  free, scene-owned, not picked). Scene: `LocationComplex("center").GetSceneName(wallLevel)`,
+  real wall HP array, `OpenSiegeMissionWithDeployment`.
+- Stale recovery: `RecoverStaleDrillSieges` on session launch — any siege whose besieger is a
+  training party OR the player besieging their OWN settlement is a drill leftover, finalized
+  before the party recovery runs.
+
+CRASH ROUND 1 (2026.07.25 19:35, Tirby Castle, defend road — hard process crash, dump
+declined): the first build invented its own encounter shape — Finish(false) the settlement
+encounter (which pops the muster menu MID-CONSEQUENCE while MapStateData.GameMenuId still
+points at it), then hand-build a new encounter. A menu re-init during the launch runs
+MenuInit → `_checkResults` was already armed → FinishTrainingBattle ran over the HALF-BUILT
+siege, destroyed the opponent party, then control returned into the launch which kept using
+it — state soup, native death. THREE fixes, all shipped: (1) `_launching` reentrancy guard —
+MenuInit and every tick finalize-trigger stand down while the launch runs; (2) both roads
+reshaped onto vanilla's exercised paths — DEFEND: settlement encounter STAYS,
+`StartBattleAction.ApplyStartAssaultAgainstWalls(temp, castle)` raises the event exactly like
+an AI assault, `PlayerEncounter.JoinBattle(Defender)` joins it (the join_siege_event road),
+no menu is ever popped; ATTACK: `PlayerEncounter.Finish()` (the true leave-settlement road),
+temp party enters the walls, `StartPlayerSiege(Attacker)` arms the player-siege machinery,
+then Start/SetupFields/StartBattle as before; (3) per-step TbLog "siege" lines (snapshots →
+siege event up → assault event up → joined → seated → assault opens) so any next crash names
+its exact step in training_battles.log. The aftermath's Finish is now Finish(false) — the
+defender must not be thrown out of their own gate (field/sea unchanged: never inside).
+
+PLAYTEST ROUND 2 (2026.07.25 evening, two clean attack-road drills at Tirby Castle — the
+recipe works, engines billed, one true KIA from the surgeon's band): two follow-ups shipped
+same evening. (1) END INSIDE THE CASTLE (Anton's ask): the aftermath now walks the attacker
+back through their own gate — `EncounterManager.StartSettlementEncounter(MainParty, castle)`,
+vanilla's own arrive door (guarded: no map event, no encounter, castle not under real siege);
+the defender path keeps its fresh-encounter re-open. (2) ORANGE LOOTERS STILL SEEN "from time
+to time, after the siege": three belts added — the lender clan is now NAMED in the log at
+dress AND restore time ([clan] lines — the next report becomes diagnosable), the restore arms
+a SECOND visual sweep ~half a second after the map quiets (a replenisher party born in the
+aftermath's own frame window kept the training colors it spawned with), and session launch
+runs a blanket visual-dirty over every bandit-clan party (any historically stale icon heals
+on load). If orange persists past this, compare the sighting time with the [clan] ledger.
+
+PLAYTEST RISKS (in rough order of worry):
+1. ATTACK road novelties: same-faction garrison forced onto the enemy side (agent hostility
+   flags?), LeaveSettlement/EnterSettlement mid-menu, `AddInsideSettlementParties` may push a
+   GUESTING lord's party out of the castle (they walk out unharmed — cosmetic but surprising).
+2. Post-battle menu dance: FinalizeSiegeEvent can push "siege_attacker_left" for an inside
+   player; the bounded pops + fresh settlement encounter should land back on the castle menu.
+3. Defeat roads at a siege (retreat mid-assault, walls lost while defending) — the winner
+   stomp + captivity guard are the same as the field drill's, but sieges add
+   `SetNextSiegeState`/pull-back states; FinalizeSiegeEvent's ResetSiegeState covers it.
+4. Mock phantoms defending walls: culture-mixed defenders on siege engines (vanilla AI mans
+   defender engines from the defender roster — should just work).
+5. The hour door: the drill uses EffectiveBattleHour through the same MapWeatherModel
+   decorator; verify a siege drill at night actually opens dark.
 
 ## Sea scout ride
 
@@ -73,12 +164,13 @@ hour is the MCM default — which remains ungated by design (it's the player's g
 setting, not battlefield intel). An MCM default of "night" does apply to a lost-duel battle;
 if a playtest ever minds, gate EffectiveBattleHour for real battles behind the duel too.
 
-## Garrison training at castles/towns
+## Town siege training (the castle drill's follow-up)
 
-Anton's numbers: castles pay ~10× the wage cost, once per 7 days; cities 50×, once per 14
-days. The ENGINEER joins the officers table here (siege drills — their band/group slot is
-ready: `Officers.cs` map + the per-officer MCM groups were built to take the new row).
-Practice siege defense/assault on your own walls; maybe garrison vs. party mock sieges.
+Castles landed 2026.07.25 (section above). Towns ride the same code with: their own pay
+multiplier and cooldown (Anton's old sketch said ~50× / 14 days — re-ask, castle went 5×/7d),
+bigger scenes, and the Lord's Hall pull-back stage (`SiegeLordsHallFightModel`,
+`Settlement.SiegeState.InTheLordsHall`) that castles never enter. Gate: `Settlement.IsTown`
+beside the existing IsCastle door.
 
 ## Scouting with companions
 

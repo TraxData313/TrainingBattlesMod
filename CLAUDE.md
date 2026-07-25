@@ -44,7 +44,14 @@ since the same day's second stroke: the SHIP-DIVIDE window, the mod's first cust
 GUI (no Harmony — see `UI/` below). The mock enemy SAILS too: the phantom shipyard window lays
 its fleet down (any culture's hulls, fittings tiers), the hulls conjured before the battle and
 sunk on every exit road. Every own hull re-owned and re-healed afterward. Awaiting playtest.
-Later: garrison training at owned fiefs (siege gear picker = the same window frame).
+CASTLES (the castle update, 2026.07.25): at an OWNED castle the muster becomes a SIEGE drill —
+storm or hold your own walls (real scene, real wall level, real wall HP), the garrison and
+militia conscripted onto the defense by vanilla itself and protected by a PER-PARTY aftermath
+(same surgeon bands, same XP officer), the ENGINEER's Engineering unlocking siege equipment in
+tiers on the engineer's-bench window (TrainingWindow frame), 5×-wages pay over everyone on the
+field plus each engine's man-day worth, a per-castle 7-day clock, and renown+influence per 100
+men (a grand muster is a public event — paid at the aftermath, never through the zeroed battle
+books). Awaiting playtest. Later: TOWN sieges (same code + Lord's Hall stage + own rates).
 
 ## Who does what — and how we work
 
@@ -102,6 +109,8 @@ src/TrainingBattles.Core/     netstandard2.0 — pure logic, fully unit-tested:
   TrainingCooldown.cs         the once-per-N-hours clock (0 = unlimited)
   FleetSplitMath.cs           the sea drill's fleet division: greedy, proportional to each
                               side's crew, flagship pinned to the player, both sides sail
+  SiegeDrillMath.cs           the engineer's arithmetic: TierForSkill (equipment unlocks),
+                              EngineCost / EquipmentBill (man-days × gold rate, clamped)
 src/TrainingBattles.Module/   net472 — the Bannerlord module:
   SubModule.cs                entry point: config, behavior, reward model, MCM bind, hotkey tick
   ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
@@ -161,7 +170,9 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               drill; confirm-untouched = null = "follow the men"),
                               FleetComposeVM/FleetComposeRowVM (the phantom shipyard: hull
                               tallies from every Culture.AvailableShipHulls, cap 12, fittings
-                              tier over ShipSlot.MatchingPieces/RequiredPortLevel)
+                              tier over ShipSlot.MatchingPieces/RequiredPortLevel),
+                              SiegeEquipVM/SiegeEquipRowVM (the engineer's bench: both sides'
+                              siege engines, tier-locked rows, caps = the mission's slots)
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)
 module/GUI/Prefabs/           the windows' prefab XMLs (native brushes/sprites only, no own
@@ -249,6 +260,19 @@ before deploying or the DLL is locked.
   lesson), and ship ownership PERSISTS IN SAVES (stale recovery must reclaim hulls). Naval
   player battles are MULTI-ROUND with a disengage state ("naval_encounter_disengaged" menu)
   — one more reason the finalize kills the event positively.
+- SIEGE drills (the castle update's finds): the siege MISSION runs on plain data
+  (`OpenSiegeMissionWithDeployment` + `MissionSiegeWeapon.CreateCampaignWeapon`), but the
+  mission-end engine writeback null-refs without a campaign `SiegeEvent` — create a real one
+  (its empty construction lists make the writeback a no-op). MapEvent's private
+  `_keepSiegeEvent` (reflection; vanilla's "siege continues" switch) makes FinalizeEvent skip
+  the entire SiegeCompleted dispatch — no capture/sack/devastation, on every exit road; set it
+  the moment the event exists. A defender-side mobile party with `CurrentSettlement == null`
+  silently flips the event Siege→SiegeOutside — seat defenders INSIDE first. On the attack
+  road the garrison never auto-joins against its own lord (faction hostility check) — set
+  `MapEventSide` positively. Walls are damaged only by campaign bombardment ticks, never by
+  the mission. Being inside a settlement IS a PlayerEncounter — stand it down with
+  `Finish(false)` (keeps the men inside) before starting the drill's own; a fresh
+  `EncounterManager.StartSettlementEncounter` re-opens the castle at the end.
 
 ## Build & deploy
 

@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 11;
+        public int ConfigVersion { get; set; } = 12;
 
         /// <summary>The split-army drill: divide your own company in two and fight yourself —
         /// THE CORE OF THE MOD, on by default and deliberately NOT in the MCM menu (Anton,
@@ -102,6 +102,48 @@ namespace TrainingBattles
         /// <summary>The SEA drill's price in the same days-of-wages coin — rigging wears, spars
         /// crack, salt eats everything. Default 2, double the land drill.</summary>
         public int TrainingCostWagesSea { get; set; } = 2;
+
+        // ---- The castle siege drill (Anton's castle update, 2026.07.25) --------------------
+
+        /// <summary>The CASTLE SIEGE drill: at an owned castle, muster the company (the garrison
+        /// and militia stand with the defense) and storm — or hold — your own walls, siege
+        /// equipment and all. Default on; the one MCM toggle of the feature.</summary>
+        public bool EnableCastleTraining { get; set; } = true;
+
+        /// <summary>The castle drill's price in days of wages for every soul on the field —
+        /// both halves, the garrison and the militia alike (a siege drill takes real
+        /// organization). Default 5 (Anton: "5x salaries of all men participating").</summary>
+        public int CastleTrainingCostWages { get; set; } = 5;
+
+        /// <summary>In-game hours between castle drills AT THE SAME CASTLE (each castle keeps
+        /// its own clock, separate from the field drill's). 0 = unlimited. Default 168 — one
+        /// week (Anton's call).</summary>
+        public int CastleTrainingCooldownHours { get; set; } = 168;
+
+        /// <summary>What one man-day of siege-engine construction costs in gold on the drill's
+        /// bill — each engine's price is the game's own man-day cost times this rate, so a
+        /// trebuchet costs real money and a ballista is pocket change. 0 = engines are free.
+        /// Default 20.</summary>
+        public int SiegeEngineGoldPerManDay { get; set; } = 20;
+
+        /// <summary>The ENGINEER's unlock thresholds: the Engineering skill at which equipment
+        /// tiers 1..3 open (tier 0 — the ram — is always open). Tier 1: ballista and onager;
+        /// tier 2: the siege tower and the fire variants; tier 3: the trebuchet. Defaults
+        /// 50 / 100 / 150.</summary>
+        public int EngineerTier1Skill { get; set; } = 50;
+        public int EngineerTier2Skill { get; set; } = 100;
+        public int EngineerTier3Skill { get; set; } = 150;
+
+        /// <summary>Hosting a castle siege drill is a grand muster — many banners, real gold
+        /// spent, and the realm notices (Anton, 2026.07.25). RENOWN earned per 100 friendly men
+        /// on the field (both halves, the garrison and the militia), paid once at the drill's
+        /// end — never through the battle's own reward books, which training keeps at zero so
+        /// no kill or loot can ever farm it. Fractions fine. 0 = none. Default 1.</summary>
+        public double CastleDrillRenownPer100Men { get; set; } = 1.0;
+
+        /// <summary>The same grand muster's INFLUENCE, per 100 friendly men on the field —
+        /// the kingdom sees a lord who keeps a sharp garrison. 0 = none. Default 1.</summary>
+        public double CastleDrillInfluencePer100Men { get; set; } = 1.0;
 
         /// <summary>v9's single cost knob — kept only so a hand-set value migrates (land = the
         /// old pick, sea = double it). Null once migrated; never written back.</summary>
@@ -258,6 +300,14 @@ namespace TrainingBattles
             HeroHealthRestorePercent = Clamp(HeroHealthRestorePercent, 0, 100);
             TrainingCostWagesLand = Clamp(TrainingCostWagesLand, 0, 30);
             TrainingCostWagesSea = Clamp(TrainingCostWagesSea, 0, 60);
+            CastleTrainingCostWages = Clamp(CastleTrainingCostWages, 0, 60);
+            CastleTrainingCooldownHours = Clamp(CastleTrainingCooldownHours, 0, 720);
+            SiegeEngineGoldPerManDay = Clamp(SiegeEngineGoldPerManDay, 0, 1000);
+            EngineerTier1Skill = Clamp(EngineerTier1Skill, 0, 300);
+            EngineerTier2Skill = Clamp(EngineerTier2Skill, 0, 300);
+            EngineerTier3Skill = Clamp(EngineerTier3Skill, 0, 300);
+            CastleDrillRenownPer100Men = ClampDouble(CastleDrillRenownPer100Men, 0.0, 10.0);
+            CastleDrillInfluencePer100Men = ClampDouble(CastleDrillInfluencePer100Men, 0.0, 10.0);
             if (string.IsNullOrWhiteSpace(OpponentBannerCode)) OpponentBannerCode = DefaultOpponentBannerCode;
             // v1 shipped with "T" as the default — which vanilla uses for the combat log. Configs
             // still carrying that default follow to "G"; a key set by hand later is honored.
@@ -347,7 +397,9 @@ namespace TrainingBattles
                 if (KiaWoundedPercentAtMedicine0 == 30.0) KiaWoundedPercentAtMedicine0 = 20.0;
                 if (DownedWoundedPercentAtMedicine0 == 15.0) DownedWoundedPercentAtMedicine0 = 10.0;
             }
-            ConfigVersion = 11;
+            // v12 (2026.07.25, the castle update): the castle siege drill and its engineer —
+            // all new keys with safe defaults, nothing to migrate.
+            ConfigVersion = 12;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 
@@ -357,5 +409,8 @@ namespace TrainingBattles
         /// <summary>Chance percents live in 0..100 — fractions welcome (0.1% real deaths).</summary>
         private static double ClampChance(double value) =>
             value < 0.0 ? 0.0 : (value > 100.0 ? 100.0 : value);
+
+        private static double ClampDouble(double value, double min, double max) =>
+            value < min ? min : (value > max ? max : value);
     }
 }

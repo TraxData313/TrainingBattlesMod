@@ -62,6 +62,15 @@ namespace TrainingBattles.Mcm
         private static void PushConfigToMenu(TrainingBattlesMcmSettings s, ModConfig c)
         {
             s.EnableMockEnemyTraining = c.EnableMockEnemyTraining;
+            s.EnableCastleTraining = c.EnableCastleTraining;
+            s.EngineerTier1Skill = c.EngineerTier1Skill;
+            s.EngineerTier2Skill = c.EngineerTier2Skill;
+            s.EngineerTier3Skill = c.EngineerTier3Skill;
+            s.SiegeEngineGoldPerManDay = c.SiegeEngineGoldPerManDay;
+            s.CastleTrainingCostWages = c.CastleTrainingCostWages;
+            s.CastleTrainingCooldownHours = c.CastleTrainingCooldownHours;
+            s.CastleDrillRenownPer100Men = (float)c.CastleDrillRenownPer100Men;
+            s.CastleDrillInfluencePer100Men = (float)c.CastleDrillInfluencePer100Men;
             s.XpKeptMinPercent = c.XpKeptMinPercent;
             s.XpKeptMaxPercent = c.XpKeptMaxPercent;
             s.RealDeathPercentAtMedicine0 = (float)c.RealDeathPercentAtMedicine0;
@@ -94,6 +103,15 @@ namespace TrainingBattles.Mcm
         private static void PullMenuToConfig(TrainingBattlesMcmSettings s, ModConfig c)
         {
             c.EnableMockEnemyTraining = s.EnableMockEnemyTraining;
+            c.EnableCastleTraining = s.EnableCastleTraining;
+            c.EngineerTier1Skill = s.EngineerTier1Skill;
+            c.EngineerTier2Skill = s.EngineerTier2Skill;
+            c.EngineerTier3Skill = s.EngineerTier3Skill;
+            c.SiegeEngineGoldPerManDay = s.SiegeEngineGoldPerManDay;
+            c.CastleTrainingCostWages = s.CastleTrainingCostWages;
+            c.CastleTrainingCooldownHours = s.CastleTrainingCooldownHours;
+            c.CastleDrillRenownPer100Men = s.CastleDrillRenownPer100Men;
+            c.CastleDrillInfluencePer100Men = s.CastleDrillInfluencePer100Men;
             c.XpKeptMinPercent = s.XpKeptMinPercent;
             c.XpKeptMaxPercent = s.XpKeptMaxPercent;
             c.RealDeathPercentAtMedicine0 = s.RealDeathPercentAtMedicine0;

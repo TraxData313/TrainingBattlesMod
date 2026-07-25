@@ -14,7 +14,7 @@ namespace TrainingBattles
     ///   drill XP      Quartermaster — Leadership      First Mate — Boatswain
     ///   the ground    Scout — Scouting                Navigator — Shipmaster
     ///   the fallen    Surgeon — Medicine              Surgeon — Medicine (same at sea)
-    ///   (future)      Engineer — Engineering, for the castle drills TASKS_TODO plans.
+    ///   the engines   Engineer — Engineering          (castle drills happen ashore)
     ///
     /// Every Effective* role falls back to the party leader when unassigned — vanilla's own
     /// rule, verified in the decompiled MobileParty. The naval skills (Shipmaster, Boatswain)
@@ -77,6 +77,11 @@ namespace TrainingBattles
         /// ashore and afloat.</summary>
         public static Officer SurgeonOfficer(MobileParty? party) =>
             Resolve(party?.EffectiveSurgeon, DefaultSkills.Medicine, "Surgeon", "Medicine");
+
+        /// <summary>The officer whose Engineering unlocks the castle drill's siege equipment
+        /// tiers (the castle update, 2026.07.25).</summary>
+        public static Officer EngineerOfficer(MobileParty? party) =>
+            Resolve(party?.EffectiveEngineer, DefaultSkills.Engineering, "Engineer", "Engineering");
 
         private static Officer Resolve(Hero? hero, SkillObject skill, string role, string skillName)
         {

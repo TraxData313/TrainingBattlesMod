@@ -15,6 +15,7 @@ using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Party.PartyComponents;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
+using TaleWorlds.CampaignSystem.Siege;
 using TaleWorlds.Core;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
@@ -134,6 +135,47 @@ namespace TrainingBattles
                                                    // (the old default); honored by Begin AND the
                                                    // send-troops hill-watch alike (Anton's
                                                    // 2026.07.25 catch: auto-resolve had no side)
+        private Settlement? _siegeSettlement;      // non-null = the muster is the CASTLE SIEGE
+                                                   // drill at this owned castle (the castle
+                                                   // update, 2026.07.25): the drill storms or
+                                                   // holds these very walls; garrison and
+                                                   // militia stand with the defense
+        private List<KeyValuePair<SiegeEngineType, int>>? _siegeAtkPick;
+                                                   // the engineer's bench: engines for the
+                                                   // assault side (type → count)...
+        private List<KeyValuePair<SiegeEngineType, int>>? _siegeDefPick;
+                                                   // ...and for the walls
+        private SiegeEvent? _drillSiegeEvent;      // the drill's campaign-side siege wrapper —
+                                                   // a REAL SiegeEvent (the siege mission's
+                                                   // engine-writeback null-refs without one),
+                                                   // dismantled on every exit road; the map
+                                                   // event's _keepSiegeEvent flag keeps the
+                                                   // capture/sack machinery from ever seeing it
+        private readonly List<(MobileParty Party, TroopRoster Snapshot)> _friendPartySnapshots
+            = new List<(MobileParty, TroopRoster)>();
+                                                   // every friendly party the siege event drags
+                                                   // in (garrison, militia, guesting lords) —
+                                                   // snapshotted walking in, restored per party
+                                                   // by the same surgeon/XP arithmetic
+        private List<float>? _wallSnapshot;        // wall-section HP ratios walking in (only
+                                                   // campaign bombardment ticks damage walls —
+                                                   // this is the belt to that finding's braces)
+        private string _castleCooldownData = string.Empty;
+                                                   // persisted per-castle drill clocks:
+                                                   // "settlementId=lastHours;..." — each castle
+                                                   // rests on its own, apart from the field
+                                                   // drill's single clock
+        private string? _clanResweepClanId;        // the lender clan gets ONE more visual sweep
+                                                   // shortly after the aftermath (see
+                                                   // RestoreOpponentClanLook) — transient
+        private int _clanResweepTicks;
+        private bool _launching;                   // inside LaunchTrainingCore's heavy work — the
+                                                   // muster menu's init and the tick's finalize
+                                                   // triggers must NOT run the aftermath while
+                                                   // the launch itself shuffles menus/encounters
+                                                   // (the castle drill's first crash: a menu
+                                                   // re-init mid-launch ran FinishTrainingBattle
+                                                   // over a half-built siege)
         private bool _checkResults;
         private bool _battleRan;                   // the drill's mission (or hill-watch simulation)
                                                    // truly started — gates the "finalize the moment
@@ -219,6 +261,7 @@ namespace TrainingBattles
             dataStore.SyncData("TrainingBattles_LastTrainingHours", ref _lastTrainingHours);
             dataStore.SyncData("TrainingBattles_ClanRestore", ref _clanRestoreData);
             dataStore.SyncData("TrainingBattles_FugitiveRescueDone", ref _fugitiveRescueDone);
+            dataStore.SyncData("TrainingBattles_CastleCooldowns", ref _castleCooldownData);
         }
 
         private void OnSessionLaunched(CampaignGameStarter starter)
@@ -242,7 +285,17 @@ namespace TrainingBattles
             _battleDead.Clear();
             _battleDeadHarvested = false;
             _playerDefendsChoice = false; // every session opens on the attack, like the old default
+            _siegeSettlement = null;
+            _siegeAtkPick = null;
+            _siegeDefPick = null;
+            _drillSiegeEvent = null;
+            _friendPartySnapshots.Clear();
+            _wallSnapshot = null;
+            _clanResweepClanId = null;
+            _clanResweepTicks = 0;
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
+            RefreshBanditClanVisuals(); // and any historically orange looter icon heals on load
+            RecoverStaleDrillSieges(); // BEFORE the party recovery — dismantle the siege shell first
             RecoverStaleOpponentParties();
             RescueStuckFugitiveCompanions();
             // Saves touched by pre-fix drills carry stale "separated after a battle" tracker
@@ -268,6 +321,10 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_ground",
                 BattleSceneCatalog.SelectBattlefieldOptionText,
                 GroundCondition, _ => ChooseGround());
+            // The castle drill's engineer bench: which engines stand on each side of the walls.
+            starter.AddGameMenuOption(MenuId, "training_siege_equip",
+                "{=TB_opt_equip}Prepare siege equipment — {TB_EQUIP_NOW}",
+                SiegeEquipCondition, _ => OpenSiegeEquip());
             starter.AddGameMenuOption(MenuId, "training_pick",
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
@@ -300,6 +357,182 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_cancel",
                 "{=TB_opt_cancel}Cancel training",
                 CancelCondition, _ => CancelTraining(), isLeave: true);
+
+            // The CASTLE door (the castle update, 2026.07.25): at an owned castle, the same
+            // muster over the settlement's own walls — the siege drill.
+            starter.AddGameMenuOption("castle", "training_castle_drill",
+                "{=TB_opt_castle_door}Hold a training siege on these walls",
+                CastleDoorCondition, _ => OpenCastleMuster(), isLeave: false, index: 4);
+        }
+
+        // ------------------------------ the castle door ------------------------------
+
+        private bool CastleDoorCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableCastleTraining) return false;
+            if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
+            var settlement = Settlement.CurrentSettlement;
+            if (settlement == null || !settlement.IsCastle) return false;
+            if (settlement.OwnerClan != Clan.PlayerClan) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            if (settlement.SiegeEvent != null || MobileParty.MainParty.MapEvent != null)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_castle_real}A real fight owns these walls — no drilling now.");
+            }
+            else if (!CastleCooldownReady(settlement, out var remaining))
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_castle_rest}These walls were drilled recently — ready in "
+                    + FormatRemaining(remaining) + ".");
+            }
+            else
+            {
+                args.Tooltip = new TextObject("{=TB_tip_castle_door}A mock siege on your own walls — storm them "
+                    + "or hold them. The garrison and militia stand with the DEFENSE and follow the same "
+                    + "training rules (wounds healed, XP kept, the surgeon's small real-death chance); take "
+                    + "garrison men into your party first if you want them under your own banner. "
+                    + "Your engineer's skill decides the siege equipment.");
+            }
+            return true;
+        }
+
+        private void OpenCastleMuster()
+        {
+            _siegeSettlement = Settlement.CurrentSettlement;
+            try { GameMenu.SwitchToMenu(MenuId); } catch { _siegeSettlement = null; }
+        }
+
+        /// <summary>"Prepare siege equipment" — the engineer's bench, shown only on the castle
+        /// muster. The label carries the standing pick so the menu tells the whole state.</summary>
+        private bool SiegeEquipCondition(MenuCallbackArgs args)
+        {
+            if (_siegeSettlement == null) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            var engineer = Officers.EngineerOfficer(MobileParty.MainParty);
+            var tier = SiegeDrillMath.TierForSkill(engineer.Skill,
+                _config.EngineerTier1Skill, _config.EngineerTier2Skill, _config.EngineerTier3Skill);
+            var atk = CountEngines(_siegeAtkPick);
+            var def = CountEngines(_siegeDefPick);
+            var bill = SiegeEquipmentBill();
+            MBTextManager.SetTextVariable("TB_EQUIP_NOW",
+                atk + def == 0
+                    ? "ladders only"
+                    : atk + " attacking, " + def + " on the walls"
+                        + (bill > 0 ? " (" + bill + " denars)" : ""), false);
+            args.Tooltip = new TextObject("{=TB_tip_equip}Choose the engines for BOTH sides of the "
+                + "walls — rams, towers, ballistae, mangonels, the trebuchet. " + engineer.Describe()
+                + " builds tier " + tier + " of 3 (better engineers, bigger toys — thresholds in the "
+                + "mod options). Each engine adds its worth to the drill's bill. Assault ladders "
+                + "always stand, so no engines is a fair drill too.");
+            return true;
+        }
+
+        private void OpenSiegeEquip()
+        {
+            try
+            {
+                var engineer = Officers.EngineerOfficer(MobileParty.MainParty);
+                var vm = new UI.SiegeEquipVM(
+                    engineer.Describe(), engineer.Skill,
+                    _config.EngineerTier1Skill, _config.EngineerTier2Skill, _config.EngineerTier3Skill,
+                    _config.SiegeEngineGoldPerManDay,
+                    _siegeAtkPick, _siegeDefPick,
+                    (atk, def) =>
+                    {
+                        _siegeAtkPick = atk.Count > 0 ? atk : null;
+                        _siegeDefPick = def.Count > 0 ? def : null;
+                        TbLog.Info("siege", "equipment picked: " + CountEngines(_siegeAtkPick)
+                            + " attacking, " + CountEngines(_siegeDefPick) + " defending, bill "
+                            + SiegeEquipmentBill());
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    },
+                    () =>
+                    {
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    });
+                UI.TrainingWindow.Open("TrainingBattlesSiegeEquip", vm, vm.ExecuteCancel);
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the engineer's bench could not open (" + ex.Message + ")."));
+            }
+        }
+
+        private static int CountEngines(List<KeyValuePair<SiegeEngineType, int>>? pick)
+        {
+            var total = 0;
+            if (pick != null)
+                foreach (var pair in pick) total += pair.Value;
+            return total;
+        }
+
+        /// <summary>What the picked engines add to the drill's bill: each engine's man-day
+        /// construction cost times the configured gold-per-man-day rate, both sides.</summary>
+        private int SiegeEquipmentBill()
+        {
+            var engines = new List<(int ManDayCost, int Count)>();
+            foreach (var pick in new[] { _siegeAtkPick, _siegeDefPick })
+            {
+                if (pick == null) continue;
+                foreach (var pair in pick)
+                {
+                    try { engines.Add((pair.Key.ManDayCost, pair.Value)); } catch { }
+                }
+            }
+            return SiegeDrillMath.EquipmentBill(engines, _config.SiegeEngineGoldPerManDay);
+        }
+
+        // ------------------------------ the castle clocks ------------------------------
+
+        /// <summary>Each castle rests on its own clock (config CastleTrainingCooldownHours),
+        /// apart from the field drill's single one. The stamps ride the save as one string.</summary>
+        private bool CastleCooldownReady(Settlement settlement, out double hoursRemaining)
+        {
+            hoursRemaining = 0;
+            if (_config.CastleTrainingCooldownHours <= 0 || settlement == null) return true;
+            var last = ReadCastleStamp(settlement);
+            var now = CampaignTime.Now.ToHours;
+            hoursRemaining = TrainingCooldown.HoursRemaining(now, last, _config.CastleTrainingCooldownHours);
+            return TrainingCooldown.IsReady(now, last, _config.CastleTrainingCooldownHours);
+        }
+
+        private float ReadCastleStamp(Settlement settlement)
+        {
+            try
+            {
+                foreach (var entry in _castleCooldownData.Split(';'))
+                {
+                    var eq = entry.IndexOf('=');
+                    if (eq <= 0 || entry.Substring(0, eq) != settlement.StringId) continue;
+                    if (float.TryParse(entry.Substring(eq + 1),
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var hours))
+                        return hours;
+                }
+            }
+            catch { }
+            return 0f;
+        }
+
+        private void StampCastleCooldown(Settlement settlement)
+        {
+            try
+            {
+                var now = ((float)CampaignTime.Now.ToHours).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var kept = new List<string> { settlement.StringId + "=" + now };
+                foreach (var entry in _castleCooldownData.Split(';'))
+                {
+                    var eq = entry.IndexOf('=');
+                    if (eq <= 0 || entry.Substring(0, eq) == settlement.StringId) continue;
+                    kept.Add(entry);
+                }
+                _castleCooldownData = string.Join(";", kept);
+            }
+            catch { }
         }
 
         private void MenuInit(MenuCallbackArgs args)
@@ -307,7 +540,7 @@ namespace TrainingBattles
             // Without a real background mesh the menu shows the engine's placeholder — a big red
             // "temp". Same field-camp image the Company of Trouble quest menu uses.
             try { args.MenuContext.SetBackgroundMeshName("wait_ambush"); } catch { }
-            if (_checkResults)
+            if (_checkResults && !_launching)
             {
                 FinishTrainingBattle();
                 return;
@@ -338,7 +571,18 @@ namespace TrainingBattles
             }
             else
             {
-                head = "Battlefield setup and Training Battles";
+                head = _siegeSettlement != null
+                    ? "A training siege at " + _siegeSettlement.Name
+                    : "Battlefield setup and Training Battles";
+            }
+            if (_siegeSettlement != null)
+            {
+                var walls = FriendlyWallCount(_siegeSettlement);
+                head += "{newline} {newline}The garrison and militia stand with the DEFENSE — "
+                     + walls + (walls == 1 ? " man" : " men")
+                     + " on the walls before the halves are counted, same training rules for "
+                     + "everyone. Take garrison men into your party first if you want them under "
+                     + "your own banner.";
             }
             var text = head + "{newline} {newline}" + BattlefieldLine() + "{newline} {newline}" + TimeOfDayLine();
             if (_config.EnableSplitTraining || _config.EnableMockEnemyTraining)
@@ -352,6 +596,12 @@ namespace TrainingBattles
         /// one scene in this game version); only a true multi-candidate patch says "random".</summary>
         private string BattlefieldLine()
         {
+            if (_siegeSettlement != null)
+            {
+                var level = 1;
+                try { level = _siegeSettlement.Town?.GetWallLevel() ?? 1; } catch { }
+                return "Battlefield - the walls of " + _siegeSettlement.Name + " (level " + level + " walls).";
+            }
             var pool = TrainingGroundPool(out var localCount);
             if (_chosenSceneId != null)
             {
@@ -382,17 +632,69 @@ namespace TrainingBattles
             var line = "Training battle - " + CasualtyNote() + " " + XpKeptNote();
             var cost = ComputeTrainingCost();
             if (cost > 0)
+            {
                 line += " " + cost + " denars (" + CostDays()
                       + FormatDaysWages(CostDays())
-                      + " a man" + (MainPartyAtSea() ? ", sea rates" : "")
+                      + " a man"
+                      + (_siegeSettlement != null ? ", castle rates" : (MainPartyAtSea() ? ", sea rates" : ""))
+                      + (_siegeSettlement != null && SiegeEquipmentBill() > 0
+                          ? ", " + SiegeEquipmentBill() + " of it engines" : "")
                       + ") for training equipment and troop rewards.";
+            }
+            if (_siegeSettlement != null)
+            {
+                var renown = CastleDrillRenown(out var influence);
+                if (renown > 0f || influence > 0f)
+                    line += " The realm notices a grand muster: +" + renown.ToString("0.#")
+                          + " renown, +" + influence.ToString("0.#") + " influence.";
+            }
             if (_config.DisorganizedAfterTraining)
                 line += " Party becomes disorganized.";
-            if (!CooldownReady(out var remaining))
+            if (!DrillCooldownReady(out var remaining))
                 line += " Next drill in " + FormatRemaining(remaining) + ".";
-            else if (_config.CooldownHours > 0)
+            else if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
+                line += " One siege drill per " + _config.CastleTrainingCooldownHours + " hours at each castle.";
+            else if (_siegeSettlement == null && _config.CooldownHours > 0)
                 line += " One drill per " + _config.CooldownHours + " hours.";
             return line;
+        }
+
+        /// <summary>The muster's cooldown, whichever clock owns this drill: the castle's own in
+        /// siege mode, the field drill's single clock otherwise.</summary>
+        private bool DrillCooldownReady(out double hoursRemaining)
+        {
+            return _siegeSettlement != null
+                ? CastleCooldownReady(_siegeSettlement, out hoursRemaining)
+                : CooldownReady(out hoursRemaining);
+        }
+
+        /// <summary>The grand muster's prestige: renown and influence per 100 friendly men on
+        /// the field (both halves, garrison and militia), by the config rates.</summary>
+        private float CastleDrillRenown(out float influence)
+        {
+            var men = MobileParty.MainParty?.MemberRoster?.TotalManCount ?? 0;
+            if (_siegeSettlement != null) men += FriendlyWallCount(_siegeSettlement);
+            var renown = (float)(men / 100.0 * _config.CastleDrillRenownPer100Men);
+            influence = (float)(men / 100.0 * _config.CastleDrillInfluencePer100Men);
+            return renown;
+        }
+
+        /// <summary>How many men the castle itself sends to the walls — the garrison's and the
+        /// militia's healthy counts (guesting lord parties fight too but are their own men).</summary>
+        private static int FriendlyWallCount(Settlement settlement)
+        {
+            var total = 0;
+            try
+            {
+                foreach (var party in settlement.Parties)
+                {
+                    if (party == null || party == MobileParty.MainParty) continue;
+                    if (!party.IsGarrison && !party.IsMilitia) continue;
+                    total += party.MemberRoster?.TotalHealthyCount ?? 0;
+                }
+            }
+            catch { }
+            return total;
         }
 
         /// <summary>"85% XP kept (Quartermaster Ansif (Leadership 140))." — the XP officer by
@@ -435,11 +737,12 @@ namespace TrainingBattles
                 + surgeon.Describe() + ").";
         }
 
-        /// <summary>The drill's price in days of wages — land or sea rates, by where the party
-        /// floats right now (Anton, 2026.07.25: the sea drill costs double by default; the
-        /// planned castle/city/army drills will add their own rates).</summary>
+        /// <summary>The drill's price in days of wages — castle, sea or land rates, by where
+        /// the drill stands (Anton, 2026.07.25: the sea drill costs double, the castle drill
+        /// five days — a siege takes real organization).</summary>
         private int CostDays() =>
-            MainPartyAtSea() ? _config.TrainingCostWagesSea : _config.TrainingCostWagesLand;
+            _siegeSettlement != null ? _config.CastleTrainingCostWages
+            : MainPartyAtSea() ? _config.TrainingCostWagesSea : _config.TrainingCostWagesLand;
 
         /// <summary>" The fleet divides with the men: 2 hulls opposite, 3 with you (the flagship
         /// yours)." — the same split <see cref="SplitFleet"/> will actually make, computed on the
@@ -522,7 +825,7 @@ namespace TrainingBattles
         {
             if (!_config.EnableSplitTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
-            if (!CooldownReady(out var remaining))
+            if (!DrillCooldownReady(out var remaining))
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_rest}The men need rest — ready in " + FormatRemaining(remaining) + ".");
@@ -551,7 +854,7 @@ namespace TrainingBattles
         {
             if (!_config.EnableMockEnemyTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
-            if (!CooldownReady(out var remaining))
+            if (!DrillCooldownReady(out var remaining))
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_rest}The men need rest — ready in " + FormatRemaining(remaining) + ".");
@@ -573,6 +876,7 @@ namespace TrainingBattles
 
         private bool GroundCondition(MenuCallbackArgs args)
         {
+            if (_siegeSettlement != null) return false; // the castle drill's ground IS the castle
             if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             var candidates = TrainingGroundPool(out _);
@@ -630,6 +934,7 @@ namespace TrainingBattles
 
         private bool ScoutCondition(MenuCallbackArgs args)
         {
+            if (_siegeSettlement != null) return false; // you can walk your own walls any day
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
             if (TrainingGroundPool(out _).Count == 0) return false;
             if (MainPartyAtSea()) return false; // no lone ride on open water — same rule as the
@@ -713,10 +1018,16 @@ namespace TrainingBattles
             if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             MBTextManager.SetTextVariable("TB_SIDE_NOW",
-                _playerDefendsChoice ? "you defend" : "you attack", false);
-            args.Tooltip = new TextObject("{=TB_tip_side}Attack or defend — one choice for both "
-                + "roads: fighting the battle yourself, or sending the men in and watching from "
-                + "the hill. Select to switch.");
+                _siegeSettlement != null
+                    ? (_playerDefendsChoice ? "you hold the walls" : "you storm the walls")
+                    : (_playerDefendsChoice ? "you defend" : "you attack"), false);
+            args.Tooltip = new TextObject(_siegeSettlement != null
+                ? "{=TB_tip_side_siege}Storm the walls or hold them — the garrison and militia "
+                    + "always defend, so attacking means fighting through your own garrison. "
+                    + "Select to switch."
+                : "{=TB_tip_side}Attack or defend — one choice for both "
+                    + "roads: fighting the battle yourself, or sending the men in and watching from "
+                    + "the hill. Select to switch.");
             return true;
         }
 
@@ -734,6 +1045,9 @@ namespace TrainingBattles
 
         private bool SendTroopsCondition(MenuCallbackArgs args)
         {
+            // No hill to watch a siege from — the send-troops road stays a field affair (the
+            // siege simulation runs vanilla's own strategy machinery we deliberately never arm).
+            if (_siegeSettlement != null) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Continue;
             return ReadyToBegin(args);
         }
@@ -749,9 +1063,13 @@ namespace TrainingBattles
                 costNow > 0 ? " (" + costNow + " denars)" : string.Empty, false);
             var mockDrill = _pickedTeam == null && _mockEnemyTeam != null;
             MBTextManager.SetTextVariable("TB_BEGIN_SIDE",
-                mockDrill
-                    ? (_playerDefendsChoice ? "you defend against the mock enemy" : "you attack the mock enemy")
-                    : (_playerDefendsChoice ? "your half defends" : "your half attacks"), false);
+                _siegeSettlement != null
+                    ? (mockDrill
+                        ? (_playerDefendsChoice ? "you hold the walls against the mock enemy" : "you storm walls held by the mock enemy")
+                        : (_playerDefendsChoice ? "your half holds the walls" : "your half storms the walls"))
+                    : mockDrill
+                        ? (_playerDefendsChoice ? "you defend against the mock enemy" : "you attack the mock enemy")
+                        : (_playerDefendsChoice ? "your half defends" : "your half attacks"), false);
             var team = _pickedTeam ?? _mockEnemyTeam;
             if (team == null || team.TotalHealthyCount < 1)
             {
@@ -795,23 +1113,43 @@ namespace TrainingBattles
         /// game's own wage model, so mercenaries cost their usual half-again more.</summary>
         private int ComputeTrainingCost()
         {
+            var total = 0;
             var days = CostDays();
-            if (days <= 0) return 0;
-            try
+            if (days > 0)
             {
-                var model = Campaign.Current.Models.PartyWageModel;
-                var total = 0;
-                foreach (var el in MobileParty.MainParty.MemberRoster.GetTroopRoster())
+                try
                 {
-                    if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
-                    total += model.GetCharacterWage(el.Character) * el.Number;
+                    var model = Campaign.Current.Models.PartyWageModel;
+                    var wages = 0;
+                    foreach (var el in MobileParty.MainParty.MemberRoster.GetTroopRoster())
+                    {
+                        if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
+                        wages += model.GetCharacterWage(el.Character) * el.Number;
+                    }
+                    // The castle drill pays the walls too: the garrison and the militia drill
+                    // beside the halves (guesting lords cover their own men).
+                    if (_siegeSettlement != null)
+                    {
+                        foreach (var party in _siegeSettlement.Parties)
+                        {
+                            if (party == null || party == MobileParty.MainParty) continue;
+                            if (!party.IsGarrison && !party.IsMilitia) continue;
+                            foreach (var el in party.MemberRoster.GetTroopRoster())
+                            {
+                                if (el.Character == null || el.Character.IsHero) continue;
+                                wages += model.GetCharacterWage(el.Character) * el.Number;
+                            }
+                        }
+                    }
+                    total = wages * days;
                 }
-                return total * days;
+                catch
+                {
+                    total = 0;
+                }
             }
-            catch
-            {
-                return 0;
-            }
+            if (_siegeSettlement != null) total += SiegeEquipmentBill();
+            return total;
         }
 
         private bool CancelCondition(MenuCallbackArgs args)
@@ -829,7 +1167,17 @@ namespace TrainingBattles
             _chosenSceneId = null;
             _shipDividePick = null;
             _mockFleetPick = null;
-            try { GameMenu.ExitToLast(); } catch { }
+            var wasSiege = _siegeSettlement != null;
+            _siegeSettlement = null;
+            _siegeAtkPick = null;
+            _siegeDefPick = null;
+            // A castle muster came from the castle menu — go back to it, not out of the walls.
+            try
+            {
+                if (wasSiege) GameMenu.SwitchToMenu("castle");
+                else GameMenu.ExitToLast();
+            }
+            catch { }
         }
 
         // ------------------------------ the hotkey door ------------------------------
@@ -862,12 +1210,20 @@ namespace TrainingBattles
                 }
             }
 
+            // The lender clan's SECOND visual sweep (see RestoreOpponentClanLook): catches a
+            // party the world spawned into that clan in the same frame window as the aftermath.
+            if (_clanResweepClanId != null && !TrainingActive && !_checkResults)
+            {
+                if (++_clanResweepTicks >= 30) ResweepLenderClanVisuals();
+            }
+
             // Finalize the training the moment it is truly decided — WITHOUT waiting for (or
             // trusting) vanilla's wrap-up menus. Vanilla owns every non-happy path (the
             // auto-resolve wrap, retreat, defeat: capture menus, member scatter, re-attack
             // screens); politely waiting for them left the aftermath late or lost (Anton's
-            // second playtest). Three triggers:
-            if (_checkResults && TaleWorlds.MountAndBlade.Mission.Current == null)
+            // second playtest). Never while the launch itself is still shuffling state. Three
+            // triggers:
+            if (_checkResults && !_launching && TaleWorlds.MountAndBlade.Mission.Current == null)
             {
                 // (a) Our map event has ended (fought out, auto-resolved, or captured) — run the
                 //     aftermath NOW; PlayerEncounter.Finish inside it tears down whatever wrap
@@ -1379,12 +1735,21 @@ namespace TrainingBattles
 
         private void LaunchTraining(bool playerDefends, bool simulate)
         {
-            try { LaunchTrainingCore(playerDefends, simulate); }
+            try
+            {
+                _launching = true;
+                LaunchTrainingCore(playerDefends, simulate);
+            }
             catch (Exception ex)
             {
+                TbLog.Info("drill", "LAUNCH FAILED: " + ex);
                 InformationManager.DisplayMessage(new InformationMessage(
                     "Training Battles: the drill could not start (" + ex.Message + ")."));
                 AbortLiveBattle();
+            }
+            finally
+            {
+                _launching = false;
             }
         }
 
@@ -1399,8 +1764,16 @@ namespace TrainingBattles
                     "Training Battles: divide the men — or compose a mock enemy — first."));
                 return;
             }
-            if (!CooldownReady(out _)) return;
-            if (!CanMusterNow(out var reason))
+            if (!DrillCooldownReady(out _)) return;
+            if (_siegeSettlement != null)
+            {
+                if (!CanCastleMusterNow(out var castleReason))
+                {
+                    InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + castleReason));
+                    return;
+                }
+            }
+            else if (!CanMusterNow(out var reason))
             {
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + reason));
                 return;
@@ -1602,9 +1975,19 @@ namespace TrainingBattles
             }
 
             TbLog.Info("drill", "begin | " + (playerDefends ? "player defends" : "player attacks")
-                + " | atSea " + MainPartyAtSea() + " | simulate " + simulate
+                + " | atSea " + MainPartyAtSea() + " | siege " + (_siegeSettlement?.Name?.ToString() ?? "no")
+                + " | simulate " + simulate
                 + " | " + Officers.XpOfficer(MobileParty.MainParty, MainPartyAtSea()).Describe()
                 + " | " + Officers.SurgeonOfficer(MobileParty.MainParty).Describe());
+
+            // The CASTLE SIEGE road: its own encounter shape (a real SiegeEvent around the same
+            // temp party) and the siege mission with the engineer's engines. Shares everything
+            // above — validation, the crossing, morale, pay, snapshots, flags.
+            if (_siegeSettlement != null)
+            {
+                LaunchSiegeBattle(opponent, playerDefends);
+                return;
+            }
 
             // The vanilla forced-battle recipe (Company of Trouble quest); a throw here is caught by
             // LaunchTraining and unwinds honestly: men home, party gone, no cooldown burned.
@@ -1647,6 +2030,263 @@ namespace TrainingBattles
                 CampaignMission.OpenNavalBattleMission(record);
             else
                 CampaignMission.OpenBattleMission(record);
+        }
+
+        // ------------------------------ the siege battle ------------------------------
+
+        /// <summary>The castle muster's own validation: the company must stand inside the owned,
+        /// unbesieged castle. (Unlike the field muster, a LIVE PlayerEncounter is expected here —
+        /// being inside a settlement IS an encounter; the launch stands it down itself.)</summary>
+        private bool CanCastleMusterNow(out string reason)
+        {
+            var settlement = _siegeSettlement;
+            var main = MobileParty.MainParty;
+            if (settlement == null || main == null) { reason = "no castle to drill at."; return false; }
+            if (main.CurrentSettlement != settlement) { reason = "the company must stand inside " + settlement.Name + "."; return false; }
+            if (settlement.OwnerClan != Clan.PlayerClan) { reason = "these walls are not yours."; return false; }
+            if (settlement.SiegeEvent != null) { reason = "a real siege owns these walls."; return false; }
+            if (main.MapEvent != null) { reason = "you are already engaged."; return false; }
+            if (main.Army != null) { reason = "the army's banners answer to sterner plans — leave the army to drill."; return false; }
+            reason = string.Empty;
+            return true;
+        }
+
+        /// <summary>The siege drill's encounter and mission. Shape verified against this game
+        /// version's decompiled corpus: a REAL SiegeEvent wraps the fight (the siege mission's
+        /// engine-writeback reads the defender leader's SiegeEvent at mission end — a null there
+        /// is a crash), PlayerEncounter.StartBattle makes the event a Siege on its own (the
+        /// defender is a fortification), and the map event's private _keepSiegeEvent flag —
+        /// set the moment the event exists — keeps FinalizeEvent from ever dispatching
+        /// SiegeCompleted, so the capture/sack/devastation machinery never sees a drill. The
+        /// mission gets its engines as plain MissionSiegeWeapon data (the engineer's bench);
+        /// with the siege event's own construction lists empty, vanilla's writeback no-ops.</summary>
+        private void LaunchSiegeBattle(MobileParty opponent, bool playerDefends)
+        {
+            var siege = _siegeSettlement!;
+            var main = MobileParty.MainParty;
+
+            // Walking in: the walls' health (only campaign bombardment ever damages walls, and
+            // the drill never ticks one — but honest is cheap) and every friendly party the
+            // event will drag onto the defense (garrison, militia, guesting lords).
+            _wallSnapshot = new List<float>(siege.SettlementWallSectionHitPointsRatioList);
+            SnapshotFriendlySettlementParties(siege);
+            TbLog.Info("siege", "snapshots taken | walls " + _wallSnapshot.Count
+                + " sections | friendly parties " + _friendPartySnapshots.Count);
+
+            // BOTH roads below walk vanilla's own exercised paths. The first build invented a
+            // shape of its own (finish the settlement encounter, hand-build a new one) and
+            // hard-crashed mid-launch — never leave the beaten path around sieges.
+            TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent;
+            if (playerDefends)
+            {
+                // Vanilla shape: your castle is besieged and assaulted while you sit inside.
+                // The settlement-visit encounter STAYS (being inside IS an encounter, and it
+                // is the one vanilla itself uses for an inside defense); the assault event is
+                // raised by the same StartBattleAction an AI assault uses, and the player
+                // JOINS the defense — PlayerEncounter.JoinBattle, the join_siege_event road.
+                _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, opponent);
+                TbLog.Info("siege", "siege event up | besieger: the opposing half");
+                StartBattleAction.ApplyStartAssaultAgainstWalls(opponent, siege);
+                mapEvent = siege.Party.MapEvent;
+                TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL"));
+                if (mapEvent == null) throw new InvalidOperationException("the assault event did not form");
+                KeepSiegeEventThroughFinalize(mapEvent);
+                if (PlayerEncounter.Current != null)
+                {
+                    PlayerEncounter.JoinBattle(BattleSideEnum.Defender);
+                }
+                else
+                {
+                    // No settlement encounter to join (shouldn't happen inside) — seat the
+                    // party on the defense directly.
+                    PlayerEncounter.Start();
+                    PartyBase.MainParty.MapEventSide = mapEvent.DefenderSide;
+                }
+                TbLog.Info("siege", "player joined the defense");
+                SeatFriendliesOnTheWalls(mapEvent, siege);
+            }
+            else
+            {
+                // Vanilla shape: walk out of the gate (Finish(true) IS the leave-settlement
+                // road), besiege your own walls as the player siege, and assault at once. The
+                // opposing half must sit INSIDE before joining the defense, or the event
+                // silently degrades to a field battle outside the walls.
+                try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+                TbLog.Info("siege", "walked out of the gate");
+                EnterSettlementAction.ApplyForParty(opponent, siege);
+                _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
+                try { PlayerSiege.StartPlayerSiege(BattleSideEnum.Attacker, isSimulation: false, siege); }
+                catch { /* the siege HUD is cosmetics; the drill fights on without it */ }
+                TbLog.Info("siege", "siege event up | besieger: you");
+                PlayerEncounter.Start();
+                PlayerEncounter.Current.SetupFields(PartyBase.MainParty, siege.Party);
+                mapEvent = PlayerEncounter.StartBattle();
+                TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL"));
+                if (mapEvent == null) throw new InvalidOperationException("the assault event did not form");
+                KeepSiegeEventThroughFinalize(mapEvent);
+                if (opponent.Party.MapEventSide == null)
+                    opponent.Party.MapEventSide = mapEvent.DefenderSide;
+                SeatFriendliesOnTheWalls(mapEvent, siege);
+            }
+            TbLog.Info("siege", "sides seated | attacker " + (mapEvent.AttackerSide?.LeaderParty?.Name?.ToString() ?? "?")
+                + " | defender " + (mapEvent.DefenderSide?.LeaderParty?.Name?.ToString() ?? "?"));
+
+            // The mission: the castle's own scene at its true wall level, the walls' true
+            // health, and the engineer's engines on both sides.
+            var wallLevel = 1;
+            try { wallLevel = siege.Town?.GetWallLevel() ?? 1; } catch { }
+            var scene = siege.LocationComplex.GetLocationWithId("center").GetSceneName(wallLevel);
+            var atk = BuildMissionWeapons(_siegeAtkPick);
+            var def = BuildMissionWeapons(_siegeDefPick);
+            var hasTower = false;
+            foreach (var weapon in atk)
+                if (weapon.Type == DefaultSiegeEngineTypes.SiegeTower) { hasTower = true; break; }
+            _siegeAtkPick = null; // the bench served its drill; the next one starts fresh
+            _siegeDefPick = null;
+            TbLog.Info("siege", "assault opens | " + siege.Name + " | walls L" + wallLevel
+                + " | scene " + scene + " | atk engines " + atk.Count + " | def engines " + def.Count
+                + " | player " + (playerDefends ? "defends" : "attacks"));
+            CampaignMission.OpenSiegeMissionWithDeployment(scene,
+                siege.SettlementWallSectionHitPointsRatioList.ToArray(),
+                hasTower, atk, def, isPlayerAttacker: !playerDefends, wallLevel);
+        }
+
+        /// <summary>The engineer's bench as the mission's own data: one MissionSiegeWeapon per
+        /// engine, at full health — the same struct vanilla mints from a real siege camp.</summary>
+        private static List<MissionSiegeWeapon> BuildMissionWeapons(List<KeyValuePair<SiegeEngineType, int>>? pick)
+        {
+            var result = new List<MissionSiegeWeapon>();
+            if (pick == null) return result;
+            var index = 0;
+            foreach (var pair in pick)
+            {
+                if (pair.Key == null) continue;
+                for (var i = 0; i < pair.Value; i++)
+                {
+                    try
+                    {
+                        result.Add(MissionSiegeWeapon.CreateCampaignWeapon(
+                            pair.Key, index++, pair.Key.BaseHitPoints, pair.Key.BaseHitPoints));
+                    }
+                    catch { /* one engine failing must not stop the assault */ }
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Sets the map event's private _keepSiegeEvent flag the moment the event is
+        /// born — vanilla's own "the siege continues past this battle" switch (public only via
+        /// FinishBattleAndKeepSiegeEvent, which also ends the battle). With it set, FinalizeEvent
+        /// skips the whole SiegeCompleted dispatch: no capture, no sack, no devastation — on
+        /// EVERY road out, even ones vanilla walks before our aftermath runs. Reflection, no
+        /// Harmony (the SweepCompanionSeparationTracker precedent); a miss costs nothing here
+        /// because the aftermath restores the settlement anyway — this is the first lock of two.</summary>
+        private static void KeepSiegeEventThroughFinalize(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
+        {
+            try
+            {
+                typeof(TaleWorlds.CampaignSystem.MapEvents.MapEvent)
+                    .GetField("_keepSiegeEvent", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(mapEvent, true);
+            }
+            catch { }
+        }
+
+        /// <summary>Seats every snapshotted friendly party still inside the walls on the
+        /// DEFENDER side. On the defend road (bandit besieger) the game auto-joins them and
+        /// this is a no-op guard; on the ATTACK road it is load-bearing — the garrison shares
+        /// the attacker's faction, so vanilla's hostility check never auto-joins them against
+        /// their own lord, and without this the walls would stand empty of their keepers.</summary>
+        private void SeatFriendliesOnTheWalls(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent, Settlement siege)
+        {
+            foreach (var (party, _) in _friendPartySnapshots)
+            {
+                try
+                {
+                    if (party == null || party.CurrentSettlement != siege) continue;
+                    if (party.Party.MapEventSide == null)
+                        party.Party.MapEventSide = mapEvent.DefenderSide;
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>Every friendly party inside the settlement that the siege event will drag
+        /// onto the defense — the garrison, the militia, and any guesting lord (trade traffic
+        /// mans no wall). Snapshotted with XP; their heroes' health too. The aftermath walks
+        /// each one back by the same surgeon/XP arithmetic as the main party.</summary>
+        private void SnapshotFriendlySettlementParties(Settlement settlement)
+        {
+            _friendPartySnapshots.Clear();
+            try
+            {
+                foreach (var party in new List<MobileParty>(settlement.Parties))
+                {
+                    if (party == null || party == MobileParty.MainParty) continue;
+                    if (party.IsCaravan || party.IsVillager) continue;
+                    if (party.MemberRoster == null || party.MemberRoster.TotalManCount == 0) continue;
+                    _friendPartySnapshots.Add((party, CloneWithXp(party.MemberRoster)));
+                    SnapshotHeroHealth(party.MemberRoster);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>The drill siege's send-off: the campaign-side SiegeEvent dismantled through
+        /// vanilla's own FinalizeSiegeEvent (camps unhooked, the settlement's siege state and
+        /// SiegeEvent reference reset, visuals dirtied). Safe to call twice; call BEFORE the
+        /// menu pops — finalize may push a vanilla "the attackers left" menu the pops then clear.</summary>
+        private void DismantleDrillSiege()
+        {
+            var siegeEvent = _drillSiegeEvent;
+            _drillSiegeEvent = null;
+            if (siegeEvent == null) return;
+            try { siegeEvent.FinalizeSiegeEvent(); }
+            catch { }
+        }
+
+        /// <summary>Walls exactly as they stood — the belt to the "only bombardment ticks damage
+        /// walls" finding's braces.</summary>
+        private void RestoreWalls()
+        {
+            var snapshot = _wallSnapshot;
+            _wallSnapshot = null;
+            var siege = _siegeSettlement;
+            if (snapshot == null || siege == null) return;
+            try
+            {
+                for (var i = 0; i < snapshot.Count && i < siege.SettlementWallSectionHitPointsRatioList.Count; i++)
+                    siege.SetWallSectionHitPointsRatioAtIndex(i, snapshot[i]);
+            }
+            catch { }
+        }
+
+        /// <summary>A crash mid-siege-drill leaves the SiegeEvent in the save. On load, any siege
+        /// whose besieger is a training party — or the player besieging their OWN settlement,
+        /// the player-attacks drill's shape — is a drill leftover and is dismantled.</summary>
+        private static void RecoverStaleDrillSieges()
+        {
+            try
+            {
+                var stale = new List<SiegeEvent>();
+                foreach (var siegeEvent in Campaign.Current.SiegeEventManager.SiegeEvents)
+                {
+                    var leader = siegeEvent?.BesiegerCamp?.LeaderParty;
+                    if (leader?.StringId == null) continue;
+                    var trainingBesieger = leader.StringId.StartsWith(OpponentPartyIdPrefix, StringComparison.Ordinal)
+                        || leader.StringId.StartsWith(MockEnemyPartyIdPrefix, StringComparison.Ordinal);
+                    var selfSiege = leader == MobileParty.MainParty
+                        && siegeEvent.BesiegedSettlement?.OwnerClan == Clan.PlayerClan;
+                    if (trainingBesieger || selfSiege) stale.Add(siegeEvent);
+                }
+                foreach (var siegeEvent in stale)
+                {
+                    try { siegeEvent.FinalizeSiegeEvent(); } catch { }
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: an interrupted siege drill was found — the siege camp has been struck."));
+                }
+            }
+            catch { }
         }
 
         private MobileParty? CreateOpponentParty(bool mockEnemy)
@@ -1951,6 +2591,7 @@ namespace TrainingBattles
                 clan.Color = banner.GetPrimaryColor();
                 clan.Color2 = banner.GetFirstIconColor();
                 clan.Banner = banner;
+                TbLog.Info("clan", "dressed " + clan.Name + " (" + clan.StringId + ") in training colors");
             }
             catch { /* colors are decoration — a bad banner code must never stop a drill */ }
         }
@@ -1978,6 +2619,13 @@ namespace TrainingBattles
                         if (uint.TryParse(parts[1], out var color)) clan.Color = color;
                         if (uint.TryParse(parts[2], out var color2)) clan.Color2 = color2;
                         if (parts[3].Length > 0) clan.Banner = new Banner(parts[3]);
+                        TbLog.Info("clan", "restored " + clan.Name + " (" + clan.StringId + ")");
+                        // One more visual sweep half a second after the map quiets down —
+                        // a replenisher party spawned in this very frame window (answering
+                        // the temp party's destruction) would otherwise keep the training
+                        // colors it was born with (Anton's recurring orange looters).
+                        _clanResweepClanId = clan.StringId;
+                        _clanResweepTicks = 0;
                         foreach (var party in MobileParty.All)
                         {
                             try
@@ -1992,6 +2640,52 @@ namespace TrainingBattles
             }
             catch { }
             _clanRestoreData = string.Empty;
+        }
+
+        /// <summary>The lender clan's delayed second visual sweep — half a second after the map
+        /// quiets down, every party of the clan is dirtied once more, so even a party born
+        /// during the aftermath's own frame window rebuilds in the clan's true colors.</summary>
+        private void ResweepLenderClanVisuals()
+        {
+            var clanId = _clanResweepClanId;
+            _clanResweepClanId = null;
+            _clanResweepTicks = 0;
+            if (clanId == null) return;
+            try
+            {
+                var swept = 0;
+                foreach (var party in MobileParty.All)
+                {
+                    try
+                    {
+                        if (party?.ActualClan?.StringId != clanId) continue;
+                        party.Party.SetVisualAsDirty();
+                        swept++;
+                    }
+                    catch { }
+                }
+                TbLog.Info("clan", "second sweep over " + clanId + " | " + swept + " parties re-dirtied");
+            }
+            catch { }
+        }
+
+        /// <summary>The historical healer: one visual-dirty pass over every bandit-clan party
+        /// at session launch. Any looter icon that somehow kept the training colors from an
+        /// earlier session's drill window rebuilds in its clan's true colors on load.</summary>
+        private static void RefreshBanditClanVisuals()
+        {
+            try
+            {
+                foreach (var party in MobileParty.All)
+                {
+                    try
+                    {
+                        if (party?.ActualClan?.IsBanditFaction == true) party.Party.SetVisualAsDirty();
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         // ------------------------------ hero health ------------------------------
@@ -2222,6 +2916,10 @@ namespace TrainingBattles
         private void AbortLiveBattle()
         {
             try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            DismantleDrillSiege(); // a half-born siege drill strikes its camp before anything else
+            RestoreWalls();
+            _friendPartySnapshots.Clear(); // nobody fought — nothing to walk back
+            _siegeSettlement = null;
             RestoreFleet(); // hulls home and healed BEFORE their borrower party dissolves
             var opponent = _opponentParty;
             if (opponent != null)
@@ -2319,7 +3017,10 @@ namespace TrainingBattles
                 }
             }
             catch { }
-            try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(); } catch { }
+            // Finish(false): the field and sea drills never sit inside a settlement (no
+            // behavior change there), and the castle drill's DEFENDER must not be thrown out
+            // of their own gate by the wrap-up.
+            try { if (PlayerEncounter.Current != null) PlayerEncounter.Finish(false); } catch { }
             // The belt to the winner-stomp's suspenders: if the defeat road was somehow faster
             // and the player already sits in the temp party's prisoner wagon, the captivity
             // ends here — quietly, before the captor party is destroyed, so no "your captors
@@ -2330,6 +3031,10 @@ namespace TrainingBattles
                     EndCaptivityAction.ApplyByReleasedAfterBattle(Hero.MainHero);
             }
             catch { }
+            // The siege drill's campaign shell comes down BEFORE the menu pops — finalize may
+            // push vanilla's "the attackers left" menu, and the pops then clear it.
+            DismantleDrillSiege();
+            RestoreWalls();
             try
             {
                 // Pop whatever wrap/encounter menus linger (bounded — never spin).
@@ -2489,6 +3194,15 @@ namespace TrainingBattles
                 + "% | downed→wounded " + (stayWoundChance * 100.0).ToString("0.##") + "%");
             report.AppendLine("harvest " + (_battleDeadHarvested ? "event-DiedInBattle" : "roster-diff fallback"));
             report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | eventDead | kiaDocket | DIED | kiaWounded | downed | stayWounded | woundedAdjust | xpAdjust");
+
+            // 2-walls. The castle drill's OTHER friendly parties first — garrison, militia,
+            //    guesting lords — each walked back on its own roster by the same surgeon and
+            //    XP arithmetic. They run BEFORE the main pass and CONSUME their share of the
+            //    event's death book (_battleDead), so a troop type shared with the main party
+            //    is never judged dead twice.
+            RestoreFriendlyParties(report, keptPercent, deathChance, kiaWoundChance, stayWoundChance,
+                ref restored, ref casualtiesTotal, ref diedTotal, ref batteredTotal, ref woundedTotal,
+                ref xpRestored, ref xpKeptFromDrill);
             if (mainSnapshot != null && opponentSnapshot != null)
             {
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
@@ -2589,16 +3303,47 @@ namespace TrainingBattles
             }
             catch { }
 
-            // 3. The drill leaves its honest marks.
+            // 3. The drill leaves its honest marks — each drill on its own clock: the castle's
+            //    (per settlement) for a siege drill, the field drill's single one otherwise.
             if (_config.DisorganizedAfterTraining)
             {
                 try { main.SetDisorganized(true); } catch { }
             }
-            _lastTrainingHours = (float)CampaignTime.Now.ToHours;
+            var siegeSettlement = _siegeSettlement;
+            _siegeSettlement = null;
+            if (siegeSettlement != null) StampCastleCooldown(siegeSettlement);
+            else _lastTrainingHours = (float)CampaignTime.Now.ToHours;
 
-            var summary = (opponentWasMock
-                    ? (playerWon ? "You carried the field. " : "The mock enemy carried the field. ")
-                    : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))
+            // 3b. The grand muster's prestige (Anton, 2026.07.25): a castle drill is a big,
+            //     expensive, very public event — renown and influence per 100 friendly men on
+            //     the field, paid HERE and never through the battle's reward books (those stay
+            //     zeroed while training, so no kill or loot can ever farm this).
+            var prestigeNote = string.Empty;
+            if (siegeSettlement != null)
+            {
+                try
+                {
+                    var renown = CastleDrillRenown(out var influence);
+                    if (renown > 0f && Hero.MainHero != null)
+                        GainRenownAction.Apply(Hero.MainHero, renown, doNotNotify: true);
+                    if (influence > 0f && Clan.PlayerClan != null)
+                        ChangeClanInfluenceAction.Apply(Clan.PlayerClan, influence);
+                    if (renown > 0f || influence > 0f)
+                        prestigeNote = " The realm took note: +" + renown.ToString("0.#")
+                            + " renown, +" + influence.ToString("0.#") + " influence.";
+                }
+                catch { }
+            }
+
+            var summary = (siegeSettlement != null
+                    ? (opponentWasMock
+                        ? (playerWon ? "You carried the walls of " + siegeSettlement.Name + ". "
+                                     : "The mock enemy carried the walls. ")
+                        : (playerWon ? "Your side carried the walls of " + siegeSettlement.Name + ". "
+                                     : "The other side carried the walls. "))
+                    : opponentWasMock
+                        ? (playerWon ? "You carried the field. " : "The mock enemy carried the field. ")
+                        : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))
                 + (casualtiesTotal > 0 || batteredTotal > 0
                     ? casualtiesTotal + " fell and " + batteredTotal + " were battered — "
                         + (diedTotal > 0
@@ -2608,9 +3353,11 @@ namespace TrainingBattles
                         + woundedTotal + " wake up wounded, the rest shrug it off."
                     : "Not a man stayed down.")
                 + " Drill XP kept: " + xpKeptFromDrill + " (at " + keptPercent + "%)"
-                + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".");
+                + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".")
+                + prestigeNote;
             InformationManager.DisplayMessage(new InformationMessage("Training over. " + summary));
-            TbLog.Info("drill", (opponentWasMock ? "mock" : "split") + " drill done | playerWon " + playerWon
+            TbLog.Info("drill", (siegeSettlement != null ? "siege " : "")
+                + (opponentWasMock ? "mock" : "split") + " drill done | playerWon " + playerWon
                 + " | " + xpOfficer.Describe() + " → " + keptPercent + "% kept (" + xpKeptFromDrill + " xp)"
                 + " | " + drillSurgeon.Describe() + " → kia " + casualtiesTotal + ", died " + diedTotal
                 + ", wounded " + woundedTotal + ", downed " + batteredTotal
@@ -2618,6 +3365,117 @@ namespace TrainingBattles
                 + (kiaWoundChance * 100).ToString("0.##") + "/" + (stayWoundChance * 100).ToString("0.##") + "%");
 
             try { if (Campaign.Current?.CurrentMenuContext != null) GameMenu.ExitToLast(); } catch { }
+
+            // A siege drill ends where it began: INSIDE the castle (Anton's ask — the drill
+            // started from the castle menu, so it returns there). The defender never left;
+            // the attacker walks back through their own gate. Both roads use vanilla's own
+            // arrive-at-settlement door (StartSettlementEncounter → the castle menu).
+            if (siegeSettlement != null)
+            {
+                try
+                {
+                    var mainParty = MobileParty.MainParty;
+                    if (mainParty?.CurrentSettlement == siegeSettlement)
+                    {
+                        if (PlayerEncounter.Current == null)
+                            EncounterManager.StartSettlementEncounter(mainParty, siegeSettlement);
+                    }
+                    else if (mainParty != null && mainParty.CurrentSettlement == null
+                        && mainParty.MapEvent == null && PlayerEncounter.Current == null
+                        && siegeSettlement.SiegeEvent == null)
+                    {
+                        EncounterManager.StartSettlementEncounter(mainParty, siegeSettlement);
+                    }
+                }
+                catch { /* worst case the player rides back in themselves */ }
+            }
+        }
+
+        /// <summary>The castle drill's garrison/militia/guest walk-back: each friendly party's
+        /// roster restored in place by the same arithmetic as the main party's — men back first
+        /// (minus the surgeon's real-death band), wounded per the bands, XP kept at the officer's
+        /// rate and restored absolutely against the clamp. Runs BEFORE the main pass and consumes
+        /// its share of the event's death book, so a troop type shared across parties is never
+        /// judged dead twice. The main party's own officers set every rate — it is their drill.</summary>
+        private void RestoreFriendlyParties(StringBuilder report, int keptPercent,
+            double deathChance, double kiaWoundChance, double stayWoundChance,
+            ref int restored, ref int casualtiesTotal, ref int diedTotal, ref int batteredTotal,
+            ref int woundedTotal, ref int xpRestored, ref int xpKeptFromDrill)
+        {
+            if (_friendPartySnapshots.Count == 0) return;
+            var main = MobileParty.MainParty;
+            foreach (var (party, snapshot) in _friendPartySnapshots)
+            {
+                try
+                {
+                    if (party == null || snapshot == null || !party.IsActive) continue;
+                    report.AppendLine("— " + (party.Name?.ToString() ?? "friendly party") + " —");
+                    var before = ToDictionary(snapshot);
+                    var after = ToDictionary(party.MemberRoster);
+                    foreach (var pair in before)
+                    {
+                        var character = pair.Key;
+                        if (character == null || character.IsHero) continue;
+                        after.TryGetValue(character, out var now);
+                        var fallen = pair.Value.Number - now.Number;
+                        var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
+                        _battleDead.TryGetValue(character, out var trulyDead);
+                        var casualties = _battleDeadHarvested
+                            ? Math.Min(trulyDead, Math.Max(fallen, 0))
+                            : Math.Max(fallen, 0);
+                        if (_battleDeadHarvested && casualties > 0)
+                            _battleDead[character] = trulyDead - casualties; // consumed
+                        var died = 0;
+                        var kiaWounded = 0;
+                        var stayWounded = 0;
+                        var woundedAdjust = 0;
+                        if (casualties > 0 || newWounded > 0 || fallen > 0)
+                        {
+                            var verdict = AftermathMath.JudgeFallen(
+                                casualties, deathChance, kiaWoundChance, () => MBRandom.RandomFloat);
+                            died = verdict.Died;
+                            kiaWounded = verdict.Wounded;
+                            var comeBack = Math.Max(fallen, 0) - died;
+                            if (comeBack > 0)
+                                party.MemberRoster.AddToCounts(character, comeBack, false, 0);
+                            var downed = newWounded + (Math.Max(fallen, 0) - casualties);
+                            stayWounded = AftermathMath.StayWounded(
+                                downed, stayWoundChance, () => MBRandom.RandomFloat);
+                            var finalNumber = now.Number + comeBack;
+                            var desiredWounded = Math.Min(pair.Value.Wounded + kiaWounded + stayWounded, finalNumber);
+                            woundedAdjust = desiredWounded - now.Wounded;
+                            if (woundedAdjust != 0)
+                                party.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
+                            restored += comeBack;
+                            casualtiesTotal += casualties;
+                            diedTotal += died;
+                            batteredTotal += downed;
+                            woundedTotal += kiaWounded + stayWounded;
+                            CreditSurgeon(main, character, casualties - died);
+                        }
+                        var earned = Math.Max(0, now.Xp - pair.Value.Xp);
+                        var kept = AftermathMath.XpKept(earned, keptPercent);
+                        var targetXp = pair.Value.Xp + kept;
+                        var xpAdjust = targetXp - now.Xp;
+                        if (xpAdjust != 0)
+                            party.MemberRoster.AddToCounts(character, 0, false, 0, xpAdjust);
+                        xpKeptFromDrill += kept;
+                        if (xpAdjust > 0) xpRestored += xpAdjust;
+                        if (casualties > 0 || newWounded > 0 || xpAdjust != 0 || fallen != 0)
+                        {
+                            report.AppendLine(character.Name + " | "
+                                + pair.Value.Number + "/" + pair.Value.Wounded + "/" + pair.Value.Xp + " | "
+                                + now.Number + "/" + now.Wounded + "/" + now.Xp + " | "
+                                + fallen + " | " + trulyDead + " | " + casualties + " | "
+                                + died + " | " + kiaWounded + " | "
+                                + (newWounded + (Math.Max(fallen, 0) - casualties)) + " | " + stayWounded + " | "
+                                + woundedAdjust + " | " + xpAdjust);
+                        }
+                    }
+                }
+                catch { /* one party's walk-back failing must not strand the rest */ }
+            }
+            _friendPartySnapshots.Clear();
         }
 
         private static void CreditSurgeon(MobileParty party, CharacterObject character, int menSaved)
