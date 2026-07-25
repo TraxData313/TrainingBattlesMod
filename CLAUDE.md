@@ -6,16 +6,26 @@ Guidance for Claude Code when working in this repository.
 
 **Training Battles** — a mod for *Mount & Blade II: Bannerlord* that lets the player split
 their army into two teams through a picker GUI, choose a defender, and fight a mock battle
-against themselves on the real terrain of their current map position. Afterward nobody truly
-dies: the "dead" become wounded (the surgeon's Medicine skill softening it), earned XP is
-kept at a configurable percent (default 75), the army goes disorganized, and a cooldown
-(default 24h) gates the next drill. Since 2026.07.23 the player can also CHOOSE the
+against themselves on the real terrain of their current map position. Afterward THE OFFICERS
+settle the bill (the officers update, 2026.07.25): the SURGEON's Medicine runs three linear
+bands over the fallen — a few truly die (default 3% at Medicine 0 falling to 0.1% at 300 —
+the drill's one real cost, zeroable for the old no-deaths pledge), some wake wounded
+(30%→5%), some of the merely-downed stay wounded (15%→1%), and there is deliberately NO
+wounded→death path; earned XP is kept at a percent the XP OFFICER sets (the QUARTERMASTER's
+LEADERSHIP on land — Anton's call over Steward — the FIRST MATE's Boatswain at sea; a config
+band, default 40% at skill 0 rising linearly to 100% at 300, cap 200 — past 100 the drill
+grants bonus XP), the army goes disorganized, and a cooldown (default 24h) gates the next
+drill (cost: 1 day's wages ashore, 2 at sea; castle/city/army rates come with those drills). Since 2026.07.23 the player can also CHOOSE the
 battlefield and SCOUT it alone — a free walk-around mission, no battle, no cost — from TWO
 doors: the training muster (any scene of the local terrain type, the patch's own marked
 "this ground"), and a REAL field battle's encounter menu, defending or attacking (a per-side
 toggle each, both default on; Anton's must-have of 2026.07.23 — this superseded the earlier
 "real battles stay strict-patch-only" call, which one-scene-per-patch data had made an
-option that never appeared). The real-encounter scout is EXACT: both armies stand frozen,
+option that never appeared). Since 2026.07.25 the real-battle ground choice and non-daylight
+battle hours sit behind the SCOUTING DUEL (your ground officer vs the enemy's best — the
+SCOUT's Scouting on land, the NAVIGATOR's Shipmaster at sea: 75% of theirs to pick ground
+defending, 125% attacking, MCM-tunable, gate off-switchable; the campaign clock and full
+daylight are always free, and the lone scout RIDE is never gated — Anton's QoL rules). The real-encounter scout is EXACT: both armies stand frozen,
 so the true attacker→defender direction is known and the previewed lines/ends/facings are
 the coming battle's own. DATA
 TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
@@ -23,10 +33,10 @@ ONE land scene, so vanilla's "random among variants" never fires — the wider t
 pool is what keeps the pickers alive. SCOPE (settled 2026.07.23 after one reversal): the
 split-army drill is THE CORE — always on, its `EnableSplitTraining` key lives in config.json
 as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; scout-only
-players simply don't drill). `EnableMockEnemyTraining` (default OFF, the one MCM "Features"
-toggle) adds the second drill mode: compose a phantom enemy of any culture/mix from
-synthetic troop pools and fight the whole company against it — the test bench for the
-battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 (branch
+players simply don't drill). `EnableMockEnemyTraining` (default ON since v9 2026.07.25, the
+one MCM "Features" toggle) adds the second drill mode: compose a phantom enemy of any
+culture/mix from synthetic troop pools and fight the whole company against it — the test
+bench for the battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 (branch
 `naval-training`, awaiting playtest) — the fleet auto-splits proportional to crew, flagship
 stays with the player, every hull re-owned and re-healed afterward; the ship-divide GUI is
 the NEXT release's must (Anton). Later: garrison training at owned fiefs.
@@ -42,15 +52,22 @@ real opinions, push back, propose things.
 
 ## Workflow (the TASKS files)
 
-- **TASKS_TODO.md** — the plan. Anton drops raw ideas here (often stream-of-thought); Claude
-  refines them in place when designing. Sections: BUGS / V1 — THE CORE / NEXT AFTER V1 /
-  POST V1 or NOT FULLY DECIDED.
+- **TASKS_TODO.md** — ANTON'S board (his rule, 2026.07.25): short idea lines only, readable
+  at a fast glance. Claude NEVER writes paragraphs here — at most a "(see AI_NOTES)" or a
+  tiny "(check X when doing Y)" tag on a line. Sections: BUGS / NEXT UPDATE / NOT FULLY
+  DECIDED.
+- **AI_NOTES.md** — Claude's detail companion: one section per TODO idea with the designs,
+  research pointers and gotchas. Read the idea's section before picking up its TODO line;
+  keep it in sync when ideas land or die.
 - **TASKS_DONE.md** — finished tasks move here as one `- [x]` entry each, written as a dense
   narrative of what was built and WHY (decisions, APIs verified, gotchas), ended with a
   `(YYYY.MM.DD HH.MM.SS)` timestamp. This file is the project's real changelog and the next
   session's memory — write entries so future-you starts warm.
 - Before wrapping a session: update the TASKS files and this doc so nothing lives only in
-  the conversation.
+  the conversation — and REBUILD + DEPLOY (`dotnet build -c Release`, `dotnet test`, then
+  `tools\deploy.ps1`) so the installed module matches the session's code; Anton playtests
+  straight after. The deploy fails while the game runs (DLL lock) — say so and hand Anton
+  the deploy line instead of leaving it silently undone.
 
 ## Hard requirements (Anton's musts)
 
@@ -61,21 +78,34 @@ real opinions, push back, propose things.
   soft dependency, config file is the fallback when MCM is absent.
 - **Cancel training** must always be available before the fight starts and must leave the
   campaign exactly as it was.
-- A training battle must never permanently cost the player: no troop deaths (wounded
-  instead), no prisoner loss, no loot loss, no relation/crime side effects.
+- A training battle must never SILENTLY cost the player: no prisoner loss, no loot loss, no
+  relation/crime side effects. AMENDED 2026.07.25 (the officers update, Anton's design): a
+  SMALL real-death chance now exists BY DESIGN — the surgeon's KIA→KIA band, default 3% of
+  the would-have-died at Medicine 0 falling to 0.1% at 300, announced in the muster tooltip
+  and the summary, zeroable in MCM for the original no-deaths pledge. Heroes never truly die.
 
 ## Repository layout (real since 2026.07.23 — V1 core built, awaiting first playtest)
 
 ```
 src/TrainingBattles.Core/     netstandard2.0 — pure logic, fully unit-tested:
-  AftermathMath.cs            per-fallen two-roll pipeline (surgeon save → wounded share),
-                              XP kept/removed split
+  AftermathMath.cs            the officers' arithmetic: skill-scaled bands (ChancePercentForSkill),
+                              the surgeon's verdicts (JudgeFallen: die/wound/shrug; StayWounded),
+                              the XP officer's kept/removed split (bonus XP past 100%, cap 200)
+  ScoutingMath.cs             the scouting duel's ratio bar (RequiredSkill = ceil, OutScouts)
   TrainingCooldown.cs         the once-per-N-hours clock (0 = unlimited)
   FleetSplitMath.cs           the sea drill's fleet division: greedy, proportional to each
                               side's crew, flagship pinned to the player, both sides sail
 src/TrainingBattles.Module/   net472 — the Bannerlord module:
   SubModule.cs                entry point: config, behavior, reward model, MCM bind, hotkey tick
   ModConfig.cs                config.json under Configs\TrainingBattles — single source of truth
+  Officers.cs                 WHO answers for WHAT: duty→officer map, land and sea (XP =
+                              Quartermaster/Leadership ashore, First Mate/Boatswain afloat;
+                              ground = Scout/Scouting ashore, Navigator/Shipmaster afloat;
+                              casualties = Surgeon/Medicine everywhere) — naval skills found
+                              by string id, no NavalDLC assembly reference
+  TbLog.cs                    the rolling debug ledger (training_battles.log, ~1 MB trim):
+                              drills, duels, picks, officer resolutions, config loads —
+                              last_drill_report.txt stays the per-stack deep witness
   TrainingBattleBehavior.cs   THE HEART: muster menu, picker flow, battle recipe, aftermath,
                               cooldown, stale-party recovery — read its class doc first
   BattleSceneCatalog.cs       battlefield candidates for a position: strict patch chain +
@@ -183,6 +213,13 @@ before deploying or the DLL is locked.
   whole campaign. Always decorate: extend the abstract model, delegate everything to
   BaseModel (AddModel hands over the previously registered model). All three of our models
   do this now.
+- War Sails' naval OFFICER roles (FirstMate, Navigator) live on MobileParty in CampaignSystem
+  itself (`EffectiveFirstMate`/`EffectiveNavigator`, leader fallback like the land roles), but
+  their governing SKILLS are DLC objects: NavalSkills registers "Mariner"/"Boatswain"/
+  "Shipmaster" by string id, and the perk trees prove the mapping (Boatswain-tree perks carry
+  PartyRole 14 = FirstMate, Shipmaster-tree PartyRole 15 = Navigator). Look the skills up via
+  `MBObjectManager.GetObject<SkillObject>(id)` — never reference NavalDLC.dll, and a miss
+  (no DLC) falls back to the land officer (the Officers.cs pattern).
 - War Sails naval semantics: `MapEvent.IsNavalMapEvent` is just `!Position.IsOnLand` — start
   an encounter at sea and the whole naval pipeline lights up; the only fork is
   `CampaignMission.OpenNavalBattleMission`. A side with ZERO ships loses instantly, so give

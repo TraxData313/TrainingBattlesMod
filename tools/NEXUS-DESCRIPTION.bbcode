@@ -9,9 +9,9 @@ Pick your battleground (and time) before the drills — and before the real batt
 If one of these searches brought you here — yes, this is that mod:
 
 [list]
-[*]a mod for [b]practice battles[/b] / [b]sparring[/b] — train your troops with no deaths and no losses
+[*]a mod for [b]practice battles[/b] / [b]sparring[/b] — train your troops with no losses (deaths near zero, can be turned fully off)
 [*]a mod for [b]naval training battles[/b] / practice [b]sea battles[/b] with your own fleet (War Sails)
-[*]a mod to [b]change the time of day of battles[/b] — fight at [b]full bright dailight[/b], night, dawn, noon or evening
+[*]a mod to [b]change the time of day of battles[/b] — fight at [b]full bright daylight[/b], night, dawn, noon or evening
 [*]a mod to [b]pick the battlefield[/b] / [b]choose where you fight[/b] before a battle
 [*]a mod to [b]scout the battlefield before the battle[/b] — walk it on foot, see the real deployment lines
 [*]a mod to [b]preview the deployment[/b] before committing to an attack
@@ -26,17 +26,17 @@ Press [b]G[/b] on the campaign map to open the muster.
 [list]
 [*][b]Split your army[/b] into two halves through a troop-picking screen, choose which half you command
 [*][b]At sea too (War Sails)[/b] — drill while sailing: the fleet divides with the men (proportional to crew, your flagship always stays yours — the muster shows the exact split before you commit), and every hull comes back afterward: sunk, damaged or captured, training costs no ships
-[*][b]Pay[/b] for the drill — broken javelins, arrows, rewards, they cost money… (1 daily wage by default)
+[*][b]Pay[/b] for the drill — broken javelins, arrows, rewards, they cost money… (1 daily wage by default, 2 at sea)
 [*][b]Choose your side[/b] — attack or defend, one standing choice — then [b]fight[/b] the battle yourself or send the men in and watch it resolve from the hill
-[*][b]Level up[/b] your soldiers — they keep the XP they earn (75% by default)
-[*]The [b]KIA[/b] → might get wounded. Some really get injured (about 10% by default), cut further by how good your surgeon is
-[*]The [b]wounded[/b] → they all get up OK
+[*][b]Level up[/b] your soldiers — keep a share of the XP, scaled by your [b]Quartermaster[/b] (the [b]First Mate[/b] at sea) — a great one even earns bonus XP
+[*]The [b]KIA[/b] → most get back up; a few wake up wounded, and in unlucky cases there is a real casualty — a good [b]Surgeon[/b] helps a lot (deaths can be turned fully off)
+[*]The [b]wounded[/b] → they get up OK; a few may stay wounded, the surgeon again
 [*][b]No loot[/b] — nothing is looted in sparring (works even alongside loot mods like BannerLoot)
 [*][b]Disorganized[/b] after — they had to form up etc.
 [*][b]Cooldown[/b] — you have to wait before the next drill (24 in-game hours by default)
 [/list]
 
-[b]Mock enemy[/b] [i](optional, off by default)[/i] — compose a phantom enemy force from [b]every troop in the game[/b], all cultures in one picker screen, any mix, up to 1000 men — and drill the whole company against it. The phantoms never touch your roster and vanish afterward; your own men follow the normal training rules. The test bench for "how would we fare against X?".
+[b]Mock enemy[/b] [i](on by default, can be turned off)[/i] — compose a phantom enemy force from [b]every troop in the game[/b], all cultures in one picker screen, any mix, up to 1000 men — and drill the whole company against it. The phantoms never touch your roster and vanish afterward; your own men follow the normal training rules. The test bench for "how would we fare against X?".
 
 [i]Coming next: a picker to choose WHICH ships each side sails in the sea drill.[/i]
 
@@ -50,6 +50,7 @@ What a real general does before the battle: know the field — and pick the hour
 [*][b]Ride out and scout[/b] — walk any of those battlefields [b]alone[/b]: no battle, no cost, no cooldown. You spawn on your deployment line, facing the enemy's, distance called out
 [*][b]Scouted lines = drilled lines[/b] — drills use the same deterministic deployment as the scout, so what you scouted is what you get. In a [i]real[/i] battle the ground holds, but the enemy's true approach direction may turn the field around
 [*][b]Same tools in REAL battles[/b] [i](per-side toggles, both on by default)[/i] — the encounter menu offers the same options (hour, scout, battlefield) when defending [b]or[/b] attacking. Both armies stand frozen, so the scouted lines and facings are [b]exact[/b] — and no time passes while you ride
+[*][b]Out-scout to earn it[/b] — in a real battle, picking the ground or a non-daylight hour must be earned: your [b]Scout[/b] against the enemy's best — nearly as good when defending, clearly better when attacking (the [b]Navigator[/b] at sea). The campaign clock and full daylight are always free. The lone scout ride is never gated
 [*][b]Rule of thumb[/b] — scout from the muster to [i]learn[/i] the battlefields, scout from the attack screen to [i]plan the actual fight[/i]
 [/list]
 
@@ -58,15 +59,16 @@ What a real general does before the battle: know the field — and pick the hour
 Every parameter lives in a JSON config ([i]Documents\Mount and Blade II Bannerlord\Configs\TrainingBattles\config.json[/i]) [b]and[/b] in the in-game [url=https://www.nexusmods.com/mountandblade2bannerlord/mods/612]Mod Configuration Menu (MCM)[/url]. MCM is a soft dependency — without it the config file alone runs the show.
 
 [list]
-[*][b]Drill knobs[/b] — XP kept %, wounded %, hero health restored %, cooldown hours, drill pay (days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
+[*][b]Officer knobs[/b] — the Quartermaster's XP band, the Surgeon's death/wounded bands, the scouting duel ratios (each officer has its own MCM group)
+[*][b]Drill knobs[/b] — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
 [*][b]Ground & time knobs[/b] — time of day for battles, the real-battle scout toggles (defending and attacking separately)
-[*][b]Misc[/b] — the mock-enemy toggle, the hotkey (default [b]G[/b] on the campaign map)
+[*][b]Misc[/b] — the mock-enemy toggle, the hotkey (default [b]G[/b] on the campaign map), debug logging
 [/list]
 
 [size=4][b]Safe & compatible[/b][/size]
 
 [list]
-[*]A training battle never permanently costs you: no troop deaths (wounded instead), no ships lost at sea, no prisoner loss, no loot loss, no relation or crime side effects
+[*]A training battle never silently costs you: no ships lost at sea, no prisoner loss, no loot loss, no relation or crime side effects. The only real cost is the small death chance above — set it to 0 for no deaths at all
 [*]War Sails is [b]optional[/b] — without the DLC everything works on land as before
 [*]Cancel is always available before the fight starts and leaves the campaign exactly as it was
 [*]No Harmony patches — the mod rides vanilla's own model chain, so it stacks politely with other mods

@@ -12,7 +12,28 @@ namespace TrainingBattles
         // One config for the whole process: loaded once, shared by the behavior and the MCM menu,
         // so a change made in either is seen by both.
         private static ModConfig? _config;
-        internal static ModConfig Config => _config ??= ModConfig.LoadOrCreate();
+        internal static ModConfig Config
+        {
+            get
+            {
+                if (_config == null)
+                {
+                    _config = ModConfig.LoadOrCreate();
+                    TbLog.Enabled = _config.DebugLogging;
+                    TbLog.Info("config", "loaded v" + _config.ConfigVersion
+                        + " | xp band " + _config.XpKeptMinPercent + "-" + _config.XpKeptMaxPercent + "%"
+                        + " | death " + _config.RealDeathPercentAtMedicine0 + "-" + _config.RealDeathPercentAtMedicine300 + "%"
+                        + " | kia-wounded " + _config.KiaWoundedPercentAtMedicine0 + "-" + _config.KiaWoundedPercentAtMedicine300 + "%"
+                        + " | downed-wounded " + _config.DownedWoundedPercentAtMedicine0 + "-" + _config.DownedWoundedPercentAtMedicine300 + "%"
+                        + " | duel " + (_config.ScoutingGateEnabled
+                            ? "on " + _config.ScoutingGateDefendPercent + "/" + _config.ScoutingGateAttackPercent + "%"
+                            : "off")
+                        + " | cost land/sea " + _config.TrainingCostWagesLand + "/" + _config.TrainingCostWagesSea
+                        + " | mock " + _config.EnableMockEnemyTraining);
+                }
+                return _config;
+            }
+        }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {

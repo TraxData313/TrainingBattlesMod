@@ -7,6 +7,7 @@ using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
+using TrainingBattles.Core;
 using TrainingBattles.Models;
 
 namespace TrainingBattles
@@ -68,22 +69,38 @@ namespace TrainingBattles
         private bool TimeOfDayCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Wait;
-            if (!GroundToolsAllowed(out _)) return false;
-            args.Tooltip = new TextObject("{=TB_tip_time}Pin the hour every battle is fought at — "
+            if (!GroundToolsAllowed(out var mapEvent)) return false;
+            var tip = "{=TB_tip_time}Pin the hour every battle is fought at — "
                 + "drills, field battles, sieges, sea battles. Your standing pick: "
-                + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".");
+                + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".";
+            if (!ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
+                tip += " Out-scouted (your " + mine.SkillName + " " + mine.Skill + " against their "
+                    + theirs + ") — the campaign clock and full daylight stay yours; dictating "
+                    + "any other hour needs " + mine.SkillName + " " + required + ".";
+            args.Tooltip = new TextObject(tip);
             return true;
         }
 
         private void ChooseTimeOfDay()
         {
+            // The scouting duel gates the EXOTIC hours only: the campaign clock is no pick at
+            // all, and waiting for full daylight is quality-of-life, always allowed (Anton,
+            // 2026.07.25 — "for those streamers and bad screen players"). Read once per open;
+            // the picker shows the locked hours with the honest numbers.
+            System.Func<int, string?>? hourLock = null;
+            var mapEvent = MapEvent.PlayerMapEvent;
+            if (mapEvent != null && !ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
+                hourLock = hour => hour == ModConfig.FullDaylightHour ? null
+                    : "Their outriders rule the dark: your " + mine.SkillName + " is " + mine.Skill
+                    + " against their " + theirs + " — it needs to be at least " + required
+                    + " to dictate this hour. The campaign clock and full daylight are always yours.";
             BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
             {
                 InformationManager.DisplayMessage(new InformationMessage(_config.BattleTimeOfDay < 0
                     ? "Training Battles: battles follow the campaign clock again."
                     : "Training Battles: battles will open at "
                         + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + "."));
-            });
+            }, hourLock);
         }
 
         private void OnMapEventEnded(MapEvent mapEvent)
@@ -106,12 +123,92 @@ namespace TrainingBattles
                 : _config.ChooseGroundWhenAttacking;
         }
 
+        /// <summary>The SCOUTING DUEL (Anton, 2026.07.25): your party's ground officer against
+        /// the enemy side's best — the Scout's Scouting on land, the NAVIGATOR's Shipmaster at
+        /// sea (see <see cref="Officers"/>) — at the config ratio for your side: defenders need
+        /// <see cref="ModConfig.ScoutingGateDefendPercent"/>% of the enemy's (default 75: you
+        /// already hold the ground), attackers <see cref="ModConfig.ScoutingGateAttackPercent"/>%
+        /// (default 125: dictating the field takes a real edge). Won = the ground choice and the
+        /// exotic battle hours unlock. Gate off in config, or a failed read, counts as won —
+        /// a broken duel must never lock a shipped tool. Each fresh verdict is logged once.</summary>
+        private bool ScoutingDuelWon(MapEvent mapEvent, out Officers.Officer mine, out int theirs, out int required)
+        {
+            var atSea = false;
+            try { atSea = PlayerEncounter.IsNavalEncounter(); } catch { }
+            mine = Officers.GroundOfficer(MobileParty.MainParty, atSea);
+            theirs = required = 0;
+            if (!_config.ScoutingGateEnabled) return true;
+            try
+            {
+                var defending = mapEvent.PlayerSide == BattleSideEnum.Defender;
+                theirs = EnemyBestGroundSkill(mapEvent, atSea);
+                var percent = defending
+                    ? _config.ScoutingGateDefendPercent
+                    : _config.ScoutingGateAttackPercent;
+                required = ScoutingMath.RequiredSkill(theirs, percent);
+                var won = ScoutingMath.OutScouts(mine.Skill, theirs, percent);
+                LogDuelOnce(mine, theirs, required, percent, won, defending, atSea);
+                return won;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        /// <summary>The best ground officer across every party on the enemy side — an army is
+        /// screened by its sharpest outriders (or, at sea, its canniest navigator), not its
+        /// leader's.</summary>
+        private static int EnemyBestGroundSkill(MapEvent mapEvent, bool atSea)
+        {
+            var enemySide = mapEvent.PlayerSide == BattleSideEnum.Defender
+                ? mapEvent.AttackerSide
+                : mapEvent.DefenderSide;
+            var best = 0;
+            foreach (var eventParty in enemySide.Parties)
+            {
+                var mobile = eventParty?.Party?.MobileParty;
+                if (mobile == null) continue;
+                var skill = Officers.GroundOfficer(mobile, atSea).Skill;
+                if (skill > best) best = skill;
+            }
+            return best;
+        }
+
+        /// <summary>Menu conditions re-evaluate every frame — a duel line goes to the log only
+        /// when its verdict (or its numbers) actually change.</summary>
+        private string? _lastDuelLogged;
+
+        private void LogDuelOnce(Officers.Officer mine, int theirs, int required, int percent,
+            bool won, bool defending, bool atSea)
+        {
+            var line = (atSea ? "sea" : "land") + " | " + (defending ? "defending" : "attacking")
+                + " | " + mine.Describe() + " vs enemy best " + theirs
+                + " | bar " + required + " (" + percent + "%) | " + (won ? "WON" : "lost");
+            if (line == _lastDuelLogged) return;
+            _lastDuelLogged = line;
+            TbLog.Info("duel", line);
+        }
+
         private bool SurveyGroundCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             if (!GroundToolsAllowed(out var mapEvent)) return false;
             var candidates = Candidates(out _);
             if (candidates.Count < 2) return false; // nothing to choose between
+            if (!ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
+            {
+                // Visible but locked, with the honest numbers — the player must SEE what
+                // scouting buys here, or the skill never gets its due (Anton, 2026.07.25).
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_survey_locked}Their outriders screen the "
+                    + "ground: your " + mine.SkillName + " is " + mine.Skill + " and theirs is " + theirs
+                    + " — it needs to be at least " + required + " to "
+                    + (mapEvent.PlayerSide == BattleSideEnum.Defender
+                        ? "choose your ground here."
+                        : "dictate where they must fight (attacking asks for a real edge)."));
+                return true;
+            }
             var chosen = TrainingBattlesSceneModel.PendingSceneId;
             args.Tooltip = new TextObject(chosen == null
                 ? (mapEvent.PlayerSide == BattleSideEnum.Defender
@@ -131,6 +228,7 @@ namespace TrainingBattles
                 candidates, localCount, TrainingBattlesSceneModel.PendingSceneId, offerFate: true, sceneId =>
             {
                 TrainingBattlesSceneModel.PendingSceneId = sceneId;
+                TbLog.Info("ground", "real-battle survey pick: " + (sceneId ?? "fate"));
                 InformationManager.DisplayMessage(new InformationMessage(sceneId == null
                     ? "Training Battles: the ground is left to fate."
                     : "Training Battles: your line will form on " + sceneId + "."));
@@ -172,6 +270,7 @@ namespace TrainingBattles
 
         private static void LaunchScout(string sceneId, BattleSideEnum playerSide, Vec2 direction)
         {
+            TbLog.Info("scout", "real-encounter ride: " + sceneId + " | side " + playerSide);
             try { ScoutMission.OpenForRealEncounter(sceneId, playerSide, direction); }
             catch (System.Exception ex)
             {

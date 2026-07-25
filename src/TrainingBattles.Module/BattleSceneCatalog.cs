@@ -143,8 +143,12 @@ namespace TrainingBattles
         /// <summary>The one battle-hour dialog, shared by every door that offers "Choose the time
         /// of day". Writes the pick straight into <see cref="ModConfig.BattleTimeOfDay"/> (the
         /// single key drills, scouts and every real battle read) and saves; <paramref name="onDecided"/>
-        /// then refreshes whichever menu asked. Cancel changes nothing.</summary>
-        public static void ShowTimeOfDayPicker(ModConfig config, Action onDecided)
+        /// then refreshes whichever menu asked. Cancel changes nothing.
+        /// <paramref name="hourLock"/> (optional) gates single hours: given an hour it returns
+        /// null to allow or the reason to show it LOCKED — the real-battle door uses it for the
+        /// scouting duel (the campaign clock and full daylight stay free; see
+        /// <see cref="ModConfig.ScoutingGateEnabled"/>). The muster passes nothing.</summary>
+        public static void ShowTimeOfDayPicker(ModConfig config, Action onDecided, Func<int, string?>? hourLock = null)
         {
             // "— your pick" marks the STANDING SETTING, never the hour outside: Anton read the
             // old "— current" as "the current time of day" and filed the pinned-noon sky as a
@@ -159,9 +163,11 @@ namespace TrainingBattles
             };
             foreach (var hour in ModConfig.SupportedBattleHours)
             {
+                var lockReason = hourLock?.Invoke(hour);
                 elements.Add(new InquiryElement(hour,
                     Models.AtmospherePresets.Label(hour) + (config.BattleTimeOfDay == hour ? " — your pick" : ""),
-                    null, true, "Every battle — drills, field battles, sieges, sea — opens at this hour."));
+                    null, lockReason == null,
+                    lockReason ?? "Every battle — drills, field battles, sieges, sea — opens at this hour."));
             }
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "Choose the time of day",
@@ -174,6 +180,8 @@ namespace TrainingBattles
                     if (picked == null || picked.Count == 0 || picked[0].Identifier is not int hour) return;
                     config.BattleTimeOfDay = hour;
                     config.Save();
+                    TbLog.Info("hour", "battle hour pinned: "
+                        + (hour < 0 ? "campaign clock" : hour.ToString("00") + ":00"));
                     Mcm.McmBridge.TryPushBattleTimeOfDay(config); // the MCM menu shows the same truth
                     onDecided();
                 },

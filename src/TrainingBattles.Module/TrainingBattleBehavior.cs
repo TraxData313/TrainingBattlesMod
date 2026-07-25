@@ -354,13 +354,13 @@ namespace TrainingBattles
         /// disorganized, cooldown — each piece only when it actually applies.</summary>
         private string DrillSetupLine()
         {
-            var line = "Training battle - " + _config.WoundedPercent + "% of the fallen wake wounded"
-                + SurgeonNote() + ". " + _config.XpKeptPercent + "% XP kept.";
+            var line = "Training battle - " + CasualtyNote() + " " + XpKeptNote();
             var cost = ComputeTrainingCost();
             if (cost > 0)
-                line += " " + cost + " denars (" + _config.TrainingCostWages
-                      + FormatDaysWages(_config.TrainingCostWages)
-                      + " a man) for training equipment and troop rewards.";
+                line += " " + cost + " denars (" + CostDays()
+                      + FormatDaysWages(CostDays())
+                      + " a man" + (MainPartyAtSea() ? ", sea rates" : "")
+                      + ") for training equipment and troop rewards.";
             if (_config.DisorganizedAfterTraining)
                 line += " Party becomes disorganized.";
             if (!CooldownReady(out var remaining))
@@ -370,20 +370,51 @@ namespace TrainingBattles
             return line;
         }
 
-        /// <summary>", cut further by Surgeon Aeron (Medicine 80)" — the party's effective surgeon
-        /// by name, so the player sees WHO is softening the wounded roll and how good they are.</summary>
-        private static string SurgeonNote()
+        /// <summary>"85% XP kept (Quartermaster Ansif (Leadership 140))." — the XP officer by
+        /// name, so the player sees WHO sets the rate and how good they are: the quartermaster's
+        /// Leadership on land, the First Mate's Boatswain at sea (see <see cref="Officers"/>).
+        /// The rate runs linearly from the config floor at skill 0 to the ceiling at 300; past
+        /// 100% the drill grants bonus XP.</summary>
+        private string XpKeptNote()
         {
-            try
-            {
-                var surgeon = MobileParty.MainParty?.EffectiveSurgeon;
-                if (surgeon != null)
-                    return ", cut further by Surgeon " + surgeon.Name
-                         + " (Medicine " + surgeon.GetSkillValue(DefaultSkills.Medicine) + ")";
-            }
-            catch { }
-            return ", cut further by the surgeon's Medicine";
+            var pct = EffectiveXpKeptPercent(out var officer);
+            return pct + "% XP kept (" + officer.Describe() + ").";
         }
+
+        /// <summary>The drill's live XP-kept percent: <see cref="AftermathMath.XpKeptPercentForSkill"/>
+        /// over the party's XP officer. A missing officer scores as skill 0 — the honest floor,
+        /// never a crash.</summary>
+        private int EffectiveXpKeptPercent(out Officers.Officer officer)
+        {
+            officer = Officers.XpOfficer(MobileParty.MainParty, MainPartyAtSea());
+            return AftermathMath.XpKeptPercentForSkill(
+                officer.Skill, _config.XpKeptMinPercent, _config.XpKeptMaxPercent);
+        }
+
+        /// <summary>"Of the fallen 1.6% truly die and 17.5% wake wounded; 8% of the downed stay
+        /// wounded (Surgeon Aeron (Medicine 80))." — the surgeon's three live bands, so the
+        /// player sees the doctor's worth (and the real stakes) before committing.</summary>
+        private string CasualtyNote()
+        {
+            var surgeon = Officers.SurgeonOfficer(MobileParty.MainParty);
+            var death = AftermathMath.ChancePercentForSkill(
+                _config.RealDeathPercentAtMedicine0, _config.RealDeathPercentAtMedicine300, surgeon.Skill);
+            var kiaWounded = AftermathMath.ChancePercentForSkill(
+                _config.KiaWoundedPercentAtMedicine0, _config.KiaWoundedPercentAtMedicine300, surgeon.Skill);
+            var stayWounded = AftermathMath.ChancePercentForSkill(
+                _config.DownedWoundedPercentAtMedicine0, _config.DownedWoundedPercentAtMedicine300, surgeon.Skill);
+            return "Of the fallen "
+                + (death > 0.0 ? death.ToString("0.##") + "% truly die and " : "none truly die and ")
+                + kiaWounded.ToString("0.##") + "% wake wounded; "
+                + stayWounded.ToString("0.##") + "% of the downed stay wounded ("
+                + surgeon.Describe() + ").";
+        }
+
+        /// <summary>The drill's price in days of wages — land or sea rates, by where the party
+        /// floats right now (Anton, 2026.07.25: the sea drill costs double by default; the
+        /// planned castle/city/army drills will add their own rates).</summary>
+        private int CostDays() =>
+            MainPartyAtSea() ? _config.TrainingCostWagesSea : _config.TrainingCostWagesLand;
 
         /// <summary>" The fleet divides with the men: 2 hulls opposite, 3 with you (the flagship
         /// yours)." — the same split <see cref="SplitFleet"/> will actually make, computed on the
@@ -475,10 +506,9 @@ namespace TrainingBattles
             }
             else
             {
-                args.Tooltip = new TextObject("{=TB_tip_pick2}A mock battle against your own men. Nobody dies: "
-                    + "the fallen get back up — the surgeon patches most (Medicine helps), and of the rest only about "
-                    + _config.WoundedPercent + "% wake up wounded. XP kept: " + _config.XpKeptPercent + "%"
-                    + (_config.DisorganizedAfterTraining ? "; the party is disorganized for a while after." : "."));
+                args.Tooltip = new TextObject("{=TB_tip_pick2}A mock battle against your own men. "
+                    + CasualtyNote() + " " + XpKeptNote()
+                    + (_config.DisorganizedAfterTraining ? " The party is disorganized for a while after." : ""));
             }
             return true;
         }
@@ -724,18 +754,20 @@ namespace TrainingBattles
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_poor}The drill's pay-chest wants " + costNow
-                    + " denars (" + _config.TrainingCostWages + FormatDaysWages(_config.TrainingCostWages)
-                    + " for every soul on the field) — you carry " + (Hero.MainHero?.Gold ?? 0) + ".");
+                    + " denars (" + CostDays() + FormatDaysWages(CostDays())
+                    + " for every soul on the field" + (MainPartyAtSea() ? ", sea rates" : "")
+                    + ") — you carry " + (Hero.MainHero?.Gold ?? 0) + ".");
             }
             return true;
         }
 
         /// <summary>What this drill costs: every soldier on the field (both halves — they all train)
-        /// earns <see cref="ModConfig.TrainingCostWages"/> extra days of their daily wage. Uses the
+        /// earns <see cref="CostDays"/> extra days of their daily wage (land or sea rates). Uses the
         /// game's own wage model, so mercenaries cost their usual half-again more.</summary>
         private int ComputeTrainingCost()
         {
-            if (_config.TrainingCostWages <= 0) return 0;
+            var days = CostDays();
+            if (days <= 0) return 0;
             try
             {
                 var model = Campaign.Current.Models.PartyWageModel;
@@ -745,7 +777,7 @@ namespace TrainingBattles
                     if (el.Character == null || el.Character == CharacterObject.PlayerCharacter) continue;
                     total += model.GetCharacterWage(el.Character) * el.Number;
                 }
-                return total * _config.TrainingCostWages;
+                return total * days;
             }
             catch
             {
@@ -1357,6 +1389,11 @@ namespace TrainingBattles
                 }
                 _chosenSceneId = null;
             }
+
+            TbLog.Info("drill", "begin | " + (playerDefends ? "player defends" : "player attacks")
+                + " | atSea " + MainPartyAtSea() + " | simulate " + simulate
+                + " | " + Officers.XpOfficer(MobileParty.MainParty, MainPartyAtSea()).Describe()
+                + " | " + Officers.SurgeonOfficer(MobileParty.MainParty).Describe());
 
             // The vanilla forced-battle recipe (Company of Trouble quest); a throw here is caught by
             // LaunchTraining and unwinds honestly: men home, party gone, no cooldown burned.
@@ -2021,20 +2058,37 @@ namespace TrainingBattles
             //    the men come back FIRST (raising the clamp ceiling to full), then each stack's XP
             //    is SET to its pre-battle pool plus the kept share of what the drill visibly earned.
             var restored = 0;
-            var casualtiesTotal = 0;    // the truly dead — the wounded knob's whole input
-            var batteredTotal = 0;      // battle-wounded (KO'd or surgeon-saved) — healed, they were sparring
-            var woundedTotal = 0;
+            var casualtiesTotal = 0;    // the event's dead — the surgeon's whole KIA docket
+            var diedTotal = 0;          // of those, the truly, permanently DEAD (the real-death band)
+            var batteredTotal = 0;      // downed but never dead (KO'd, battle-wounded) — the stay-wounded band's docket
+            var woundedTotal = 0;       // wake up wounded, from either band
             var xpRestored = 0;
             var xpKeptFromDrill = 0;
             // Every drill writes a full account of the aftermath arithmetic to
             // Configs\TrainingBattles\last_drill_report.txt — per stack: what the snapshots held,
             // what the battle left, what was restored/filtered and with what rolls. When a number
             // on the party screen looks wrong, this file is the witness.
+            // The officers set this drill's rates — read once, before the loop, and spelled
+            // out in the report (if a hero has not walked home yet the read falls back to the
+            // leader; the report shows exactly whose skill was used).
+            var keptPercent = EffectiveXpKeptPercent(out var xpOfficer);
+            var drillSurgeon = Officers.SurgeonOfficer(main);
+            var deathChance = AftermathMath.ChancePercentForSkill(
+                _config.RealDeathPercentAtMedicine0, _config.RealDeathPercentAtMedicine300, drillSurgeon.Skill) / 100.0;
+            var kiaWoundChance = AftermathMath.ChancePercentForSkill(
+                _config.KiaWoundedPercentAtMedicine0, _config.KiaWoundedPercentAtMedicine300, drillSurgeon.Skill) / 100.0;
+            var stayWoundChance = AftermathMath.ChancePercentForSkill(
+                _config.DownedWoundedPercentAtMedicine0, _config.DownedWoundedPercentAtMedicine300, drillSurgeon.Skill) / 100.0;
             var report = new StringBuilder();
-            report.AppendLine("Training drill report — " + CampaignTime.Now
-                + " | XpKept " + _config.XpKeptPercent + "% | Wounded " + _config.WoundedPercent + "% | playerWon " + playerWon);
+            report.AppendLine("Training drill report — " + CampaignTime.Now + " | playerWon " + playerWon);
+            report.AppendLine("XP: " + keptPercent + "% kept (" + xpOfficer.Describe()
+                + ", band " + _config.XpKeptMinPercent + "-" + _config.XpKeptMaxPercent + "%)");
+            report.AppendLine("Casualties: " + drillSurgeon.Describe()
+                + " | real death " + (deathChance * 100.0).ToString("0.##")
+                + "% | KIA→wounded " + (kiaWoundChance * 100.0).ToString("0.##")
+                + "% | downed→wounded " + (stayWoundChance * 100.0).ToString("0.##") + "%");
             report.AppendLine("harvest " + (_battleDeadHarvested ? "event-DiedInBattle" : "roster-diff fallback"));
-            report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | died | newWounded | casualties | saveChance | woundedFinal | woundedAdjust | xpAdjust");
+            report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | eventDead | kiaDocket | DIED | kiaWounded | downed | stayWounded | woundedAdjust | xpAdjust");
             if (mainSnapshot != null && opponentSnapshot != null)
             {
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
@@ -2045,18 +2099,16 @@ namespace TrainingBattles
                     if (character == null || character.IsHero) continue; // heroes never die here; game wounds them
                     after.TryGetValue(character, out var now);
 
-                    // ONLY the truly DEAD go through the wounded filter; every battle-wounded
-                    // man is healed by the absolute wounded-target below (the round-9 negative
-                    // adjust) unless the filter re-wounds him. History of this line: round 9
-                    // fed the filter dead AND battle-wounded, because on a WIN the two together
-                    // approximate the men who actually dropped (vanilla's surgeon converts most
-                    // mission KIA to roster-wounded before we run — filtering only the dead let
-                    // 14 KIA at 10% come home as 14 wounded). But on a LOSS the entire beaten
-                    // side comes home roster-wounded (every man was downed or KO'd), so the
-                    // knob chewed on all 150 instead of the ~20 truly killed (Anton,
-                    // 2026.07.25, land and sea alike). The men the drill may leave wounded are
-                    // the men the battle would have PERMANENTLY cost — the dead; the KO'd were
-                    // sparring, they shrug it off.
+                    // The event's DEAD go to the surgeon's KIA verdict (real death, then
+                    // wounded); the merely DOWNED go to the softer stay-wounded band below.
+                    // History: round 9 fed one flat filter dead AND battle-wounded, because on
+                    // a WIN the two together approximate the men who actually dropped
+                    // (vanilla's surgeon converts most mission KIA to roster-wounded before we
+                    // run). But on a LOSS the entire beaten side comes home roster-wounded
+                    // (every man was downed or KO'd), so the knob chewed on all 150 instead of
+                    // the ~20 truly killed (Anton, 2026.07.25, land and sea alike). The
+                    // officers update kept that separation and gave each pool its own
+                    // Medicine-scaled band.
                     var fallen = pair.Value.Number - now.Number;
                     var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
                     // The knob's input is the event's OWN death book, not the roster hole: the
@@ -2068,34 +2120,44 @@ namespace TrainingBattles
                     var casualties = _battleDeadHarvested
                         ? Math.Min(trulyDead, Math.Max(fallen, 0))
                         : Math.Max(fallen, 0);
-                    var saveChance = 0.0;
-                    var woundedFinal = 0;
+                    var died = 0;
+                    var kiaWounded = 0;
+                    var stayWounded = 0;
                     var woundedAdjust = 0;
                     if (casualties > 0 || newWounded > 0 || fallen > 0)
                     {
-                        saveChance = SurgeonSaveChance(main.Party, character);
-                        woundedFinal = AftermathMath.WoundedAmongFallen(
-                            casualties, saveChance, _config.WoundedPercent / 100.0, () => MBRandom.RandomFloat);
-                        if (fallen > 0)
-                            main.MemberRoster.AddToCounts(character, fallen, false, 0); // men back first
-                        var finalNumber = now.Number + Math.Max(fallen, 0);
-                        var desiredWounded = Math.Min(pair.Value.Wounded + woundedFinal, finalNumber);
+                        // The surgeon's verdict on the would-have-died: a few truly die (the
+                        // real-death band — the drill's one permanent cost), some wake wounded,
+                        // the rest shrug it off. The truly dead are NOT restored below.
+                        var verdict = AftermathMath.JudgeFallen(
+                            casualties, deathChance, kiaWoundChance, () => MBRandom.RandomFloat);
+                        died = verdict.Died;
+                        kiaWounded = verdict.Wounded;
+                        var comeBack = Math.Max(fallen, 0) - died; // men back first — minus the dead
+                        if (comeBack > 0)
+                            main.MemberRoster.AddToCounts(character, comeBack, false, 0);
+                        // The downed pool — roster-wounded plus the vanished would-be-captured
+                        // (everyone who dropped without dying) — rolls the stay-wounded band.
+                        var downed = newWounded + (Math.Max(fallen, 0) - casualties);
+                        stayWounded = AftermathMath.StayWounded(
+                            downed, stayWoundChance, () => MBRandom.RandomFloat);
+                        var finalNumber = now.Number + comeBack;
+                        var desiredWounded = Math.Min(pair.Value.Wounded + kiaWounded + stayWounded, finalNumber);
                         woundedAdjust = desiredWounded - now.Wounded;
                         if (woundedAdjust != 0)
                             main.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
-                        restored += Math.Max(fallen, 0);
+                        restored += comeBack;
                         casualtiesTotal += casualties;
-                        // Battered = everyone down who did NOT die: the roster-wounded AND the
-                        // vanished would-be-captured (restored healthy above).
-                        batteredTotal += newWounded + (Math.Max(fallen, 0) - casualties);
-                        woundedTotal += woundedFinal;
-                        CreditSurgeon(main, character, casualties);
+                        diedTotal += died;
+                        batteredTotal += downed;
+                        woundedTotal += kiaWounded + stayWounded;
+                        CreditSurgeon(main, character, casualties - died);
                     }
 
                     // Visible earnings only — anything the clamp already ate mid-battle counts as
                     // unearned (conservative, never negative). Target = old pool + kept earnings.
                     var earned = Math.Max(0, now.Xp - pair.Value.Xp);
-                    var kept = AftermathMath.XpKept(earned, _config.XpKeptPercent);
+                    var kept = AftermathMath.XpKept(earned, keptPercent);
                     var targetXp = pair.Value.Xp + kept;
                     var xpAdjust = targetXp - now.Xp;
                     if (xpAdjust != 0)
@@ -2108,14 +2170,16 @@ namespace TrainingBattles
                         report.AppendLine(character.Name + " | "
                             + pair.Value.Number + "/" + pair.Value.Wounded + "/" + pair.Value.Xp + " | "
                             + now.Number + "/" + now.Wounded + "/" + now.Xp + " | "
-                            + fallen + " | " + trulyDead + " | " + newWounded + " | " + casualties + " | "
-                            + saveChance.ToString("0.00") + " | " + woundedFinal + " | "
+                            + fallen + " | " + trulyDead + " | " + casualties + " | "
+                            + died + " | " + kiaWounded + " | "
+                            + (newWounded + (Math.Max(fallen, 0) - casualties)) + " | " + stayWounded + " | "
                             + woundedAdjust + " | " + xpAdjust);
                     }
                 }
             }
-            report.AppendLine("TOTALS: casualties " + casualtiesTotal + " | wake wounded " + woundedTotal
-                + " | dead restored " + restored + " | xp kept " + xpKeptFromDrill + " | xp restored " + xpRestored);
+            report.AppendLine("TOTALS: kia docket " + casualtiesTotal + " | TRULY DIED " + diedTotal
+                + " | wake wounded " + woundedTotal + " | downed " + batteredTotal
+                + " | restored " + restored + " | xp kept " + xpKeptFromDrill + " | xp restored " + xpRestored);
             try
             {
                 System.IO.Directory.CreateDirectory(ModConfig.ConfigDirectory);
@@ -2137,27 +2201,23 @@ namespace TrainingBattles
                     : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))
                 + (casualtiesTotal > 0 || batteredTotal > 0
                     ? casualtiesTotal + " fell and " + batteredTotal + " were battered — "
+                        + (diedTotal > 0
+                            ? diedTotal + (diedTotal == 1 ? " man TRULY DIED" : " men TRULY DIED")
+                                + " despite the surgeon, "
+                            : "")
                         + woundedTotal + " wake up wounded, the rest shrug it off."
                     : "Not a man stayed down.")
-                + " Drill XP kept: " + xpKeptFromDrill
+                + " Drill XP kept: " + xpKeptFromDrill + " (at " + keptPercent + "%)"
                 + (xpRestored > 0 ? " (and " + xpRestored + " upgrade XP restored to the stacks)." : ".");
             InformationManager.DisplayMessage(new InformationMessage("Training over. " + summary));
+            TbLog.Info("drill", (opponentWasMock ? "mock" : "split") + " drill done | playerWon " + playerWon
+                + " | " + xpOfficer.Describe() + " → " + keptPercent + "% kept (" + xpKeptFromDrill + " xp)"
+                + " | " + drillSurgeon.Describe() + " → kia " + casualtiesTotal + ", died " + diedTotal
+                + ", wounded " + woundedTotal + ", downed " + batteredTotal
+                + " | chances d/kw/dw " + (deathChance * 100).ToString("0.##") + "/"
+                + (kiaWoundChance * 100).ToString("0.##") + "/" + (stayWoundChance * 100).ToString("0.##") + "%");
 
             try { if (Campaign.Current?.CurrentMenuContext != null) GameMenu.ExitToLast(); } catch { }
-        }
-
-        private static double SurgeonSaveChance(PartyBase party, CharacterObject character)
-        {
-            try
-            {
-                // The game's own survival math — Medicine-driven, so a good doctor helps.
-                return Campaign.Current.Models.PartyHealingModel.GetSurvivalChance(
-                    party, character, DamageTypes.Cut, canDamageKillEvenIfBlunt: false, null);
-            }
-            catch
-            {
-                return 0.5;
-            }
         }
 
         private static void CreditSurgeon(MobileParty party, CharacterObject character, int menSaved)

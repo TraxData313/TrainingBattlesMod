@@ -77,17 +77,28 @@ namespace TrainingBattles.Mcm
         private static void PushConfigToMenu(TrainingBattlesMcmSettings s, ModConfig c)
         {
             s.EnableMockEnemyTraining = c.EnableMockEnemyTraining;
-            s.XpKeptPercent = c.XpKeptPercent;
-            s.WoundedPercent = c.WoundedPercent;
+            s.XpKeptMinPercent = c.XpKeptMinPercent;
+            s.XpKeptMaxPercent = c.XpKeptMaxPercent;
+            s.RealDeathPercentAtMedicine0 = (float)c.RealDeathPercentAtMedicine0;
+            s.RealDeathPercentAtMedicine300 = (float)c.RealDeathPercentAtMedicine300;
+            s.KiaWoundedPercentAtMedicine0 = (float)c.KiaWoundedPercentAtMedicine0;
+            s.KiaWoundedPercentAtMedicine300 = (float)c.KiaWoundedPercentAtMedicine300;
+            s.DownedWoundedPercentAtMedicine0 = (float)c.DownedWoundedPercentAtMedicine0;
+            s.DownedWoundedPercentAtMedicine300 = (float)c.DownedWoundedPercentAtMedicine300;
             s.DisorganizedAfterTraining = c.DisorganizedAfterTraining;
             s.HeroHealthRestorePercent = c.HeroHealthRestorePercent;
             s.CooldownHours = c.CooldownHours;
-            s.TrainingCostWages = c.TrainingCostWages;
+            s.TrainingCostWagesLand = c.TrainingCostWagesLand;
+            s.TrainingCostWagesSea = c.TrainingCostWagesSea;
             s.AutoSplitInHalf = c.AutoSplitInHalf;
+            s.DebugLogging = c.DebugLogging;
             s.UseOpponentBanner = c.UseOpponentBanner;
             s.OpponentBannerCode = c.OpponentBannerCode;
             s.ChooseGroundWhenDefending = c.ChooseGroundWhenDefending;
             s.ChooseGroundWhenAttacking = c.ChooseGroundWhenAttacking;
+            s.ScoutingGateEnabled = c.ScoutingGateEnabled;
+            s.ScoutingGateDefendPercent = c.ScoutingGateDefendPercent;
+            s.ScoutingGateAttackPercent = c.ScoutingGateAttackPercent;
             // Rebuild rather than select: the dropdown's index convention (0 = clock, i+1 =
             // SupportedBattleHours[i]) lives in TimeOfDayChoices — one authority for both sides.
             s.BattleTimeOfDay = TrainingBattlesMcmSettings.TimeOfDayChoices(c.BattleTimeOfDay);
@@ -98,18 +109,30 @@ namespace TrainingBattles.Mcm
         private static void PullMenuToConfig(TrainingBattlesMcmSettings s, ModConfig c)
         {
             c.EnableMockEnemyTraining = s.EnableMockEnemyTraining;
-            c.XpKeptPercent = s.XpKeptPercent;
-            c.WoundedPercent = s.WoundedPercent;
+            c.XpKeptMinPercent = s.XpKeptMinPercent;
+            c.XpKeptMaxPercent = s.XpKeptMaxPercent;
+            c.RealDeathPercentAtMedicine0 = s.RealDeathPercentAtMedicine0;
+            c.RealDeathPercentAtMedicine300 = s.RealDeathPercentAtMedicine300;
+            c.KiaWoundedPercentAtMedicine0 = s.KiaWoundedPercentAtMedicine0;
+            c.KiaWoundedPercentAtMedicine300 = s.KiaWoundedPercentAtMedicine300;
+            c.DownedWoundedPercentAtMedicine0 = s.DownedWoundedPercentAtMedicine0;
+            c.DownedWoundedPercentAtMedicine300 = s.DownedWoundedPercentAtMedicine300;
             c.DisorganizedAfterTraining = s.DisorganizedAfterTraining;
             c.HeroHealthRestorePercent = s.HeroHealthRestorePercent;
             c.CooldownHours = s.CooldownHours;
-            c.TrainingCostWages = s.TrainingCostWages;
+            c.TrainingCostWagesLand = s.TrainingCostWagesLand;
+            c.TrainingCostWagesSea = s.TrainingCostWagesSea;
             c.AutoSplitInHalf = s.AutoSplitInHalf;
+            c.DebugLogging = s.DebugLogging;
+            TbLog.Enabled = c.DebugLogging; // the toggle bites immediately, not on restart
             c.UseOpponentBanner = s.UseOpponentBanner;
             c.OpponentBannerCode = string.IsNullOrWhiteSpace(s.OpponentBannerCode)
                 ? c.OpponentBannerCode : s.OpponentBannerCode;
             c.ChooseGroundWhenDefending = s.ChooseGroundWhenDefending;
             c.ChooseGroundWhenAttacking = s.ChooseGroundWhenAttacking;
+            c.ScoutingGateEnabled = s.ScoutingGateEnabled;
+            c.ScoutingGateDefendPercent = s.ScoutingGateDefendPercent;
+            c.ScoutingGateAttackPercent = s.ScoutingGateAttackPercent;
             var hourIndex = s.BattleTimeOfDay?.SelectedIndex ?? 0;
             c.BattleTimeOfDay = hourIndex > 0 && hourIndex <= ModConfig.SupportedBattleHours.Length
                 ? ModConfig.SupportedBattleHours[hourIndex - 1]
