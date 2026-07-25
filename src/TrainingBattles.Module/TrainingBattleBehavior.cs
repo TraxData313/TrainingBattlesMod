@@ -1206,6 +1206,14 @@ namespace TrainingBattles
                 }
             }
 
+            // One company, one spirit: the opposing half fights at the SAME party morale as
+            // yours. Every agent's starting battle morale carries (party morale - 50) / 2
+            // (CampaignAgentComponent.GetMoraleAddition), and the temp party is a freshly
+            // minted bandit party — no food (starving penalty), a tiny bandit size limit
+            // (overcrowding penalty) — so without this your own men fought ~20-30 initial
+            // morale worse from the opposite bank (Anton's dim-eagles catch, 2026.07.25).
+            MatchOpponentMorale(main, opponent);
+
             // The sea drill divides the FLEET as the men were divided: proportional to each
             // side's healthy crew, the flagship never crossing. Every hull's health is
             // snapshotted first — the aftermath re-owns and re-heals them all, so a drill can
@@ -1338,6 +1346,22 @@ namespace TrainingBattles
             {
                 return null;
             }
+        }
+
+        /// <summary>Levels the temp party's morale to the main party's, through the same knob
+        /// vanilla's events use (RecentEventsMorale — its setter clamps to ±100, plenty for the
+        /// bandit-party penalties). Called AFTER the men have crossed: the party-size morale
+        /// penalty depends on the roster the model sees. No restore needed — the temp party
+        /// dies with the drill.</summary>
+        private static void MatchOpponentMorale(MobileParty main, MobileParty opponent)
+        {
+            try
+            {
+                var delta = main.Morale - opponent.Morale;
+                if (Math.Abs(delta) < 0.01f) return;
+                opponent.RecentEventsMorale += delta;
+            }
+            catch { /* a morale mismatch is a fairness papercut, never a reason to stop a drill */ }
         }
 
         // ------------------------------ the fleet ------------------------------
