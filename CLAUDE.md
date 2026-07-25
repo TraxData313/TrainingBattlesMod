@@ -265,7 +265,9 @@ before deploying or the DLL is locked.
   reference NavalDLC.dll (+.View) at build — soft-dependency, never shipped, under the HARD
   RULE in SeaScoutMission's class doc: naval types in METHOD BODIES ONLY, never in a base
   class, interface, field type, or method signature anywhere in the module assembly, so
-  every no-DLC assembly scan (view creator, savegame, MCM) still succeeds.
+  every no-DLC assembly scan (view creator, savegame, MCM) still succeeds. ONE sanctioned
+  exception: SeaScoutDeploymentController extends the DLC's deployment controller (the MCM
+  settings class set the foreign-base-type precedent; documented on the class).
 - War Sails naval semantics: `MapEvent.IsNavalMapEvent` is just `!Position.IsOnLand` — start
   an encounter at sea and the whole naval pipeline lights up; the only fork is
   `CampaignMission.OpenNavalBattleMission`. A side with ZERO ships loses instantly, so give

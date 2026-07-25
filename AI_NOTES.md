@@ -192,9 +192,44 @@ So the ride snapshots the flagship's HP/sail-HP at Open and heals it home in
 SeaScoutRideLogic.OnRemoveBehavior (idempotent `_restored` flag; OnEndMission too) — the
 drill's RestoreFleet pledge in miniature.
 
+CRASH ROUND 1 (2026.07.25 21:39, first ride, hard native crash in the loading screen —
+DIAGNOSED from the crash folder's rgl_log + a healthy sea drill log side by side): the view
+set carried SandBox.View's `MissionPreloadView` — the CAMPAIGN preloader, whose first
+pre-mission tick walks `MapEvent.PlayerMapEvent.InvolvedParties`, and this mission has NO
+map event → death exactly between "water_prefabs.xml" and the first "Preload physics" line.
+FIX: `MissionCustomBattlePreloadView` (vanilla's own choice for its MapEvent-less naval
+missions — reads MissionCombatantsLogic.GetAllCombatants, our CustomBattleCombatants
+exactly). LESSON for the corpus: when borrowing views for a MapEvent-less mission, take the
+CUSTOM BATTLE variant of anything that has one — the campaign twin may assume the encounter.
+SandBox.View and TaleWorlds.MountAndBlade.View are now decompiled beside the rest.
+
+CRASH ROUND 2 (21:50, same session): preload fix HELD — engine log shows teams added,
+equipment preloaded, the flagship SPAWNED (CreateMissionShip: drakkar_ship_nested), nav
+mesh loaded — then native death where a healthy drill starts crew/formation work. Response:
+`SeaScoutDeploymentController` (subclass of the naval deployment controller — the ONE
+sanctioned break of the bodies-only rule, MCM-settings-class precedent, documented on the
+class) wearing a FLIGHT RECORDER: TbLog at every phase boundary, plus a self-heal that
+hand-spawns the player onto the flagship if vanilla's allocation left them missing (base
+SetupTeams derefs Mission.InitialPlayerAgent UNGUARDED).
+
+CRASH ROUND 3 (22:01): the recorder spoke — enemy (empty) side sets up CLEAN (watch-list
+item 1 RETIRED), death is INSIDE base OnSetupTeamsOfSide(Defender), i.e. the player side's
+own setup, downstream of the ship spawn. Response (deployed 2026.07.25 ~22:30, AWAITING
+ROUND 4): the recorder now REPLICATES the base's four steps for the player side (verified
+against the decompile: DeployBattleSide → AllocateAndDeployInitialTroops → agent-AI-states →
+OnSideDeploymentOver; the two internal ones via reflection, signature-miss falls back to
+the plain base call) with a log between each, catches any managed exception with its FULL
+INNER STACK into training_battles.log, and SeaScoutRideLogic.OnAgentBuild logs EVERY agent
+build by name — if one crewman's build is the killer, the last line names them. Static
+audit of the whole chain found no smoking gun (AllocateAndDeployInitialTroops force-enables
+spawning, so the ~106-crew batch spawn runs inside step 2; Mission.SpawnTroop,
+GetAgentTeam, CustomBattleAgentOrigin, AssignTroops, OnSideDeploymentOver all clean for a
+campaign + CustomBattleCombatant mix) — the round-4 log decides. NEXT SESSION: read the
+[sea-scout] lines after Anton's next ride; the failing step (and, for a managed fault, the
+exact stack) will be in them. Then strip the OnAgentBuild spam once the ride sails.
+
 PLAYTEST WATCH-LIST:
-1. The empty attacker side actually booting (the one prototype unknown left; everything
-   audited but never run).
+1. ~~The empty attacker side actually booting~~ RETIRED — round 3 proved it sets up clean.
 2. The helm: ship control view + input on a campaign mission under our own mission name.
 3. Spawn spot: naval scenes' deployment frames for the defender formation (ship shouldn't
    spawn beached or outside the boundary).

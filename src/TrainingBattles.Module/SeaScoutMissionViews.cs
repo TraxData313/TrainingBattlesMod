@@ -30,6 +30,7 @@ namespace TrainingBattles
         [ViewMethod(SeaScoutMission.MissionName)]
         public static MissionView[] OpenSeaScoutMission(Mission mission)
         {
+            TbLog.Info("sea-scout", "views: building the view list");
             return new List<MissionView>
             {
                 (MissionView)(object)new MissionCampaignView(),
@@ -47,8 +48,14 @@ namespace TrainingBattles
                 // The land scout's one addition over "Camp": the hold-Tab leave bar.
                 ViewCreator.CreateMissionLeaveView(),
                 // The sea's own: the helm (ship control HUD + input) and the hull preloader.
+                // CRASH LESSON (Anton's first ride, 2026.07.25 21:39): the CAMPAIGN preloader
+                // (SandBox.View's MissionPreloadView) walks MapEvent.PlayerMapEvent.InvolvedParties
+                // on its first pre-mission tick — and this mission HAS no map event, so the ride
+                // died in the loading screen. The CUSTOM BATTLE preloader reads the combatants
+                // logic instead (our CustomBattleCombatants exactly) — vanilla's own choice for
+                // its MapEvent-less naval missions.
                 NavalViewCreator.CreateMissionShipControlView(mission),
-                (MissionView)new MissionPreloadView(),
+                (MissionView)new MissionCustomBattlePreloadView(),
                 (MissionView)(object)new NavalShipsPreloadView(),
             }.ToArray();
         }
