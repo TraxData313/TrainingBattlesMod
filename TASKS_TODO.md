@@ -1,20 +1,6 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] Naval training battles (War Sails) — BUILT on branch `naval-training`, AWAITING PLAYTEST
-    (2026.07.25; see TASKS_DONE for the full narrative). PLAYTEST LIST, in order of risk:
-    1. The multi-round/disengage state machine: fight a sea drill to a clean win, a loss, a
-       retreat, and a cancel-of-auto-resolve — the finalize must kill the event every time
-       (naval battles re-run while both sides hold ships; "naval_encounter_disengaged" is the
-       new menu our bounded pops have never met).
-    2. The fleet comes home whole: hull/sail HP restored, sunk hulls back, nothing "captured",
-       figurehead untouched, fleet visuals right on the map after (SetNavalVisualAsDirty).
-    3. The split feels right (proportional to crew, flagship stays) and the muster preview
-       line matches what actually crosses.
-    4. Send-troops (hill-watch) at sea — the naval simulation path.
-    5. REGRESSION on land: one ordinary land drill, and one REAL naval battle WITHOUT
-       training (the reward model became a decorator — figurehead drops and ship loot must
-       still work for real sea fights; that was silently broken in v1.0.1).
 - [ ] Ship divide GUI — MUST for the next release (Anton, 2026.07.25)
     A real picker for WHICH ships go to which side in the naval split drill (the V1 naval
     solution auto-splits proportional to crew). No vanilla "divide the fleet" screen exists —
@@ -27,6 +13,9 @@ NEXT UPDATE:
 - [ ] Sea scout ride (the muster scout hides at sea today, same rule as the real-encounter
     door): walking a naval scene alone means standing on a deck — needs its own ship-spawn
     mission shape, not the Camp walk-around.
+- [ ] One REAL naval battle WITHOUT training on v1.1.0 — confirm figurehead drops and
+    captured-ship distribution came back (the v1.0.x reward-model bug's regression check;
+    Anton's 2026.07.25 playtest covered the drills, not a plain DLC sea fight).
 - [ ] "Choose the time of day" as a MENU OPTION on the siege/naval doors too (Anton wants
     the option before EVERY battle type). The CONFIG already applies everywhere (the
     MapWeatherModel decorator fires for any player map event — sieges and sea included);

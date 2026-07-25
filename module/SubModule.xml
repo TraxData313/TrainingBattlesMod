@@ -2,7 +2,7 @@
 <Module xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/BUTR/Bannerlord.XmlSchemas/master/SubModule.xsd">
   <Id value="TrainingBattles" />
   <Name value="Training Battles" />
-  <Version value="v1.0.1" />
+  <Version value="v1.1.0" />
   <DefaultModule value="false" />
   <ModuleCategory value="Singleplayer" />
   <ModuleType value="Community" />
@@ -20,6 +20,10 @@
     <!-- Mod Configuration Menu: optional. Load it before us (so its settings menu is ready when we
          bind), but never require it — the mod runs on config.json when MCM is absent. -->
     <DependedModuleMetadata id="Bannerlord.MBOptionScreen" order="LoadBeforeThis" optional="true" />
+    <!-- War Sails: optional, but when present it MUST register its models before ours — our
+         BattleRewardModel decorates whatever came before it (BaseModel chain), and loading the
+         other way round would let the DLC's model re-expose figurehead/ship loot during drills. -->
+    <DependedModuleMetadata id="NavalDLC" order="LoadBeforeThis" optional="true" />
   </DependedModuleMetadatas>
   <SubModules>
     <SubModule>

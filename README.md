@@ -10,8 +10,9 @@ A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 
 
 - **Split your army** into two halves through a troop-picking GUI, choose which half you command
+- **At sea too (War Sails)** — drill while sailing: the fleet divides with the men (proportional to crew, your flagship stays yours), and every hull comes back afterward — sunk, damaged or "captured", training costs no ships
 - **Pay** for the drill - broken javs, arrows, rewards, they cost money... (1 daily wage by default)
-- **Fight** on the battlefield (attacking or defending) or auto resolve
+- **Fight** on the battlefield (attacking or defending) or auto resolve — one side choice governs both roads
 - **Level up** your soldiers - keep the XP (75% by default)
 - the **KIA** -> might get Wounded. Some really get injured (default to about 10%), further reduced by how good your surgeon is
 - the **Wounded** -> they all get up OK
@@ -62,6 +63,7 @@ If one of these searches brought you here — yes, this is that mod:
 - a mod to **change the time of day of battles** — fight at **night**, dawn, noon or evening
 - a mod to **preview the deployment** before committing to an attack
 - a mod for **practice battles** / **sparring** — train your troops with no deaths and no losses
+- a mod for **naval training battles** / practice **sea battles** with your own fleet (War Sails)
 
 
 ## The knobs
