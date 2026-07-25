@@ -112,6 +112,10 @@ namespace TrainingBattles
                                                    // sweep — loot screens grant items only when the
                                                    // player closes them, AFTER the aftermath ran
         private int _chargedCost;                  // the pay-chest already charged; refunded on abort
+        private bool _playerDefendsChoice;         // the muster's side toggle: false = you attack
+                                                   // (the old default); honored by Begin AND the
+                                                   // send-troops hill-watch alike (Anton's
+                                                   // 2026.07.25 catch: auto-resolve had no side)
         private bool _checkResults;
         private bool _returnToMenuPending;         // set by the picker's close; honored on the next tick
         private bool _aftermathReady;              // our map event has truly ended (set by MapEventEnded)
@@ -173,6 +177,7 @@ namespace TrainingBattles
             _heroHpBefore.Clear();
             _chargedCost = 0;
             _fleetSnapshot.Clear();
+            _playerDefendsChoice = false; // every session opens on the attack, like the old default
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
             RecoverStaleOpponentParties();
             RescueStuckFugitiveCompanions();
@@ -205,15 +210,19 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_mock_enemy",
                 "{=TB_opt_mock}Compose a mock enemy to drill against",
                 MockEnemyCondition, _ => OpenMockEnemyComposer());
-            starter.AddGameMenuOption(MenuId, "training_begin_attack",
-                "{=TB_opt_attack4}Begin — {TB_BEGIN_ATTACK}{TB_COST_SUFFIX}",
-                args => BeginCondition(args), _ => BeginBattle(playerDefends: false));
-            starter.AddGameMenuOption(MenuId, "training_begin_defend",
-                "{=TB_opt_defend4}Begin — {TB_BEGIN_DEFEND}{TB_COST_SUFFIX}",
-                args => BeginCondition(args), _ => BeginBattle(playerDefends: true));
+            // The side is chosen ONCE, then both roads honor it — fight it yourself or watch
+            // it resolve from the hill. (Anton's 2026.07.25 catch: the old menu carried the
+            // side only on the two Begin options, so the send-troops auto-resolve silently
+            // always made him the attacker — on land and at sea alike.)
+            starter.AddGameMenuOption(MenuId, "training_side",
+                "{=TB_opt_side}Choose your side — {TB_SIDE_NOW}",
+                SideCondition, _ => ToggleSide());
+            starter.AddGameMenuOption(MenuId, "training_begin",
+                "{=TB_opt_begin}Begin the battle — {TB_BEGIN_SIDE}{TB_COST_SUFFIX}",
+                args => BeginCondition(args), _ => BeginBattle(_playerDefendsChoice));
             starter.AddGameMenuOption(MenuId, "training_send_troops",
                 "{=TB_opt_send2}Send the men in — watch it resolve from the hill{TB_COST_SUFFIX}",
-                SendTroopsCondition, _ => LaunchTraining(playerDefends: false, simulate: true));
+                SendTroopsCondition, _ => LaunchTraining(_playerDefendsChoice, simulate: true));
             starter.AddGameMenuOption(MenuId, "training_cancel",
                 "{=TB_opt_cancel}Cancel training",
                 CancelCondition, _ => CancelTraining(), isLeave: true);
@@ -244,14 +253,14 @@ namespace TrainingBattles
                 head = "The two halves stand ready: " + _pickedTeam.TotalHealthyCount
                      + " men opposite, " + Math.Max(yours, 0)
                      + " with you." + FleetSplitPreview(Math.Max(yours, 1))
-                     + " Choose your side — or call it off.";
+                     + " Set your side and begin — or call it off.";
             }
             else if (_mockEnemyTeam != null && _mockEnemyTeam.TotalManCount > 0)
             {
                 head = "The mock enemy stands ready: " + _mockEnemyTeam.TotalHealthyCount
                      + " " + DescribeMockEnemyCultures(_mockEnemyTeam) + " men opposite, "
                      + MobileParty.MainParty.MemberRoster.TotalHealthyCount
-                     + " with you — phantoms, your own ranks untouched. Choose your side — or call it off.";
+                     + " with you — phantoms, your own ranks untouched. Set your side and begin — or call it off.";
             }
             else
             {
@@ -583,6 +592,27 @@ namespace TrainingBattles
             }
         }
 
+        /// <summary>The side toggle: one click flips attacker/defender, and BOTH roads — Begin
+        /// and the send-troops hill-watch — honor the standing choice. Shown whenever a drill
+        /// mode is on, so the side can be set before or after dividing the men.</summary>
+        private bool SideCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            MBTextManager.SetTextVariable("TB_SIDE_NOW",
+                _playerDefendsChoice ? "you defend" : "you attack", false);
+            args.Tooltip = new TextObject("{=TB_tip_side}Attack or defend — one choice for both "
+                + "roads: fighting the battle yourself, or sending the men in and watching from "
+                + "the hill. Select to switch.");
+            return true;
+        }
+
+        private void ToggleSide()
+        {
+            _playerDefendsChoice = !_playerDefendsChoice;
+            try { GameMenu.SwitchToMenu(MenuId); } catch { } // re-init so every label tells the new side
+        }
+
         private bool BeginCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
@@ -605,10 +635,10 @@ namespace TrainingBattles
             MBTextManager.SetTextVariable("TB_COST_SUFFIX",
                 costNow > 0 ? " (" + costNow + " denars)" : string.Empty, false);
             var mockDrill = _pickedTeam == null && _mockEnemyTeam != null;
-            MBTextManager.SetTextVariable("TB_BEGIN_ATTACK",
-                mockDrill ? "you attack the mock enemy" : "your half attacks", false);
-            MBTextManager.SetTextVariable("TB_BEGIN_DEFEND",
-                mockDrill ? "you defend against the mock enemy" : "your half defends", false);
+            MBTextManager.SetTextVariable("TB_BEGIN_SIDE",
+                mockDrill
+                    ? (_playerDefendsChoice ? "you defend against the mock enemy" : "you attack the mock enemy")
+                    : (_playerDefendsChoice ? "your half defends" : "your half attacks"), false);
             var team = _pickedTeam ?? _mockEnemyTeam;
             if (team == null || team.TotalHealthyCount < 1)
             {

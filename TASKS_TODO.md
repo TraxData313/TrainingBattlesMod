@@ -1,6 +1,5 @@
 BUGS:
 
-
 NEXT UPDATE:
 - [ ] Naval training battles (War Sails) — BUILT on branch `naval-training`, AWAITING PLAYTEST
     (2026.07.25; see TASKS_DONE for the full narrative). PLAYTEST LIST, in order of risk:
@@ -40,6 +39,8 @@ NEXT UPDATEs or NOT FULLY DECIDED:
 - [ ] Garrison training at owned castles/towns
     Run training battles with the garrison of a castle/town the player owns — practice siege
     defense/assault on your own walls, maybe garrison vs. party mock sieges.
+    - castles cost 10x by default to pay, and can be done once in 7 days
+    - cities 50x, once per 14 days
 - [ ] A menu door besides the hotkey (e.g. a party-screen button or clan-screen entry), for
     players who never read hotkey hints.
 - [ ] Scouting with companions (V1 scouts ALONE) — spawn picked companions alongside with
