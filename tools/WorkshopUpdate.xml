@@ -10,7 +10,7 @@
     </GetItem>
     <UpdateItem>
         <ModuleFolder Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\dist\TrainingBattles"/>
-        <ChangeNotes Value="v1.1.0 - NAVAL TRAINING BATTLES (War Sails): drill at sea! Press the muster hotkey while sailing - the fleet divides with the men (proportional to each side's crew, your flagship always stays with you; the muster text shows the exact split before you commit), the two halves fight a real sea battle, and afterward EVERY hull comes home: sunk, damaged or captured ships are fully restored - training costs no ships, no figureheads, no men. NEW: 'Choose your side' - attack or defend is now one standing choice that applies to fighting the battle yourself AND to sending the men in to auto-resolve (which previously always made you the attacker). FIX for War Sails players: real sea battles fought with this mod installed now correctly give figurehead drops and captured-ship distribution again (a model-override bug in v1.0.x silently disabled the DLC's battle rewards - sorry, and thanks for sailing with us). Coming next: a picker to choose WHICH ships each side sails." />
+        <ChangeNotes Value="v1.1.1 - Three drill fixes: the opposing half now fights at YOUR party's morale (it used to walk in demoralized and rout early); losing a drill can no longer take you prisoner or strand you at sea; and the wounded now follow the REAL battle deaths only - knocked-out men shrug it off, so a lost drill no longer wounds half the company." />
         <Tags>
             <Tag Value="Utility" />
             <Tag Value="Native" />
