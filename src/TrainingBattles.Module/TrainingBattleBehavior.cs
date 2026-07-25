@@ -754,7 +754,7 @@ namespace TrainingBattles
             // trusting) vanilla's wrap-up menus. Vanilla owns every non-happy path (the
             // auto-resolve wrap, retreat, defeat: capture menus, member scatter, re-attack
             // screens); politely waiting for them left the aftermath late or lost (Anton's
-            // second playtest). Two triggers:
+            // second playtest). Three triggers:
             if (_checkResults && TaleWorlds.MountAndBlade.Mission.Current == null)
             {
                 // (a) Our map event has ended (fought out, auto-resolved, or captured) — run the
