@@ -1,9 +1,8 @@
 BUGS:
 
 NEXT UPDATE:
-- [ ] Ship divide GUI — pick WHICH ships go to each side in the sea drill, and it lay the groundwork for next things like castle trainings, where I would have to chose equipment etc (MUST for the next release; see AI_NOTES)
-- [ ] Mock enemy at sea — give the phantoms ships, chose upgrades (see AI_NOTES; decide the fleet recipe together)
-- [ ] Choose the time of day on the siege/naval menus too (see AI_NOTES; config already applies there)
+- [ ] Playtest: ship divide GUI + phantom fleets at sea + siege/naval hour doors (all built, see AI_NOTES)
+- [ ] Playtest eye: no more orange-banner looters after drills (fixed 2026.07.25 — visuals now rebuilt on clan restore)
 - [ ] Playtest check: one plain naval battle without training — loot/ships back to normal (see AI_NOTES)
 
 NEXT UPDATEs or NOT FULLY DECIDED:
@@ -12,3 +11,4 @@ NEXT UPDATEs or NOT FULLY DECIDED:
 - [ ] A menu door besides the hotkey (party-screen or clan-screen button)
 - [ ] Scouting with companions (see AI_NOTES)
 - [ ] Training while leading an ARMY (research done — army vs mock enemy first; see AI_NOTES)
+- [ ] Siege drill equipment picker — the custom window frame is built, reuse it (see AI_NOTES)

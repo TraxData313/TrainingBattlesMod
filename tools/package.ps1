@@ -29,6 +29,10 @@ Copy-Item (Join-Path $outDir "TrainingBattles.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "TrainingBattles.Core.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "Newtonsoft.Json.dll") $binDir -Force
 
+# GUI assets (the custom windows' prefab XMLs). The dist dir is freshly made, plain copy is safe.
+$guiSource = Join-Path $repoRoot "module\GUI"
+if (Test-Path $guiSource) { Copy-Item $guiSource (Join-Path $moduleDir "GUI") -Recurse }
+
 # The version stamp comes from the manifest, so the zip name always tells the truth.
 $version = "unversioned"
 try {

@@ -76,6 +76,7 @@ namespace TrainingBattles
         {
             base.OnApplicationTick(dt);
             TrainingBattleBehavior.Instance?.TickHotkey();
+            UI.TrainingWindow.Tick(); // the custom windows' Escape road; cheap when none is up
         }
     }
 }

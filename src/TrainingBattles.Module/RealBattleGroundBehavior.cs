@@ -65,6 +65,19 @@ namespace TrainingBattles
             starter.AddGameMenuOption("encounter", "training_battles_survey_ground",
                 BattleSceneCatalog.SelectBattlefieldOptionText,
                 SurveyGroundCondition, _ => SurveyGround(), isLeave: false, index: 6);
+            // The hour pick on the SIEGE menu too (Anton's ask: the option before EVERY battle
+            // type — the MapWeatherModel already applies it to assault and sally missions; only
+            // this door was missing). Both sides sit on menu_siege_strategies, besieger and
+            // besieged alike. No scouting duel here: when the assault or the sally happens is
+            // the commander's own call, not battlefield intel to be screened from.
+            starter.AddGameMenuOption("menu_siege_strategies", "training_battles_time_of_day",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                SiegeTimeOfDayCondition, _ => ChooseSiegeTimeOfDay(), isLeave: false, index: 1);
+            // And on the naval DISENGAGE menu (multi-round sea battles breathe between rounds
+            // there) — the pre-battle "encounter" menu already carries the tools for sea fights.
+            starter.AddGameMenuOption("naval_encounter_disengaged", "training_battles_time_of_day",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                DisengagedTimeOfDayCondition, _ => ChooseTimeOfDay(), isLeave: false, index: 1);
         }
 
         private bool TimeOfDayCondition(MenuCallbackArgs args)
@@ -104,6 +117,62 @@ namespace TrainingBattles
                     : "Training Battles: this battle will open at "
                         + AtmospherePresets.Label(effective).ToLowerInvariant() + "."));
             }, hourLock);
+        }
+
+        /// <summary>The siege menu's hour pick: live whenever the player truly sits in a siege
+        /// (besieging, or besieged inside the walls) — the picked hour then colors the next
+        /// assault or sally mission, one battle only, exactly like everywhere else.</summary>
+        private bool SiegeTimeOfDayCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Wait;
+            if (TrainingBattleBehavior.TrainingActive) return false;
+            var main = MobileParty.MainParty;
+            var inSiege = false;
+            try
+            {
+                inSiege = main?.BesiegedSettlement != null
+                    || main?.CurrentSettlement?.SiegeEvent != null;
+            }
+            catch { }
+            if (!inSiege) return false;
+            args.Tooltip = new TextObject("{=TB_tip_time_siege}Pick the hour for the NEXT assault "
+                + "or sally only — the standing default lives in the mod options. Next battle: "
+                + AtmospherePresets.Label(TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
+                + (TrainingBattlesMapWeatherModel.PendingBattleHour != null ? " (your pick)." : "."));
+            return true;
+        }
+
+        private void ChooseSiegeTimeOfDay()
+        {
+            BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
+            {
+                var effective = TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config);
+                InformationManager.DisplayMessage(new InformationMessage(effective < 0
+                    ? "Training Battles: the next assault follows the campaign clock."
+                    : "Training Battles: the next assault will open at "
+                        + AtmospherePresets.Label(effective).ToLowerInvariant() + "."));
+            });
+        }
+
+        /// <summary>The naval disengage menu's hour pick: the sea battle breathes between rounds
+        /// and the next round's sky can still be chosen — same one-battle rule, same duel gate as
+        /// the pre-battle door (their navigator still reads the same sea).</summary>
+        private bool DisengagedTimeOfDayCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Wait;
+            if (TrainingBattleBehavior.TrainingActive) return false;
+            var mapEvent = MapEvent.PlayerMapEvent;
+            if (mapEvent == null) return false;
+            var tip = "{=TB_tip_time_naval}Pick the hour for the NEXT round of this sea fight "
+                + "only — the standing default lives in the mod options. Next round: "
+                + AtmospherePresets.Label(TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
+                + (TrainingBattlesMapWeatherModel.PendingBattleHour != null ? " (your pick)." : ".");
+            if (!ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
+                tip += " Out-sailed (your " + mine.SkillName + " " + mine.Skill + " against their "
+                    + theirs + ") — the campaign clock and full daylight stay yours; dictating "
+                    + "any other hour needs " + mine.SkillName + " " + required + ".";
+            args.Tooltip = new TextObject(tip);
+            return true;
         }
 
         private void OnMapEventEnded(MapEvent mapEvent)

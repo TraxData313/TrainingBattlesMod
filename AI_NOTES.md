@@ -4,20 +4,40 @@ TASKS_TODO.md is Anton's board: short idea lines, readable at a glance. The deta
 research pointers and gotchas behind those ideas live HERE, one section per idea. When picking
 up a TODO line, read its section first.
 
-## Ship divide GUI (sea drill)
+## Ship divide GUI + phantom fleets — BUILT 2026.07.25, awaiting playtest
 
-A real picker for WHICH ships go to which side in the naval split drill (the V1 naval solution
-auto-splits proportional to crew, flagship pinned to the player — `FleetSplitMath`). No vanilla
-"divide the fleet" screen exists — research candidates: the fleet management screen's roster
-machinery, or a custom inquiry/Gauntlet list. Pairs with the men picker: divide the men, then
-divide the hulls.
+Both landed in one session, on the mod's FIRST custom Gauntlet windows (`UI\TrainingWindow` —
+the ImmersiveAI chat-window pattern: GauntletLayer + LoadMovie over a ViewModel, prefab XML in
+`module\GUI\Prefabs`, native brushes only, NO Harmony needed). The window frame is deliberately
+generic — the future siege-equipment picker reuses `TrainingWindow` + a new VM/prefab pair.
 
-## Phantom fleets for the mock enemy at sea
+Playtest points (sea drill, split): the muster's "Divide the ships" option (afloat, ≥2 hulls,
+men divided first); flagship pinned; confirm-with-untouched-default stores NULL ("follow the
+men") so re-dividing the men re-divides the fleet; a stale pick (hull sold between pick and
+Begin) falls back to auto with a message. Escape = Cancel (polled in SubModule tick).
 
-Blocked today with an honest tooltip ("phantoms do not sail yet"). Conjure `new Ship(hull)` per
-culture for the mock party and dissolve them after — the Ship ctor is public, hulls come from
-the object manager. Decide the fleet recipe (culture's shipyard list? player-mirrored?) with
-Anton first.
+Playtest points (mock at sea): "Lay down the phantom fleet" (afloat, mock enemy composed
+first) — hull rows from every culture's `AvailableShipHulls`, +/− tallies, cap 12 hulls
+(mission perf), fittings tier cycler (bare / harbor I–III; per slot the BEST
+`ShipSlot.MatchingPieces` piece whose `RequiredPortLevel` the tier affords —
+`PhantomFleetMath.UpgradePickIndex`, deterministic). Begin at sea requires a laid-down fleet
+(shipless side loses the naval event instantly). Phantom hulls are `new Ship(hull)` marked
+IsTradeable=false + IsUsedByQuest, owned by the mock party before StartBattle; every exit road
+(finish, abort, stale recovery) SINKS them (Owner=null — vanilla's own sinking leftover shape),
+NEVER reclaims (reclaiming would mint a free fleet — the old stale-recovery ReclaimShips call
+for mock parties was exactly that trap, now fixed). The aftermath also sweeps any hull in the
+player's fleet that was not in the pre-drill snapshot ("captured" phantoms dissolve). The
+player's own fleet is snapshotted and healed even in mock sea drills (phantoms can hurt it).
+
+Fleet recipe DECIDED by building the GUI: the player composes it hull by hull from every
+culture's shipyard list — no auto-mirror; revisit only if the playtest wants a "mirror my
+fleet" convenience button.
+
+## Siege drill equipment picker (future)
+
+When garrison/siege training lands, the equipment choice (engines, ladders?) gets its own
+VM + prefab over the same `UI\TrainingWindow` frame — that generality is why the window
+manager is separate from the ship VMs.
 
 ## Sea scout ride
 
@@ -31,13 +51,16 @@ One REAL naval battle WITHOUT training — confirm figurehead drops and captured
 distribution came back (the v1.0.x reward-model bug's regression check; Anton's 2026.07.25
 playtest covered the drills, not a plain DLC sea fight).
 
-## "Choose the time of day" on the siege/naval doors
+## "Choose the time of day" on the siege/naval doors — BUILT 2026.07.25, awaiting playtest
 
-Anton wants the option before EVERY battle type. The CONFIG already applies everywhere (the
-MapWeatherModel decorator fires for any player map event — sieges and sea included); what's
-missing is only the menu entry on vanilla's siege menus (menu ids to research: the
-besiege/assault menus) and wherever naval encounters diverge from "encounter". The muster, the
-encounter menu and MCM all edit the same key already.
+Menu research settled it: NAVAL pre-battle encounters use the plain "encounter" menu (already
+carried our tools), so the only missing doors were the SIEGE wait menu and the naval
+disengage state. Added in `RealBattleGroundBehavior`: the hour option on
+`menu_siege_strategies` (BOTH sides sit on it — besieger strategies and the besieged's
+sally options; ungated by the scouting duel — when to assault/sally is the commander's own
+call, a deliberate design choice for Anton to veto) and on `naval_encounter_disengaged`
+(multi-round sea fights breathe there; duel-gated like the pre-battle door). Same
+one-battle-only PendingBattleHour everywhere.
 
 ## Scouting duel — decisions log
 

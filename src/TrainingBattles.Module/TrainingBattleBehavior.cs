@@ -90,6 +90,14 @@ namespace TrainingBattles
         private TroopRoster? _prisonSnapshot;      // main party's prisoners before the fight — to spot
                                                    // own men who ended up "captured" by the drill
         private string? _chosenSceneId;            // the battlefield the player picked for the drill
+        private List<Ship>? _shipDividePick;       // the hulls the player sent OPPOSITE in the
+                                                   // ship-divide window (null = follow the men:
+                                                   // the FleetSplitMath auto-split)
+        private List<KeyValuePair<ShipHull, int>>? _mockFleetPick;
+                                                   // the phantom fleet's composition (hull class →
+                                                   // how many), from the shipyard window
+        private int _mockFleetTier = 1;            // the phantom fleet's fittings tier (0 = bare
+                                                   // hulls, 1..3 = the best pieces of that harbor)
         private readonly Dictionary<CharacterObject, int> _battleDead = new Dictionary<CharacterObject, int>();
                                                    // per-troop TRUE dead of the drill, harvested
                                                    // from the map event's own DiedInBattle rosters
@@ -221,6 +229,8 @@ namespace TrainingBattles
             _mockEnemyTeam = null;
             _opponentIsMockEnemy = false;
             _chosenSceneId = null;
+            _shipDividePick = null;
+            _mockFleetPick = null;
             _opponentParty = null;
             _mainSnapshot = null;
             _opponentSnapshot = null;
@@ -261,9 +271,19 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_pick",
                 "{=TB_opt_pick}Divide the men for a training battle",
                 PickCondition, _ => OpenPicker());
+            // The sea drill's second hand: WHICH hulls sail opposite (default: the auto split
+            // that follows the men). Only shown afloat with a fleet worth dividing.
+            starter.AddGameMenuOption(MenuId, "training_ships",
+                "{=TB_opt_ships}Divide the ships — {TB_SHIPS_NOW}",
+                ShipDivideCondition, _ => OpenShipDivide());
             starter.AddGameMenuOption(MenuId, "training_mock_enemy",
                 "{=TB_opt_mock}Compose a mock enemy to drill against",
                 MockEnemyCondition, _ => OpenMockEnemyComposer());
+            // The phantoms' hulls: at sea a mock enemy must sail something — the shipyard
+            // window lays its fleet down, hull class by hull class.
+            starter.AddGameMenuOption(MenuId, "training_mock_fleet",
+                "{=TB_opt_mock_fleet}Lay down the phantom fleet — {TB_MOCK_FLEET_NOW}",
+                MockFleetCondition, _ => OpenFleetCompose());
             // The side is chosen ONCE, then both roads honor it — fight it yourself or watch
             // it resolve from the hill. (Anton's 2026.07.25 catch: the old menu carried the
             // side only on the two Begin options, so the send-troops auto-resolve silently
@@ -423,8 +443,9 @@ namespace TrainingBattles
 
         /// <summary>" The fleet divides with the men: 2 hulls opposite, 3 with you (the flagship
         /// yours)." — the same split <see cref="SplitFleet"/> will actually make, computed on the
-        /// same inputs, so the muster text is a promise and not an estimate. Empty on land, with
-        /// a lone hull, or with no divided company yet.</summary>
+        /// same inputs, so the muster text is a promise and not an estimate. A standing manual
+        /// pick from the ship-divide window is told as "at your word". Empty on land, with a
+        /// lone hull, or with no divided company yet.</summary>
         private string FleetSplitPreview(int yourHealthyMen)
         {
             try
@@ -432,6 +453,14 @@ namespace TrainingBattles
                 if (!MainPartyAtSea() || _pickedTeam == null) return string.Empty;
                 var ships = MobileParty.MainParty.Ships;
                 if (ships.Count < 2) return string.Empty;
+                if (_shipDividePick != null)
+                {
+                    var picked = CountValidManualCrossings();
+                    if (picked > 0 && picked < ships.Count)
+                        return " The fleet divides at your word: "
+                            + picked + (picked == 1 ? " hull" : " hulls") + " opposite, "
+                            + (ships.Count - picked) + " with you (the flagship yours).";
+                }
                 var capacities = new List<int>(ships.Count);
                 var flagship = 0;
                 for (var i = 0; i < ships.Count; i++)
@@ -532,19 +561,12 @@ namespace TrainingBattles
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_mock_none}Not a healthy soul to drill.");
             }
-            else if (MainPartyAtSea())
-            {
-                // A phantom FLEET means conjuring hulls from nothing — its own feature, parked
-                // in TASKS_TODO. The split drill covers the sea until then.
-                args.IsEnabled = false;
-                args.Tooltip = new TextObject("{=TB_tip_mock_sea}Phantoms do not sail yet — make "
-                    + "port or drop anchor ashore to drill against a mock enemy.");
-            }
             else
             {
                 args.Tooltip = new TextObject("{=TB_tip_mock2}Build a phantom force from every troop in the "
                     + "game — any cultures, any mix — and test the whole company against it. Your men follow "
-                    + "the normal training rules; the phantoms vanish afterward.");
+                    + "the normal training rules; the phantoms vanish afterward."
+                    + (MainPartyAtSea() ? " At sea, lay down their fleet too — the option below." : ""));
             }
             return true;
         }
@@ -741,15 +763,15 @@ namespace TrainingBattles
                     : "{=TB_tip_mock_first}Compose the mock enemy first.");
                 return true;
             }
-            if (MainPartyAtSea() && mockDrill)
+            if (MainPartyAtSea() && mockDrill && (_mockFleetPick == null || _mockFleetPick.Count == 0))
             {
-                // Composed ashore, sailed out since — the phantoms have no hulls to ride.
+                // At sea the phantoms must sail something — the shipyard lays their fleet down.
                 args.IsEnabled = false;
-                args.Tooltip = new TextObject("{=TB_tip_mock_sea}Phantoms do not sail yet — make "
-                    + "port or drop anchor ashore to drill against a mock enemy.");
+                args.Tooltip = new TextObject("{=TB_tip_mock_no_fleet}The phantoms have no hulls — "
+                    + "lay down their fleet first (the shipyard option above).");
                 return true;
             }
-            if (MainPartyAtSea() && MobileParty.MainParty.Ships.Count < 2)
+            if (MainPartyAtSea() && !mockDrill && MobileParty.MainParty.Ships.Count < 2)
             {
                 // Divided ashore, sailed out since — a fleet of one cannot fight itself.
                 args.IsEnabled = false;
@@ -805,6 +827,8 @@ namespace TrainingBattles
             _pickedTeam = null;
             _mockEnemyTeam = null;
             _chosenSceneId = null;
+            _shipDividePick = null;
+            _mockFleetPick = null;
             try { GameMenu.ExitToLast(); } catch { }
         }
 
@@ -1189,6 +1213,163 @@ namespace TrainingBattles
             _returnToMenuPending = true;
         }
 
+        // ------------------------------ the ship windows ------------------------------
+
+        /// <summary>"Divide the ships" shows only where it means something: afloat, a fleet of
+        /// two or more, the split drill on. Without a divided company it sits disabled — the
+        /// default split follows the men, so the men must be divided first.</summary>
+        private bool ShipDivideCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableSplitTraining) return false;
+            if (!MainPartyAtSea() || MobileParty.MainParty.Ships.Count < 2) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            var shipCount = MobileParty.MainParty.Ships.Count;
+            string now;
+            if (_pickedTeam == null || _pickedTeam.TotalHealthyCount < 1)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_ships_first}Divide the men first — the "
+                    + "fleet divides around the halves.");
+                now = "divide the men first";
+            }
+            else if (_shipDividePick != null)
+            {
+                var crossing = CountValidManualCrossings();
+                now = crossing + " of " + shipCount + " hulls opposite (your pick)";
+                args.Tooltip = new TextObject("{=TB_tip_ships_set}Your hulls, your call — these "
+                    + "very ships sail opposite. Select again to change the division, or reset "
+                    + "it to follow the men.");
+            }
+            else
+            {
+                now = "following the men";
+                args.Tooltip = new TextObject("{=TB_tip_ships}Choose WHICH hulls the opposing "
+                    + "half sails. Left alone, the fleet divides itself in proportion to the "
+                    + "men — the flagship always stays with you.");
+            }
+            MBTextManager.SetTextVariable("TB_SHIPS_NOW", now, false);
+            return true;
+        }
+
+        /// <summary>How many hulls of the manual pick still exist in the live fleet (ships can be
+        /// sold or sunk between the pick and the muster) — the menu label's honest number.</summary>
+        private int CountValidManualCrossings()
+        {
+            var count = 0;
+            try
+            {
+                if (_shipDividePick == null) return 0;
+                foreach (var ship in _shipDividePick)
+                    if (MobileParty.MainParty.Ships.Contains(ship)) count++;
+            }
+            catch { }
+            return count;
+        }
+
+        private void OpenShipDivide()
+        {
+            try
+            {
+                var main = MobileParty.MainParty;
+                if (_pickedTeam == null || main.Ships.Count < 2) return;
+                var ships = new List<Ship>(main.Ships);
+                var flagship = 0;
+                for (var i = 1; i < ships.Count; i++)
+                {
+                    try { if (ships[i].FlagshipScore > ships[flagship].FlagshipScore) flagship = i; }
+                    catch { }
+                }
+                var opponentMen = _pickedTeam.TotalHealthyCount;
+                var yourMen = Math.Max(main.MemberRoster.TotalHealthyCount - opponentMen, 1);
+                var vm = new UI.ShipDivideVM(ships, flagship, yourMen, opponentMen, _shipDividePick,
+                    pick =>
+                    {
+                        _shipDividePick = pick;
+                        TbLog.Info("ships", pick == null
+                            ? "divide: following the men"
+                            : "divide: " + pick.Count + " hulls picked to cross");
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    },
+                    () =>
+                    {
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    });
+                UI.TrainingWindow.Open("TrainingBattlesShipDivide", vm, vm.ExecuteCancel);
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the ship-divide window could not open (" + ex.Message + ")."));
+            }
+        }
+
+        /// <summary>The phantom shipyard's door: afloat with a composed mock enemy. Ashore the
+        /// phantoms march on their own feet and the option stays out of the way.</summary>
+        private bool MockFleetCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableMockEnemyTraining) return false;
+            if (!MainPartyAtSea()) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Manage;
+            string now;
+            if (_mockEnemyTeam == null || _mockEnemyTeam.TotalHealthyCount < 1)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_mock_fleet_first}Compose the mock enemy "
+                    + "first — the fleet is laid down for its men.");
+                now = "compose the enemy first";
+            }
+            else if (_mockFleetPick != null && _mockFleetPick.Count > 0)
+            {
+                var hulls = 0;
+                foreach (var pair in _mockFleetPick) hulls += pair.Value;
+                now = hulls + (hulls == 1 ? " hull" : " hulls") + " laid down";
+                args.Tooltip = new TextObject("{=TB_tip_mock_fleet_set}The phantom fleet stands "
+                    + "ready on the slips. Select again to rework it.");
+            }
+            else
+            {
+                now = "no hulls yet";
+                args.Tooltip = new TextObject("{=TB_tip_mock_fleet}Give the phantoms their ships — "
+                    + "any culture's hulls, with fittings if you wish. At sea the mock enemy "
+                    + "cannot fight without them.");
+            }
+            MBTextManager.SetTextVariable("TB_MOCK_FLEET_NOW", now, false);
+            return true;
+        }
+
+        private void OpenFleetCompose()
+        {
+            try
+            {
+                var phantomMen = _mockEnemyTeam?.TotalHealthyCount ?? 0;
+                if (phantomMen < 1) return;
+                var vm = new UI.FleetComposeVM(phantomMen, _mockFleetPick, _mockFleetTier,
+                    (pick, tier) =>
+                    {
+                        _mockFleetPick = pick.Count > 0 ? pick : null;
+                        _mockFleetTier = tier;
+                        var hulls = 0;
+                        foreach (var pair in pick) hulls += pair.Value;
+                        TbLog.Info("ships", "phantom fleet: " + hulls + " hulls, tier " + tier);
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    },
+                    () =>
+                    {
+                        UI.TrainingWindow.Close();
+                        try { GameMenu.SwitchToMenu(MenuId); } catch { }
+                    });
+                UI.TrainingWindow.Open("TrainingBattlesFleetCompose", vm, vm.ExecuteCancel);
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the shipyard window could not open (" + ex.Message + ")."));
+            }
+        }
+
         // ------------------------------ the battle ------------------------------
 
         private void BeginBattle(bool playerDefends)
@@ -1224,19 +1405,19 @@ namespace TrainingBattles
                 InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + reason));
                 return;
             }
-            // The sea's own gates, checked before anything is touched: a mock enemy has no hulls
-            // to sail (phantom fleets are the next patch's feature), and a fleet of one cannot
-            // fight itself. The menu conditions already say both — these catch a pick carried
-            // from shore out onto the water.
+            // The sea's own gates, checked before anything is touched: at sea a mock enemy needs
+            // a laid-down phantom fleet (a shipless side loses the naval event instantly), and
+            // a fleet of one cannot fight itself. The menu conditions already say both — these
+            // catch a pick carried from shore out onto the water.
             if (MainPartyAtSea())
             {
-                if (mock != null)
+                if (mock != null && (_mockFleetPick == null || _mockFleetPick.Count == 0))
                 {
                     InformationManager.DisplayMessage(new InformationMessage(
-                        "Training Battles: phantoms do not sail yet — drill the mock enemy ashore."));
+                        "Training Battles: the phantoms have no hulls — lay down their fleet first."));
                     return;
                 }
-                if (MobileParty.MainParty.Ships.Count < 2)
+                if (mock == null && MobileParty.MainParty.Ships.Count < 2)
                 {
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: a sea drill needs at least two hulls to divide."));
@@ -1327,14 +1508,37 @@ namespace TrainingBattles
             // morale worse from the opposite bank (Anton's dim-eagles catch, 2026.07.25).
             MatchOpponentMorale(main, opponent);
 
-            // The sea drill divides the FLEET as the men were divided: proportional to each
-            // side's healthy crew, the flagship never crossing. Every hull's health is
-            // snapshotted first — the aftermath re-owns and re-heals them all, so a drill can
-            // sink nothing for keeps. (A dedicated "divide the ships" picker is the next
-            // release's must — this auto-split is V1's honest stand-in.)
+            // The sea drill divides the FLEET as the men were divided — the player's own hand
+            // (the ship-divide window) or, left alone, proportional to each side's healthy
+            // crew — the flagship never crossing. Every OWN hull's health is snapshotted first:
+            // the aftermath re-owns and re-heals them all, so a drill can sink nothing for
+            // keeps. A MOCK sea drill splits nothing — the whole fleet stays with the player
+            // (snapshotted all the same) and the phantoms sail CONJURED hulls, minted from the
+            // shipyard composition and dissolved afterward.
             _fleetSnapshot.Clear();
-            if (MainPartyAtSea() && mock == null)
-                SplitFleet(main, opponent);
+            if (MainPartyAtSea())
+            {
+                if (mock == null)
+                {
+                    SplitFleet(main, opponent);
+                }
+                else
+                {
+                    SnapshotOwnFleet(main);
+                    BuildPhantomFleet(opponent);
+                    if (opponent.Ships.Count == 0)
+                    {
+                        // The shipyard failed — a shipless side loses the naval event instantly,
+                        // so stand down honestly rather than start a rigged fight.
+                        DestroyOpponentParty(opponent);
+                        _heroRolesBefore.Clear();
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "Training Battles: the phantom fleet could not be launched."));
+                        return;
+                    }
+                }
+            }
+            _shipDividePick = null; // the division served its drill; the next one starts fresh
 
             // The men are paid BEFORE the first bruise; an abort refunds the chest in full.
             if (cost > 0)
@@ -1496,6 +1700,9 @@ namespace TrainingBattles
         /// roster bookkeeping on both parties.</summary>
         private void SplitFleet(MobileParty main, MobileParty opponent)
         {
+            // The player's own division (the ship-divide window) outranks the arithmetic —
+            // validated against the live fleet, since hulls can be sold or sunk between the
+            // pick and the drill; a pick gone stale falls back to the auto split, said aloud.
             // The Owner setter edits the party's LIVE ship list — copy before the loop, the
             // same footgun as TroopRoster.GetTroopRoster.
             var ships = new List<Ship>(main.Ships);
@@ -1509,8 +1716,9 @@ namespace TrainingBattles
                 try { if (ships[i].FlagshipScore > ships[flagship].FlagshipScore) flagship = i; }
                 catch { }
             }
-            var crossing = FleetSplitMath.OpponentShips(capacities, flagship,
-                main.MemberRoster.TotalHealthyCount, opponent.MemberRoster.TotalHealthyCount);
+            var crossing = ManualCrossingIndices(ships, flagship)
+                ?? FleetSplitMath.OpponentShips(capacities, flagship,
+                    main.MemberRoster.TotalHealthyCount, opponent.MemberRoster.TotalHealthyCount);
             foreach (var index in crossing)
                 ships[index].Owner = opponent.Party;
             // The event's shipless-side check and the mission's spawners read the party lists
@@ -1521,6 +1729,152 @@ namespace TrainingBattles
                 "Training Battles: the fleet divides with the men — "
                 + crossing.Count + (crossing.Count == 1 ? " hull" : " hulls") + " opposite, "
                 + (ships.Count - crossing.Count) + " under your banner."));
+        }
+
+        /// <summary>The ship-divide window's pick, as indices into the live fleet — or null when
+        /// no pick stands (follow the men) or it went stale enough to be no division at all
+        /// (all its hulls gone, or somehow the whole fleet). The flagship never crosses even if
+        /// a stale reference tries.</summary>
+        private List<int>? ManualCrossingIndices(List<Ship> ships, int flagship)
+        {
+            if (_shipDividePick == null) return null;
+            var indices = new List<int>();
+            foreach (var ship in _shipDividePick)
+            {
+                var index = ships.IndexOf(ship);
+                if (index >= 0 && index != flagship && !indices.Contains(index)) indices.Add(index);
+            }
+            if (indices.Count == 0 || indices.Count >= ships.Count)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the picked hulls are no longer in the fleet — it divides "
+                    + "with the men instead."));
+                return null;
+            }
+            if (indices.Count < _shipDividePick.Count)
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: " + (_shipDividePick.Count - indices.Count)
+                    + " picked hull(s) left the fleet — the rest sail as chosen."));
+            return indices;
+        }
+
+        /// <summary>The mock sea drill's snapshot: nothing crosses, but the player's own hulls
+        /// can still be hurt or "sunk" by the phantoms — remember every hull's health so
+        /// <see cref="RestoreFleet"/> can raise and heal the whole fleet afterward.</summary>
+        private void SnapshotOwnFleet(MobileParty main)
+        {
+            try
+            {
+                foreach (var ship in new List<Ship>(main.Ships))
+                    _fleetSnapshot.Add((ship, ship.HitPoints, ship.SailHitPoints));
+            }
+            catch { }
+        }
+
+        /// <summary>Launches the phantom fleet: every hull of the shipyard composition conjured
+        /// fresh (<c>new Ship(hull)</c> — the same recipe vanilla's naval quests use), dressed
+        /// per slot with the best upgrade piece the chosen fittings tier affords
+        /// (<see cref="PhantomFleetMath.UpgradePickIndex"/>, deterministic), marked quest-bound
+        /// and untradeable, and handed to the mock party. The hulls are dissolved by
+        /// <see cref="SinkPhantomFleet"/> on every exit road — they must never reach the
+        /// player's fleet or the save's live world.</summary>
+        private void BuildPhantomFleet(MobileParty opponent)
+        {
+            if (_mockFleetPick == null) return;
+            var launched = 0;
+            foreach (var pair in _mockFleetPick)
+            {
+                var hull = pair.Key;
+                if (hull == null) continue;
+                for (var i = 0; i < pair.Value; i++)
+                {
+                    try
+                    {
+                        var ship = new Ship(hull);
+                        ship.IsTradeable = false;
+                        ship.IsUsedByQuest = true;
+                        FitPhantomShip(ship, _mockFleetTier);
+                        ship.Owner = opponent.Party;
+                        launched++;
+                    }
+                    catch { /* one hull failing must not scuttle the fleet */ }
+                }
+            }
+            try { opponent.IsCurrentlyAtSea = true; } catch { }
+            TbLog.Info("ships", "phantom fleet launched: " + launched + " hulls, tier " + _mockFleetTier);
+            if (launched > 0)
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "Training Battles: the phantom fleet stands out to sea — "
+                    + launched + (launched == 1 ? " hull" : " hulls") + "."));
+        }
+
+        /// <summary>Dresses one conjured hull's slots for the fittings tier: per slot, the best
+        /// matching piece whose harbor level the tier affords. Tier 0 leaves the hull bare.</summary>
+        private static void FitPhantomShip(Ship ship, int tier)
+        {
+            if (tier <= 0) return;
+            try
+            {
+                foreach (var slot in ship.ShipHull.AvailableSlots)
+                {
+                    try
+                    {
+                        var pieces = slot.Value.MatchingPieces;
+                        if (pieces == null || pieces.Count == 0) continue;
+                        var levels = new List<int>(pieces.Count);
+                        foreach (var piece in pieces)
+                            levels.Add(piece?.RequiredPortLevel ?? int.MaxValue);
+                        var pick = PhantomFleetMath.UpgradePickIndex(levels, tier);
+                        if (pick >= 0) ship.EquipUpgradePiece(slot.Key, pieces[pick]);
+                    }
+                    catch { /* a slot that will not dress sails bare */ }
+                }
+                ship.HitPoints = ship.MaxHitPoints;       // fittings raise the ceilings —
+                ship.SailHitPoints = ship.MaxSailHitPoints; // a phantom sails at full strength
+            }
+            catch { }
+        }
+
+        /// <summary>The phantoms' send-off: every hull still owned by the mock party is orphaned
+        /// (Owner = null — exactly what vanilla's own "sinking" leaves behind), so a conjured
+        /// ship can never linger in the save or be reclaimed into the player's fleet. Run before
+        /// the mock party is destroyed, on every exit road including the stale-party recovery.</summary>
+        private static void SinkPhantomFleet(MobileParty party)
+        {
+            try
+            {
+                var ships = new List<Ship>(party.Ships); // Owner writes mutate the live list
+                foreach (var ship in ships)
+                {
+                    try { ship.Owner = null; } catch { }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>The mock sea drill's capture sweep: any hull in the player's fleet that was
+        /// NOT there when the drill began is a "captured" phantom — vanilla's victory path (or a
+        /// mod's) handed it over; it dissolves like its crew. The reward model already forbids
+        /// ship transfers while training; this is the belt to those suspenders.</summary>
+        private static void SweepForeignHulls(HashSet<Ship> ownHulls)
+        {
+            try
+            {
+                var swept = 0;
+                foreach (var ship in new List<Ship>(MobileParty.MainParty.Ships))
+                {
+                    if (ownHulls.Contains(ship)) continue;
+                    try { ship.Owner = null; swept++; } catch { }
+                }
+                if (swept > 0)
+                {
+                    MobileParty.MainParty.SetNavalVisualAsDirty();
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: " + swept + " captured phantom hull"
+                        + (swept == 1 ? "" : "s") + " dissolved — there are no spoils in sparring."));
+                }
+            }
+            catch { }
         }
 
         /// <summary>Every hull comes home whole: re-owned by the main party (whether it crossed
@@ -1602,7 +1956,14 @@ namespace TrainingBattles
         }
 
         /// <summary>Undoes <see cref="ApplyOpponentLook"/>'s clan changes, whether this session made
-        /// them or a crashed one did (the restore data rides in the save).</summary>
+        /// them or a crashed one did (the restore data rides in the save) — and then REBUILDS the
+        /// map icon of every party of that clan. Party visuals are built once and never refreshed
+        /// on a clan-banner change (vanilla never mutates clan banners, so no refresh path exists):
+        /// a looter party the world spawned WHILE the drill ran — the hideout replenisher answers
+        /// the temp party's destruction, and map time passes around the drill's edges — kept our
+        /// orange training banner until a save/load rebuilt it (Anton's coast looters, 2026.07.25).
+        /// SetVisualAsDirty is the engine's own on-load rebuild call, so this is exactly that heal,
+        /// run at once.</summary>
         private void RestoreOpponentClanLook()
         {
             if (string.IsNullOrEmpty(_clanRestoreData)) return;
@@ -1617,6 +1978,14 @@ namespace TrainingBattles
                         if (uint.TryParse(parts[1], out var color)) clan.Color = color;
                         if (uint.TryParse(parts[2], out var color2)) clan.Color2 = color2;
                         if (parts[3].Length > 0) clan.Banner = new Banner(parts[3]);
+                        foreach (var party in MobileParty.All)
+                        {
+                            try
+                            {
+                                if (party?.ActualClan == clan) party.Party.SetVisualAsDirty();
+                            }
+                            catch { }
+                        }
                         break;
                     }
                 }
@@ -1857,8 +2226,15 @@ namespace TrainingBattles
             var opponent = _opponentParty;
             if (opponent != null)
             {
-                if (_opponentIsMockEnemy) MergeMockPrisonersHome(opponent); // phantoms dissolve, our men come home
-                else MergePartyBackIntoMain(opponent);
+                if (_opponentIsMockEnemy)
+                {
+                    SinkPhantomFleet(opponent); // conjured hulls dissolve with their crews
+                    MergeMockPrisonersHome(opponent); // phantoms dissolve, our men come home
+                }
+                else
+                {
+                    MergePartyBackIntoMain(opponent);
+                }
                 DestroyOpponentParty(opponent);
             }
             _opponentIsMockEnemy = false;
@@ -1967,6 +2343,12 @@ namespace TrainingBattles
             _chargedCost = 0; // the drill happened — the chest is spent
             Models.TrainingBattlesSceneModel.PendingSceneId = null; // never read = never armed again
             RestoreOpponentClanLook(); // the lender clan gets its own colors back
+            // Who the fleet truly was before the drill — read BEFORE RestoreFleet clears the
+            // snapshot; the mock sea drill's capture sweep below tells own from phantom by it.
+            var ownHulls = new HashSet<Ship>();
+            foreach (var entry in _fleetSnapshot)
+                if (entry.Ship != null) ownHulls.Add(entry.Ship);
+            var wasSeaDrill = ownHulls.Count > 0;
             RestoreFleet(); // every hull re-owned and re-healed, sunk or "captured" or crossed
 
             var mainSnapshot = _mainSnapshot;
@@ -1984,10 +2366,20 @@ namespace TrainingBattles
             //    dissolve with their party; only its prisoner wagons (ours, if anyone) come home.
             if (opponent != null)
             {
-                if (opponentWasMock) MergeMockPrisonersHome(opponent);
-                else MergePartyBackIntoMain(opponent);
+                if (opponentWasMock)
+                {
+                    SinkPhantomFleet(opponent); // conjured hulls dissolve with their crews
+                    MergeMockPrisonersHome(opponent);
+                }
+                else
+                {
+                    MergePartyBackIntoMain(opponent);
+                }
                 DestroyOpponentParty(opponent);
             }
+            // A mock SEA drill can end with vanilla handing the player "captured" phantom
+            // hulls — anything in the fleet that was not there before the drill dissolves.
+            if (opponentWasMock && wasSeaDrill) SweepForeignHulls(ownHulls);
 
             // 1b. A won field battle makes the losers' wounded the winner's PRISONERS in vanilla.
             //     The reward model forbids that during training, but if any of our own slipped into
@@ -2367,8 +2759,10 @@ namespace TrainingBattles
                 {
                     // Its men were never ours — merging them home would MINT free troops. The
                     // phantoms dissolve; only its prisoner wagons (ours, if anyone) walk back.
+                    // Its HULLS were never ours either: they are conjured phantom ships, and
+                    // reclaiming them would mint a free fleet — they sink with their party.
                     MergeMockPrisonersHome(party);
-                    ReclaimShips(party); // belt and braces — mock drills never lend hulls today
+                    SinkPhantomFleet(party);
                     DestroyOpponentParty(party);
                     InformationManager.DisplayMessage(new InformationMessage(
                         "Training Battles: an interrupted mock drill was found — the phantom enemy has dissolved."));

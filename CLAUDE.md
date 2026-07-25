@@ -38,10 +38,13 @@ as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; 
 players simply don't drill). `EnableMockEnemyTraining` (default ON since v9 2026.07.25, the
 one MCM "Features" toggle) adds the second drill mode: compose a phantom enemy of any
 culture/mix from synthetic troop pools and fight the whole company against it — the test
-bench for the battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 (branch
-`naval-training`, awaiting playtest) — the fleet auto-splits proportional to crew, flagship
-stays with the player, every hull re-owned and re-healed afterward; the ship-divide GUI is
-the NEXT release's must (Anton). Later: garrison training at owned fiefs.
+bench for the battle pipeline. NAVAL (War Sails): the split drill works AT SEA since 2026.07.25 —
+the fleet divides with the men (proportional to crew, flagship pinned) or AT THE PLAYER'S WORD
+since the same day's second stroke: the SHIP-DIVIDE window, the mod's first custom Gauntlet
+GUI (no Harmony — see `UI/` below). The mock enemy SAILS too: the phantom shipyard window lays
+its fleet down (any culture's hulls, fittings tiers), the hulls conjured before the battle and
+sunk on every exit road. Every own hull re-owned and re-healed afterward. Awaiting playtest.
+Later: garrison training at owned fiefs (siege gear picker = the same window frame).
 
 ## Who does what — and how we work
 
@@ -94,6 +97,8 @@ src/TrainingBattles.Core/     netstandard2.0 — pure logic, fully unit-tested:
                               the surgeon's verdicts (JudgeFallen: die/wound/shrug; StayWounded),
                               the XP officer's kept/removed split (bonus XP past 100%, cap 200)
   ScoutingMath.cs             the scouting duel's ratio bar (RequiredSkill = ceil, OutScouts)
+  PhantomFleetMath.cs         the phantom fleet's fittings pick: per slot the best piece the
+                              chosen harbor tier affords (deterministic)
   TrainingCooldown.cs         the once-per-N-hours clock (0 = unlimited)
   FleetSplitMath.cs           the sea drill's fleet division: greedy, proportional to each
                               side's crew, flagship pinned to the player, both sides sail
@@ -147,8 +152,20 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               EffectiveBattleHour: the menus' pick is ONE battle (cleared at
                               map-event end), only MCM writes the standing config key (v11)
   Mcm/                        McmBridge + settings — the ImmersiveAI soft-dependency pattern
+  UI/                         the mod's CUSTOM GAUNTLET WINDOWS (since 2026.07.25 — NO Harmony:
+                              GauntletLayer + LoadMovie over a ViewModel, the ImmersiveAI
+                              chat-window pattern): TrainingWindow.cs (the shared modal frame —
+                              one window at a time over the top screen, Escape polled from
+                              SubModule's tick; REUSE IT for future pickers like siege gear),
+                              ShipDivideVM/ShipDivideRowVM (which hulls sail opposite in the sea
+                              drill; confirm-untouched = null = "follow the men"),
+                              FleetComposeVM/FleetComposeRowVM (the phantom shipyard: hull
+                              tallies from every Culture.AvailableShipHulls, cap 12, fittings
+                              tier over ShipSlot.MatchingPieces/RequiredPortLevel)
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)
+module/GUI/Prefabs/           the windows' prefab XMLs (native brushes/sprites only, no own
+                              assets) — deploy.ps1 AND package.ps1 ship this folder
 tools/deploy.ps1              build + install as "Training Battles (dev)" into the game's
                               Modules folder (module id TrainingBattles.Dev, safe beside
                               the Workshop copy — enable only ONE at a time)

@@ -27,4 +27,13 @@ Copy-Item (Join-Path $outDir "TrainingBattles.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "TrainingBattles.Core.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "Newtonsoft.Json.dll") $binDir -Force -ErrorAction SilentlyContinue
 
+# GUI assets (the custom windows' prefab XMLs) ride along. Remove-then-copy: Copy-Item with a
+# folder source and an existing folder destination would nest a GUI\GUI inside it instead.
+$guiSource = Join-Path $repoRoot "module\GUI"
+if (Test-Path $guiSource) {
+    $guiDest = Join-Path $moduleDir "GUI"
+    if (Test-Path $guiDest) { Remove-Item $guiDest -Recurse -Force }
+    Copy-Item $guiSource $guiDest -Recurse
+}
+
 Write-Host "Deployed to $moduleDir as 'Training Battles (dev)' - enable it in the launcher."
