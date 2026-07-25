@@ -90,6 +90,16 @@ namespace TrainingBattles
         private TroopRoster? _prisonSnapshot;      // main party's prisoners before the fight — to spot
                                                    // own men who ended up "captured" by the drill
         private string? _chosenSceneId;            // the battlefield the player picked for the drill
+        private readonly Dictionary<CharacterObject, int> _battleDead = new Dictionary<CharacterObject, int>();
+                                                   // per-troop TRUE dead of the drill, harvested
+                                                   // from the map event's own DiedInBattle rosters
+                                                   // at event end — the ONLY honest source: the
+                                                   // roster diff cannot tell a dead man from a
+                                                   // KO'd one VANISHED by the no-capture guard
+                                                   // (empty captor list = removed, received by
+                                                   // nobody)
+        private bool _battleDeadHarvested;         // false = harvest never ran; the filter then
+                                                   // falls back to the roster diff (conservative)
         private readonly Dictionary<Hero, int> _heroHpBefore = new Dictionary<Hero, int>();
                                                    // heroes' health walking INTO the drill — the
                                                    // restore ceiling (training is not a hospital)
@@ -149,6 +159,11 @@ namespace TrainingBattles
                 {
                     if (party != _opponentParty.Party) continue;
                     _pendingPlayerWon = mapEvent.WinningSide == mapEvent.PlayerSide;
+                    // The event dies here — read its DiedInBattle books NOW, while they exist.
+                    // This fires for every finalize road: trigger (a) naturally, and (b)/(c)
+                    // mid-FinishTrainingBattle (its PlayerEncounter.Finish ends the event
+                    // BEFORE the aftermath's arithmetic runs, so the harvest is always fresh).
+                    HarvestBattleDead(mapEvent);
                     _aftermathReady = true;
                     return;
                 }
@@ -157,6 +172,38 @@ namespace TrainingBattles
             {
                 _aftermathReady = true;
             }
+        }
+
+        /// <summary>Per-troop TRUE dead of the drill, from the event's own accounting
+        /// (MapEventParty.DiedInBattle — filled by OnTroopKilled for exactly the men whose
+        /// survival roll failed). The roster diff cannot supply this: vanilla hands the
+        /// DEFEATED side's downed men to the winners as prisoners, and our no-capture guard
+        /// empties the captor list — so those men are REMOVED and received by nobody,
+        /// indistinguishable on the roster from the truly dead (Anton's lost drill: "130
+        /// fell" from ~10 real KIA).</summary>
+        private void HarvestBattleDead(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
+        {
+            try
+            {
+                _battleDead.Clear();
+                foreach (var side in new[] { mapEvent.AttackerSide, mapEvent.DefenderSide })
+                {
+                    if (side?.Parties == null) continue;
+                    foreach (var eventParty in side.Parties)
+                    {
+                        var died = eventParty?.DiedInBattle;
+                        if (died == null) continue;
+                        foreach (var el in died.GetTroopRoster())
+                        {
+                            if (el.Character == null || el.Character.IsHero) continue;
+                            _battleDead.TryGetValue(el.Character, out var have);
+                            _battleDead[el.Character] = have + el.Number;
+                        }
+                    }
+                }
+                _battleDeadHarvested = true;
+            }
+            catch { /* the filter falls back to the roster diff — never worse than before */ }
         }
 
         public override void SyncData(IDataStore dataStore)
@@ -182,6 +229,8 @@ namespace TrainingBattles
             _heroHpBefore.Clear();
             _chargedCost = 0;
             _fleetSnapshot.Clear();
+            _battleDead.Clear();
+            _battleDeadHarvested = false;
             _playerDefendsChoice = false; // every session opens on the attack, like the old default
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
             RecoverStaleOpponentParties();
@@ -1285,6 +1334,8 @@ namespace TrainingBattles
             _checkResults = true;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            _battleDead.Clear();
+            _battleDeadHarvested = false;
 
             // Arm the chosen battlefield (if the player picked one and it still fits where the
             // party now stands). The scene model gives it out on the next scene query — which is
@@ -1782,6 +1833,8 @@ namespace TrainingBattles
             _battleRan = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            _battleDead.Clear();
+            _battleDeadHarvested = false;
             _opponentParty = null;
             _mainSnapshot = null;
             _opponentSnapshot = null;
@@ -1980,7 +2033,8 @@ namespace TrainingBattles
             var report = new StringBuilder();
             report.AppendLine("Training drill report — " + CampaignTime.Now
                 + " | XpKept " + _config.XpKeptPercent + "% | Wounded " + _config.WoundedPercent + "% | playerWon " + playerWon);
-            report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | newWounded | casualties | saveChance | woundedFinal | woundedAdjust | xpAdjust");
+            report.AppendLine("harvest " + (_battleDeadHarvested ? "event-DiedInBattle" : "roster-diff fallback"));
+            report.AppendLine("stack | before N/W/xp | after N/W/xp | fallen | died | newWounded | casualties | saveChance | woundedFinal | woundedAdjust | xpAdjust");
             if (mainSnapshot != null && opponentSnapshot != null)
             {
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
@@ -2005,11 +2059,19 @@ namespace TrainingBattles
                     // sparring, they shrug it off.
                     var fallen = pair.Value.Number - now.Number;
                     var newWounded = Math.Max(0, now.Wounded - pair.Value.Wounded);
-                    var casualties = Math.Max(fallen, 0);
+                    // The knob's input is the event's OWN death book, not the roster hole: the
+                    // hole also swallows the defeated side's KO'd men (the no-capture guard
+                    // leaves their prisoner-distribution without a receiver — see
+                    // HarvestBattleDead). Clamped to the hole; roster-diff fallback if the
+                    // harvest never ran.
+                    _battleDead.TryGetValue(character, out var trulyDead);
+                    var casualties = _battleDeadHarvested
+                        ? Math.Min(trulyDead, Math.Max(fallen, 0))
+                        : Math.Max(fallen, 0);
                     var saveChance = 0.0;
                     var woundedFinal = 0;
                     var woundedAdjust = 0;
-                    if (casualties > 0 || newWounded > 0)
+                    if (casualties > 0 || newWounded > 0 || fallen > 0)
                     {
                         saveChance = SurgeonSaveChance(main.Party, character);
                         woundedFinal = AftermathMath.WoundedAmongFallen(
@@ -2023,7 +2085,9 @@ namespace TrainingBattles
                             main.MemberRoster.AddToCounts(character, 0, false, woundedAdjust);
                         restored += Math.Max(fallen, 0);
                         casualtiesTotal += casualties;
-                        batteredTotal += newWounded;
+                        // Battered = everyone down who did NOT die: the roster-wounded AND the
+                        // vanished would-be-captured (restored healthy above).
+                        batteredTotal += newWounded + (Math.Max(fallen, 0) - casualties);
                         woundedTotal += woundedFinal;
                         CreditSurgeon(main, character, casualties);
                     }
@@ -2044,7 +2108,7 @@ namespace TrainingBattles
                         report.AppendLine(character.Name + " | "
                             + pair.Value.Number + "/" + pair.Value.Wounded + "/" + pair.Value.Xp + " | "
                             + now.Number + "/" + now.Wounded + "/" + now.Xp + " | "
-                            + fallen + " | " + newWounded + " | " + casualties + " | "
+                            + fallen + " | " + trulyDead + " | " + newWounded + " | " + casualties + " | "
                             + saveChance.ToString("0.00") + " | " + woundedFinal + " | "
                             + woundedAdjust + " | " + xpAdjust);
                     }
