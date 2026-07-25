@@ -15,7 +15,8 @@ namespace TrainingBattles.Models
     ///
     /// Vanilla builds every battle mission's sky by calling <see cref="GetAtmosphereModel"/> while
     /// filling the MissionInitializerRecord (MenuHelper and SandBoxMissions, verified in the
-    /// decompiled corpus). So: when the player pinned an hour (ModConfig.BattleTimeOfDay) AND a
+    /// decompiled corpus). So: when an hour is pinned (<see cref="EffectiveBattleHour"/> — the
+    /// one-battle menu pick, else the MCM standing default) AND a
     /// player map event is live (that call happens only when a battle mission is opening — sieges
     /// and sea battles included), the campaign atmosphere is swapped for the same fixed-hour
     /// preset vanilla's CUSTOM BATTLE uses (BannerlordMissions.CreateAtmosphereInfoForMission).
@@ -27,6 +28,19 @@ namespace TrainingBattles.Models
     /// </summary>
     public sealed class TrainingBattlesMapWeatherModel : MapWeatherModel
     {
+        /// <summary>The ONE-BATTLE hour pick (Anton, 2026.07.25: a menu pick must never change
+        /// the standing default — it silently pinned his sky to noon). Set by the muster's and
+        /// the encounter menu's "Choose the time of day", cleared when the player's map event
+        /// ends (and at session launch); never saved. Null = no pick (the MCM standing default
+        /// rules); -1 = the campaign clock for the next battle even if the default pins an hour;
+        /// else one of ModConfig.SupportedBattleHours.</summary>
+        public static int? PendingBattleHour;
+
+        /// <summary>The hour the NEXT battle actually opens at: the one-battle pick when one is
+        /// armed, else the config's standing default (MCM). -1 = campaign clock.</summary>
+        public static int EffectiveBattleHour(ModConfig config) =>
+            PendingBattleHour ?? config.BattleTimeOfDay;
+
         private readonly ModConfig _config;
         private MapWeatherModel? _fallback;
 
@@ -41,7 +55,7 @@ namespace TrainingBattles.Models
 
         public override AtmosphereInfo GetAtmosphereModel(CampaignVec2 position)
         {
-            var hour = _config.BattleTimeOfDay;
+            var hour = EffectiveBattleHour(_config);
             if (hour >= 0 && !TrainingBattleBehavior.TrainingActive && MapEvent.PlayerMapEvent != null)
             {
                 var preset = AtmospherePresets.For(hour);

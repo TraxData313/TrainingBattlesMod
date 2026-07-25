@@ -10,7 +10,7 @@
     </GetItem>
     <UpdateItem>
         <ModuleFolder Value="C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\dist\TrainingBattles"/>
-        <ChangeNotes Value="v1.1.1 - Three drill fixes: the opposing half now fights at YOUR party's morale (it used to walk in demoralized and rout early); losing a drill can no longer take you prisoner or strand you at sea; and the wounded now follow the REAL battle deaths only - knocked-out men shrug it off, so a lost drill no longer wounds half the company." />
+        <ChangeNotes Value="v1.2.0 - THE OFFICERS UPDATE. Your officers now own the drill: the Quartermaster's Leadership sets how much XP the troops keep (a master earns BONUS XP; the First Mate takes over at sea), the Surgeon's Medicine decides the fallen's fate (a few wake wounded - and in unlucky cases a man truly dies; a good doctor helps a lot, and deaths can be turned fully off), and choosing the battlefield or a non-daylight hour in a REAL battle must now be EARNED by out-scouting the enemy (the Navigator at sea; full daylight and the campaign clock always free). Mock-enemy training is on by default; sea drills cost double wages; 'Choose the time of day' from a menu now applies to ONE battle only - the standing default lives in MCM; every officer got its own MCM group; and a debug log ledger for easy bug reports." />
         <Tags>
             <Tag Value="Utility" />
             <Tag Value="Native" />

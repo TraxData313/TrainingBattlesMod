@@ -13,7 +13,7 @@ namespace TrainingBattles
     {
         /// <summary>The config format's version stamp, so a later release can migrate defaults
         /// without clobbering hand-edits. Do not edit.</summary>
-        public int ConfigVersion { get; set; } = 10;
+        public int ConfigVersion { get; set; } = 11;
 
         /// <summary>The split-army drill: divide your own company in two and fight yourself —
         /// THE CORE OF THE MOD, on by default and deliberately NOT in the MCM menu (Anton,
@@ -61,14 +61,16 @@ namespace TrainingBattles
         public double RealDeathPercentAtMedicine300 { get; set; } = 0.1;
 
         /// <summary>KIA→wounded: of the would-have-died who live, this percent wakes truly
-        /// WOUNDED; the rest shrug it off. Default 30% with no doctor, 5% at Medicine 300.</summary>
-        public double KiaWoundedPercentAtMedicine0 { get; set; } = 30.0;
+        /// WOUNDED; the rest shrug it off. Default 20% with no doctor (Anton's playtest retune,
+        /// 2026.07.25 — was 30), 5% at Medicine 300.</summary>
+        public double KiaWoundedPercentAtMedicine0 { get; set; } = 20.0;
         public double KiaWoundedPercentAtMedicine300 { get; set; } = 5.0;
 
         /// <summary>Wounded→wounded: of the men merely DOWNED in the drill (battle-wounded and
         /// knocked out — they never died), this percent STAYS wounded afterward; the rest are
-        /// patched up on the spot. Default 15% with no doctor, 1% at Medicine 300.</summary>
-        public double DownedWoundedPercentAtMedicine0 { get; set; } = 15.0;
+        /// patched up on the spot. Default 10% with no doctor (retuned from 15, same playtest),
+        /// 1% at Medicine 300.</summary>
+        public double DownedWoundedPercentAtMedicine0 { get; set; } = 10.0;
         public double DownedWoundedPercentAtMedicine300 { get; set; } = 1.0;
 
         /// <summary>v9's flat "wounded among the fallen" knob — kept only so a hand-set value in
@@ -122,15 +124,15 @@ namespace TrainingBattles
             + ".510.172.172.420.1700.764.764.0.0.0"
             + ".510.172.172.1700.420.764.764.0.0.0";
 
-        /// <summary>The hour EVERY battle is fought at — drills, the muster scout ride, and real
-        /// battles of every type (field, siege assault, sea): -1 follows the campaign clock (the
-        /// default); otherwise one of the game's own custom-battle hours — 6 (morning), 12 (noon),
-        /// 15 (afternoon), 18 (evening), 22 (night). An admitted immersion-breaker Anton wants
-        /// anyway (2026.07.24): players and streamers alike cannot see a thing in night battles.
-        /// Drills read it into their mission record; real battles get it through
-        /// <see cref="Models.TrainingBattlesMapWeatherModel"/>, which only overrides while a
-        /// player map event is opening its mission. Editable from the muster and encounter menus
-        /// ("Choose the time of day") as well as MCM — all write this one key.</summary>
+        /// <summary>The STANDING DEFAULT hour battles are fought at — drills, the muster scout
+        /// ride, and real battles of every type (field, siege assault, sea): -1 follows the
+        /// campaign clock (the default); otherwise one of the game's own custom-battle hours —
+        /// 6 (morning), 12 (noon), 15 (afternoon), 18 (evening), 22 (night). Since v11 (Anton,
+        /// 2026.07.25: a menu pick silently pinned his default to noon) this key is MCM's ALONE:
+        /// the muster and encounter menus' "Choose the time of day" arm a ONE-BATTLE override
+        /// (<see cref="Models.TrainingBattlesMapWeatherModel.PendingBattleHour"/>) and never
+        /// write here. Everything reads the merged truth via
+        /// TrainingBattlesMapWeatherModel.EffectiveBattleHour.</summary>
         public int BattleTimeOfDay { get; set; } = -1;
 
         /// <summary>The hours vanilla's custom battle supports — each has a hand-made atmosphere
@@ -182,12 +184,12 @@ namespace TrainingBattles
 
         /// <summary>When DEFENDING, your scouting must be at least this percent of the enemy's
         /// best to control the ground (you already hold it — a modest screen of outriders will
-        /// do). Default 75.</summary>
-        public int ScoutingGateDefendPercent { get; set; } = 75;
+        /// do). Default 50 (Anton's playtest retune, 2026.07.25 — was 75).</summary>
+        public int ScoutingGateDefendPercent { get; set; } = 50;
 
         /// <summary>When ATTACKING, the bar rises: dictating WHERE the enemy must fight takes a
-        /// real intelligence edge. Default 125.</summary>
-        public int ScoutingGateAttackPercent { get; set; } = 125;
+        /// real intelligence edge. Default 150 (retuned from 125, same playtest).</summary>
+        public int ScoutingGateAttackPercent { get; set; } = 150;
 
         // ------------------------------------------------------------------
 
@@ -332,7 +334,20 @@ namespace TrainingBattles
             }
             WoundedPercent = null;    // migrated — never written back
             TrainingCostWages = null; // migrated — never written back
-            ConfigVersion = 10;
+            // v11 (2026.07.25, Anton's playtest retune): BattleTimeOfDay resets to the campaign
+            // clock ONCE — through v10 the game menus wrote this key on every pick, so any stored
+            // hour is likely pollution, not intent (from v11 on only MCM writes it, so later
+            // values are trusted). The duel ratios ease to 50/150 and the surgeon's Medicine-0
+            // wounded ends to 20/10; values still on the old defaults follow, hand picks stay.
+            if (ConfigVersion < 11)
+            {
+                BattleTimeOfDay = -1;
+                if (ScoutingGateDefendPercent == 75) ScoutingGateDefendPercent = 50;
+                if (ScoutingGateAttackPercent == 125) ScoutingGateAttackPercent = 150;
+                if (KiaWoundedPercentAtMedicine0 == 30.0) KiaWoundedPercentAtMedicine0 = 20.0;
+                if (DownedWoundedPercentAtMedicine0 == 15.0) DownedWoundedPercentAtMedicine0 = 10.0;
+            }
+            ConfigVersion = 11;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

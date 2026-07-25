@@ -26,7 +26,8 @@ namespace TrainingBattles
         public const string ScoutBattlefieldOptionText = "{=TB_opt_scout}Ride out and scout a battlefield";
 
         /// <summary>The battle-hour option's one name (muster menu and encounter menu alike) —
-        /// it edits the single ModConfig.BattleTimeOfDay every battle type reads.</summary>
+        /// it arms the ONE-BATTLE hour pick every battle type reads (the standing default is
+        /// MCM's alone; see ShowTimeOfDayPicker).</summary>
         public const string ChooseTimeOfDayOptionText = "{=TB_opt_time}Choose the time of day";
 
         /// <summary>The shared picker-dialog titles, one per tool, same everywhere.</summary>
@@ -141,48 +142,52 @@ namespace TrainingBattles
         }
 
         /// <summary>The one battle-hour dialog, shared by every door that offers "Choose the time
-        /// of day". Writes the pick straight into <see cref="ModConfig.BattleTimeOfDay"/> (the
-        /// single key drills, scouts and every real battle read) and saves; <paramref name="onDecided"/>
-        /// then refreshes whichever menu asked. Cancel changes nothing.
+        /// of day". The pick is for ONE battle only (Anton, 2026.07.25 — a menu pick must never
+        /// rewrite the standing default, which lives in MCM alone): it arms
+        /// <see cref="Models.TrainingBattlesMapWeatherModel.PendingBattleHour"/>, which every
+        /// battle door reads through EffectiveBattleHour and which clears when the player's map
+        /// event ends. <paramref name="onDecided"/> then refreshes whichever menu asked; Cancel
+        /// changes nothing.
         /// <paramref name="hourLock"/> (optional) gates single hours: given an hour it returns
         /// null to allow or the reason to show it LOCKED — the real-battle door uses it for the
         /// scouting duel (the campaign clock and full daylight stay free; see
         /// <see cref="ModConfig.ScoutingGateEnabled"/>). The muster passes nothing.</summary>
         public static void ShowTimeOfDayPicker(ModConfig config, Action onDecided, Func<int, string?>? hourLock = null)
         {
-            // "— your pick" marks the STANDING SETTING, never the hour outside: Anton read the
-            // old "— current" as "the current time of day" and filed the pinned-noon sky as a
-            // sync bug (2026.07.24) — so the true clock is now spelled out on the clock entry.
+            // "— your pick" marks the hour the NEXT battle will actually use; the true clock is
+            // spelled out on the clock entry (Anton read the old "— current" as "the current
+            // time of day" and filed the pinned-noon sky as a sync bug, 2026.07.24).
+            var effective = Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(config);
             var nowHour = CampaignTime.Now.GetHourOfDay;
             var elements = new List<InquiryElement>
             {
                 new InquiryElement(-1,
                     Models.AtmospherePresets.Label(-1) + " (now " + nowHour.ToString("00") + ":00)"
-                        + (config.BattleTimeOfDay < 0 ? " — your pick" : ""),
+                        + (effective < 0 ? " — your pick" : ""),
                     null, true, "Battles are fought whenever they happen — vanilla's honest clock."),
             };
             foreach (var hour in ModConfig.SupportedBattleHours)
             {
                 var lockReason = hourLock?.Invoke(hour);
                 elements.Add(new InquiryElement(hour,
-                    Models.AtmospherePresets.Label(hour) + (config.BattleTimeOfDay == hour ? " — your pick" : ""),
+                    Models.AtmospherePresets.Label(hour) + (effective == hour ? " — your pick" : ""),
                     null, lockReason == null,
-                    lockReason ?? "Every battle — drills, field battles, sieges, sea — opens at this hour."));
+                    lockReason ?? "The NEXT battle — drill, field, siege or sea — opens at this hour."));
             }
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "Choose the time of day",
-                "Pin the hour every battle is fought at — an immersion trade for a field you can "
-                + "actually see. The pick is a standing setting: it holds for every later battle "
-                + "until changed. \"" + Models.AtmospherePresets.Label(-1) + "\" returns to the true clock.",
+                "Pick the hour for the NEXT battle — an immersion trade for a field you can "
+                + "actually see. The pick lasts one battle; the standing default lives in the "
+                + "mod options (MCM). \"" + Models.AtmospherePresets.Label(-1) + "\" is the true clock.",
                 elements, isExitShown: true, 1, 1, "Choose", "Cancel",
                 picked =>
                 {
                     if (picked == null || picked.Count == 0 || picked[0].Identifier is not int hour) return;
-                    config.BattleTimeOfDay = hour;
-                    config.Save();
-                    TbLog.Info("hour", "battle hour pinned: "
-                        + (hour < 0 ? "campaign clock" : hour.ToString("00") + ":00"));
-                    Mcm.McmBridge.TryPushBattleTimeOfDay(config); // the MCM menu shows the same truth
+                    Models.TrainingBattlesMapWeatherModel.PendingBattleHour = hour;
+                    TbLog.Info("hour", "next battle's hour picked: "
+                        + (hour < 0 ? "campaign clock" : hour.ToString("00") + ":00")
+                        + " (one battle; standing default "
+                        + (config.BattleTimeOfDay < 0 ? "clock" : config.BattleTimeOfDay.ToString("00") + ":00") + ")");
                     onDecided();
                 },
                 _ => { }), pauseGameActiveState: true);

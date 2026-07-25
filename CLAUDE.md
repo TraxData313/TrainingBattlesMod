@@ -10,8 +10,8 @@ against themselves on the real terrain of their current map position. Afterward 
 settle the bill (the officers update, 2026.07.25): the SURGEON's Medicine runs three linear
 bands over the fallen — a few truly die (default 3% at Medicine 0 falling to 0.1% at 300 —
 the drill's one real cost, zeroable for the old no-deaths pledge), some wake wounded
-(30%→5%), some of the merely-downed stay wounded (15%→1%), and there is deliberately NO
-wounded→death path; earned XP is kept at a percent the XP OFFICER sets (the QUARTERMASTER's
+(20%→5%), some of the merely-downed stay wounded (10%→1%; both Medicine-0 ends retuned in
+Anton's 2026.07.25 playtest), and there is deliberately NO wounded→death path; earned XP is kept at a percent the XP OFFICER sets (the QUARTERMASTER's
 LEADERSHIP on land — Anton's call over Steward — the FIRST MATE's Boatswain at sea; a config
 band, default 40% at skill 0 rising linearly to 100% at 300, cap 200 — past 100 the drill
 grants bonus XP), the army goes disorganized, and a cooldown (default 24h) gates the next
@@ -23,9 +23,11 @@ toggle each, both default on; Anton's must-have of 2026.07.23 — this supersede
 "real battles stay strict-patch-only" call, which one-scene-per-patch data had made an
 option that never appeared). Since 2026.07.25 the real-battle ground choice and non-daylight
 battle hours sit behind the SCOUTING DUEL (your ground officer vs the enemy's best — the
-SCOUT's Scouting on land, the NAVIGATOR's Shipmaster at sea: 75% of theirs to pick ground
-defending, 125% attacking, MCM-tunable, gate off-switchable; the campaign clock and full
-daylight are always free, and the lone scout RIDE is never gated — Anton's QoL rules). The real-encounter scout is EXACT: both armies stand frozen,
+SCOUT's Scouting on land, the NAVIGATOR's Shipmaster at sea: 50% of theirs to pick ground
+defending, 150% attacking — playtest-retuned from 75/125 — MCM-tunable, gate off-switchable;
+the campaign clock and full daylight are always free, and the lone scout RIDE is never gated
+— Anton's QoL rules). The menus' hour pick is ONE-BATTLE only (v11): the standing default is
+MCM's alone, so a pick can never silently pin every later battle's sky. The real-encounter scout is EXACT: both armies stand frozen,
 so the true attacker→defender direction is known and the previewed lines/ends/facings are
 the coming battle's own. DATA
 TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
@@ -141,8 +143,9 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               never while TrainingActive) pins the hour for field/siege/sea
                               battles using vanilla custom battle's own TOD_* presets; also
                               home of the shared AtmospherePresets table (drill records and
-                              the muster scout use it directly). Edited from the muster menu,
-                              the encounter menu and MCM — all write the one config key
+                              the muster scout use it directly) AND of PendingBattleHour +
+                              EffectiveBattleHour: the menus' pick is ONE battle (cleared at
+                              map-event end), only MCM writes the standing config key (v11)
   Mcm/                        McmBridge + settings — the ImmersiveAI soft-dependency pattern
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)

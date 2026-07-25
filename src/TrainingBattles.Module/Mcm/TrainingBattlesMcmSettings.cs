@@ -61,9 +61,9 @@ namespace TrainingBattles.Mcm
         public float RealDeathPercentAtMedicine300 { get; set; } = 0.1f;
 
         [SettingPropertyFloatingInteger("Fallen wake wounded at Medicine 0 (%)", 0f, 100f, "0.0'%'", Order = 2, RequireRestart = false,
-            HintText = "KIA→wounded: of the would-have-died who live, this share wakes truly WOUNDED with no doctor; the rest shrug it off. Default 30.")]
+            HintText = "KIA→wounded: of the would-have-died who live, this share wakes truly WOUNDED with no doctor; the rest shrug it off. Default 20.")]
         [SettingPropertyGroup("The Surgeon — the fallen", GroupOrder = 2)]
-        public float KiaWoundedPercentAtMedicine0 { get; set; } = 30.0f;
+        public float KiaWoundedPercentAtMedicine0 { get; set; } = 20.0f;
 
         [SettingPropertyFloatingInteger("Fallen wake wounded at Medicine 300 (%)", 0f, 100f, "0.0'%'", Order = 3, RequireRestart = false,
             HintText = "The same share under a master surgeon. Default 5.")]
@@ -71,9 +71,9 @@ namespace TrainingBattles.Mcm
         public float KiaWoundedPercentAtMedicine300 { get; set; } = 5.0f;
 
         [SettingPropertyFloatingInteger("Downed stay wounded at Medicine 0 (%)", 0f, 100f, "0.0'%'", Order = 4, RequireRestart = false,
-            HintText = "Wounded→wounded: of the men merely downed in the drill (knocked out, battle-wounded — they never died), this share STAYS wounded with no doctor; the rest are patched up on the spot. Default 15. There is deliberately no wounded→death path.")]
+            HintText = "Wounded→wounded: of the men merely downed in the drill (knocked out, battle-wounded — they never died), this share STAYS wounded with no doctor; the rest are patched up on the spot. Default 10. There is deliberately no wounded→death path.")]
         [SettingPropertyGroup("The Surgeon — the fallen", GroupOrder = 2)]
-        public float DownedWoundedPercentAtMedicine0 { get; set; } = 15.0f;
+        public float DownedWoundedPercentAtMedicine0 { get; set; } = 10.0f;
 
         [SettingPropertyFloatingInteger("Downed stay wounded at Medicine 300 (%)", 0f, 100f, "0.0'%'", Order = 5, RequireRestart = false,
             HintText = "The same share under a master surgeon. Default 1.")]
@@ -94,14 +94,14 @@ namespace TrainingBattles.Mcm
         public bool ScoutingGateEnabled { get; set; } = true;
 
         [SettingPropertyInteger("Defending: skill needed (% of enemy's)", 0, 500, "0'%'", Order = 1, RequireRestart = false,
-            HintText = "When you DEFEND, your ground officer's skill must be at least this share of the enemy side's best to choose the ground — you already hold it, so a modest screen of outriders will do. Default 75.")]
+            HintText = "When you DEFEND, your ground officer's skill must be at least this share of the enemy side's best to choose the ground — you already hold it, so a modest screen of outriders will do. Default 50.")]
         [SettingPropertyGroup("The Scout — the ground", GroupOrder = 3)]
-        public int ScoutingGateDefendPercent { get; set; } = 75;
+        public int ScoutingGateDefendPercent { get; set; } = 50;
 
         [SettingPropertyInteger("Attacking: skill needed (% of enemy's)", 0, 500, "0'%'", Order = 2, RequireRestart = false,
-            HintText = "When you ATTACK, the bar rises — dictating WHERE the enemy must fight takes a real intelligence edge. Default 125.")]
+            HintText = "When you ATTACK, the bar rises — dictating WHERE the enemy must fight takes a real intelligence edge. Default 150.")]
         [SettingPropertyGroup("The Scout — the ground", GroupOrder = 3)]
-        public int ScoutingGateAttackPercent { get; set; } = 125;
+        public int ScoutingGateAttackPercent { get; set; } = 150;
 
         // ---- Pacing & costs -----------------------------------------------------------
 
@@ -152,8 +152,8 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Battlefield", GroupOrder = 5)]
         public string OpponentBannerCode { get; set; } = ModConfig.DefaultOpponentBannerCode;
 
-        [SettingPropertyDropdown("Time of day for battles", Order = 4, RequireRestart = false,
-            HintText = "Pin the hour EVERY battle opens at — drills, field battles, sieges, sea battles (an immersion trade for a field you can see; night battles are unwatchable on many screens). Also changeable from the muster and encounter menus. Default: campaign clock.")]
+        [SettingPropertyDropdown("Time of day for battles (standing default)", Order = 4, RequireRestart = false,
+            HintText = "The STANDING default hour battles open at — drills, field battles, sieges, sea battles (an immersion trade for a field you can see). The muster and encounter menus can override it for ONE battle without touching this. Default: campaign clock.")]
         [SettingPropertyGroup("Battlefield", GroupOrder = 5)]
         public Dropdown<string> BattleTimeOfDay { get; set; } = TimeOfDayChoices(-1);
 

@@ -345,10 +345,15 @@ namespace TrainingBattles
             return "Battlefield - random on this kind of ground (default).";
         }
 
-        private string TimeOfDayLine() =>
-            _config.BattleTimeOfDay >= 0
-                ? "Time - " + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + " (your pick)."
-                : "Time - the campaign clock (default).";
+        private string TimeOfDayLine()
+        {
+            var hour = Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config);
+            var oneBattle = Models.TrainingBattlesMapWeatherModel.PendingBattleHour != null;
+            return hour >= 0
+                ? "Time - " + Models.AtmospherePresets.Label(hour).ToLowerInvariant()
+                    + (oneBattle ? " (your pick, next battle)." : " (mod-options default).")
+                : "Time - the campaign clock" + (oneBattle ? " (your pick, next battle)." : " (default).");
+        }
 
         /// <summary>The whole drill contract in one line: wounded math, surgeon, XP, cost,
         /// disorganized, cooldown — each piece only when it actually applies.</summary>
@@ -583,9 +588,11 @@ namespace TrainingBattles
         private bool TimeOfDayCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Wait;
-            args.Tooltip = new TextObject("{=TB_tip_time}Pin the hour every battle is fought at — "
-                + "drills, field battles, sieges, sea battles. Currently: "
-                + Models.AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".");
+            args.Tooltip = new TextObject("{=TB_tip_time}Pick the hour for the NEXT battle only — "
+                + "drill, field, siege or sea; the standing default lives in the mod options. Next battle: "
+                + Models.AtmospherePresets.Label(
+                    Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
+                + (Models.TrainingBattlesMapWeatherModel.PendingBattleHour != null ? " (your pick)." : "."));
             return true;
         }
 
@@ -643,8 +650,8 @@ namespace TrainingBattles
 
         private void LaunchScout(string sceneId)
         {
-            // The pinned battle hour rides along, so the preview lighting is the drill's own.
-            try { ScoutMission.Open(sceneId, _config.BattleTimeOfDay); }
+            // The effective battle hour rides along, so the preview lighting is the drill's own.
+            try { ScoutMission.Open(sceneId, Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)); }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
@@ -1430,7 +1437,8 @@ namespace TrainingBattles
             // the same lines the scout ride previews). The old string overload carried no patch
             // data, and without it the game picks a random spawn path and pivot per battle.
             // The pinned battle hour (if any) rides in the record's atmosphere.
-            var record = ScoutMission.CreatePatchAwareRecord(sceneId, _config.BattleTimeOfDay);
+            var record = ScoutMission.CreatePatchAwareRecord(
+                sceneId, Models.TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config));
             if (navalEvent)
                 CampaignMission.OpenNavalBattleMission(record);
             else

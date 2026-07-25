@@ -50,6 +50,7 @@ namespace TrainingBattles
         private void OnSessionLaunched(CampaignGameStarter starter)
         {
             TrainingBattlesSceneModel.PendingSceneId = null;
+            TrainingBattlesMapWeatherModel.PendingBattleHour = null;
             // Indices 4/5/6 slot the options right before vanilla's "{ATTACK_TEXT}!" — cosmetic
             // only; wherever another mod pushes them, they still work.
             // Same labels AND same order as the training muster's tools — the HOUR first (Anton
@@ -70,9 +71,10 @@ namespace TrainingBattles
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Wait;
             if (!GroundToolsAllowed(out var mapEvent)) return false;
-            var tip = "{=TB_tip_time}Pin the hour every battle is fought at — "
-                + "drills, field battles, sieges, sea battles. Your standing pick: "
-                + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + ".";
+            var tip = "{=TB_tip_time}Pick the hour for THIS battle only — the standing default "
+                + "lives in the mod options. This battle: "
+                + AtmospherePresets.Label(TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
+                + (TrainingBattlesMapWeatherModel.PendingBattleHour != null ? " (your pick)." : ".");
             if (!ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
                 tip += " Out-scouted (your " + mine.SkillName + " " + mine.Skill + " against their "
                     + theirs + ") — the campaign clock and full daylight stay yours; dictating "
@@ -96,19 +98,24 @@ namespace TrainingBattles
                     + " to dictate this hour. The campaign clock and full daylight are always yours.";
             BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
             {
-                InformationManager.DisplayMessage(new InformationMessage(_config.BattleTimeOfDay < 0
-                    ? "Training Battles: battles follow the campaign clock again."
-                    : "Training Battles: battles will open at "
-                        + AtmospherePresets.Label(_config.BattleTimeOfDay).ToLowerInvariant() + "."));
+                var effective = TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config);
+                InformationManager.DisplayMessage(new InformationMessage(effective < 0
+                    ? "Training Battles: this battle follows the campaign clock."
+                    : "Training Battles: this battle will open at "
+                        + AtmospherePresets.Label(effective).ToLowerInvariant() + "."));
             }, hourLock);
         }
 
         private void OnMapEventEnded(MapEvent mapEvent)
         {
-            // The fight this choice was made for is over (fought, auto-resolved, or walked away
-            // from) — nothing may linger for a later, unrelated battle.
+            // The fight these choices were made for is over (fought, auto-resolved, or walked
+            // away from) — nothing may linger for a later, unrelated battle: not the chosen
+            // ground, not the one-battle hour.
             if (mapEvent != null && mapEvent.IsPlayerMapEvent)
+            {
                 TrainingBattlesSceneModel.PendingSceneId = null;
+                TrainingBattlesMapWeatherModel.PendingBattleHour = null;
+            }
         }
 
         /// <summary>The shared gate: a real field battle, not our own drill, and the toggle for

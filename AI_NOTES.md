@@ -39,12 +39,16 @@ missing is only the menu entry on vanilla's siege menus (menu ids to research: t
 besiege/assault menus) and wherever naval encounters diverge from "encounter". The muster, the
 encounter menu and MCM all edit the same key already.
 
-## Scouting duel — known softness (noted 2026.07.25, fine for now)
+## Scouting duel — decisions log
 
-The battle hour is a STANDING config key, so an hour pinned earlier (from the muster or MCM)
-still applies to a battle where the duel is lost — the gate stops CHANGING the hour from that
-encounter menu, it does not re-veto the standing pick. Tighten only if playtests care.
-DECIDED (Anton, 2026.07.25): the lone scout RIDE is never gated.
+DECIDED (Anton, 2026.07.25): the lone scout RIDE is never gated. Ratios retuned same day
+after playtest: defend 50%, attack 150% (were 75/125).
+
+The old "standing hour beats a lost duel" softness is RESOLVED since v1.2.0: the menus' hour
+pick is one-battle-only (PendingBattleHour, cleared at map-event end), so the only standing
+hour is the MCM default — which remains ungated by design (it's the player's global QoL
+setting, not battlefield intel). An MCM default of "night" does apply to a lost-duel battle;
+if a playtest ever minds, gate EffectiveBattleHour for real battles behind the duel too.
 
 ## Garrison training at castles/towns
 

@@ -58,21 +58,6 @@ namespace TrainingBattles.Mcm
             return true;
         }
 
-        /// <summary>Mirrors a battle-hour pick made from a GAME MENU into the MCM dropdown, so the
-        /// two editors never show different truths. No-op (and MCM-type-free) while unbound.</summary>
-        public static void TryPushBattleTimeOfDay(ModConfig live)
-        {
-            if (!_bound || live == null) return;
-            try { PushBattleTimeOfDay(live); } catch { }
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void PushBattleTimeOfDay(ModConfig live)
-        {
-            var s = TrainingBattlesMcmSettings.Instance;
-            if (s != null) s.BattleTimeOfDay = TrainingBattlesMcmSettings.TimeOfDayChoices(live.BattleTimeOfDay);
-        }
-
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void PushConfigToMenu(TrainingBattlesMcmSettings s, ModConfig c)
         {
