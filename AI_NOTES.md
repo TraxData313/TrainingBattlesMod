@@ -214,19 +214,36 @@ SetupTeams derefs Mission.InitialPlayerAgent UNGUARDED).
 
 CRASH ROUND 3 (22:01): the recorder spoke — enemy (empty) side sets up CLEAN (watch-list
 item 1 RETIRED), death is INSIDE base OnSetupTeamsOfSide(Defender), i.e. the player side's
-own setup, downstream of the ship spawn. Response (deployed 2026.07.25 ~22:30, AWAITING
-ROUND 4): the recorder now REPLICATES the base's four steps for the player side (verified
-against the decompile: DeployBattleSide → AllocateAndDeployInitialTroops → agent-AI-states →
-OnSideDeploymentOver; the two internal ones via reflection, signature-miss falls back to
+own setup, downstream of the ship spawn. Response: the recorder now REPLICATES the base's
+four steps for the player side (the two internal ones via reflection, miss falls back to
 the plain base call) with a log between each, catches any managed exception with its FULL
 INNER STACK into training_battles.log, and SeaScoutRideLogic.OnAgentBuild logs EVERY agent
-build by name — if one crewman's build is the killer, the last line names them. Static
-audit of the whole chain found no smoking gun (AllocateAndDeployInitialTroops force-enables
-spawning, so the ~106-crew batch spawn runs inside step 2; Mission.SpawnTroop,
-GetAgentTeam, CustomBattleAgentOrigin, AssignTroops, OnSideDeploymentOver all clean for a
-campaign + CustomBattleCombatant mix) — the round-4 log decides. NEXT SESSION: read the
-[sea-scout] lines after Anton's next ride; the failing step (and, for a managed fault, the
-exact stack) will be in them. Then strip the OnAgentBuild spam once the ride sails.
+build by name.
+
+CRASH ROUND 4 (2026.07.26 08:23) — THE RECORDER DELIVERED THE WHOLE STORY, root cause
+FOUND AND FIXED: step 2/4 (crew spawn), first agent build, `InvalidCastException: Unable
+to cast CustomBattleCombatant to PartyBase` at
+`SandboxAgentStatCalculateModel.InitializeMissionEquipment` — the CAMPAIGN's agent-stat
+model HARD-CASTS every agent's `Origin.BattleCombatant` to PartyBase (verified in the
+SandBox decompile: `(PartyBase)obj`, null flows through, foreign types die). Vanilla never
+mixes CustomBattleTroopSupplier with a campaign, so the mine was theirs but the field was
+ours. THE FIX (deployed 2026.07.26, awaiting ROUND 5): our own `SeaScoutAgentOrigin` +
+`SeaScoutTroopSupplier` (all-vanilla interfaces, soft-dependency clean) — BattleCombatant
+presents the REAL `PartyBase.MainParty` (campaign-native for every model, and truthful:
+the crew ARE the main party's men, so faces/colors/perk context read right), while every
+casualty callback (SetKilled/SetWounded/SetRouted/OnScoreHit) is a NO-OP — the
+consequence-free pledge enforced at the origin itself. (Vanilla's SimpleAgentOrigin was
+almost the answer but its SetKilled TRULY kills heroes — noted for the corpus.) The
+CustomBattleCombatants remain for TEAM identity (side/banner/colors) and the preloader's
+character walk only; player still found by IsPlayerCharacter, still helmed via
+Game.PlayerTroop (campaign sets it to main_hero — verified, Campaign.cs:1318). LESSON for
+the corpus (generalizes round 1): in a campaign, EVERY per-agent game model may assume
+campaign types — a MapEvent-less campaign mission must feed campaign-shaped origins, not
+custom-battle ones; the supplier was fine, the origin was the poison. Same session,
+Anton's naming: the muster scout option is now a text variable — "Scout out the sea with
+your flagship" afloat, the classic ride-out line ashore. AFTER ROUND 5 SAILS: strip the
+per-crewman OnAgentBuild log spam + the step-by-step reflection replication (keep the
+phase-boundary lines), and swap the tooltip/menu texts if Anton wants more sea flavor.
 
 PLAYTEST WATCH-LIST:
 1. ~~The empty attacker side actually booting~~ RETIRED — round 3 proved it sets up clean.

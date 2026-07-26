@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Helpers;
 using NavalDLC;
 using NavalDLC.Missions;
 using NavalDLC.Missions.Deployment;
@@ -92,43 +93,55 @@ namespace TrainingBattles
             if (crewCap < 1) crewCap = 1;
 
             // The ship's company as synthetic combatants: the player at the helm, then the
-            // roster's healthy men until the deck is full. Synthetic (CustomBattleCombatant)
-            // on purpose — mission casualties, XP and states never touch the campaign roster,
-            // the same "it never happened" guarantee the land scout gets for free by walking.
+            // roster's healthy men until the deck is full. The ORIGINS are our own
+            // SeaScoutAgentOrigin — campaign-native where it matters, consequence-free where it
+            // counts: round 4's stack proved campaign game models HARD-CAST an agent's
+            // BattleCombatant to PartyBase (SandboxAgentStatCalculateModel.InitializeMissionEquipment
+            // died on the first crewman), so our origins present the REAL main party there, while
+            // every casualty callback (SetKilled/SetWounded/SetRouted) is a no-op — mission states
+            // never touch the campaign roster, the "it never happened" guarantee enforced at the
+            // origin itself.
             var mainHero = Hero.MainHero;
             var banner = mainHero?.ClanBanner ?? Banner.CreateRandomBanner();
             var culture = (BasicCultureObject?)mainHero?.Culture ?? party.Party.Culture;
-            var company = new CustomBattleCombatant(
-                new TextObject("{=TB_sea_scout_company}The Ship's Company"), culture, banner)
-            { Side = BattleSideEnum.Defender };
             var playerCharacter = CharacterObject.PlayerCharacter;
-            company.AddCharacter(playerCharacter, 1);
-            company.SetGeneral(playerCharacter);
+            var crew = new List<IAgentOriginBase> { new SeaScoutAgentOrigin(playerCharacter, banner) };
             int seats = crewCap - 1;
             try
             {
+                // Heroes first (they stand the deck by name), then the ranks — spawn order is
+                // supplier order, and the player must sail in the very first batch.
                 foreach (var element in party.MemberRoster.GetTroopRoster())
                 {
                     if (seats <= 0) break;
                     var character = element.Character;
-                    if (character == null || character == playerCharacter) continue;
-                    if (character.IsHero)
+                    if (character == null || character == playerCharacter || !character.IsHero) continue;
+                    if (character.HeroObject?.IsWounded == false)
                     {
-                        if (character.HeroObject?.IsWounded == false)
-                        {
-                            company.AddCharacter(character, 1);
-                            seats--;
-                        }
-                        continue;
+                        crew.Add(new SeaScoutAgentOrigin(character, banner));
+                        seats--;
                     }
+                }
+                foreach (var element in party.MemberRoster.GetTroopRoster())
+                {
+                    if (seats <= 0) break;
+                    var character = element.Character;
+                    if (character == null || character.IsHero) continue;
                     int healthy = element.Number - element.WoundedNumber;
-                    if (healthy <= 0) continue;
-                    int take = Math.Min(healthy, seats);
-                    company.AddCharacter(character, take);
-                    seats -= take;
+                    for (int i = 0; i < healthy && seats > 0; i++, seats--)
+                        crew.Add(new SeaScoutAgentOrigin(character, banner));
                 }
             }
             catch { }
+
+            // The combatants exist for TEAM identity (side, banner, colors) and the preloader's
+            // character walk — the ship's company mirrors the crew so equipment preloads true.
+            var company = new CustomBattleCombatant(
+                new TextObject("{=TB_sea_scout_company}The Ship's Company"), culture, banner)
+            { Side = BattleSideEnum.Defender };
+            foreach (var origin in crew)
+                if (origin.Troop != null) company.AddCharacter(origin.Troop, 1);
+            company.SetGeneral(playerCharacter);
 
             // The empty horizon: a combatant with no men and no hulls, so both teams exist
             // (much of the mission stack indexes them) while nothing ever spawns opposite.
@@ -137,10 +150,9 @@ namespace TrainingBattles
             { Side = BattleSideEnum.Attacker };
 
             var suppliers = new IMissionTroopSupplier[2];
-            suppliers[(int)BattleSideEnum.Defender] = new CustomBattleTroopSupplier(
-                company, isPlayerSide: true, isPlayerGeneral: true, isSallyOut: false);
-            suppliers[(int)BattleSideEnum.Attacker] = new CustomBattleTroopSupplier(
-                horizon, isPlayerSide: false, isPlayerGeneral: false, isSallyOut: false);
+            suppliers[(int)BattleSideEnum.Defender] = new SeaScoutTroopSupplier(crew, playerCharacter);
+            suppliers[(int)BattleSideEnum.Attacker] = new SeaScoutTroopSupplier(
+                new List<IAgentOriginBase>(), null);
 
             // The record is the land scout's own (map patch + fixed approach + pinned hour), with
             // the one naval stroke every War Sails mission adds: simulated water on.
@@ -157,7 +169,7 @@ namespace TrainingBattles
             int[] maxTroopsPerTeam = { crewCap, 0, 0 };
 
             TbLog.Info("sea-scout", "Riding out: scene=" + sceneId + " flagship='" + (flagship.Name?.ToString() ?? "?")
-                + "' crew=" + (crewCap - seats) + "/" + crewCap + " hour=" + timeOfDayOverride);
+                + "' crew=" + crew.Count + "/" + crewCap + " hour=" + timeOfDayOverride);
 
             NavalMissionState.OpenNew(MissionName, rec, mission => new MissionBehavior[]
             {
@@ -192,6 +204,100 @@ namespace TrainingBattles
                 new SeaScoutRideLogic(hullSnapshot),
             });
         }
+    }
+
+    /// <summary>The ride's own agent origin — THE ROUND-4 FIX. Campaign game models hard-cast an
+    /// agent's <c>Origin.BattleCombatant</c> to <c>PartyBase</c> (proven by round 4's stack:
+    /// SandboxAgentStatCalculateModel.InitializeMissionEquipment threw InvalidCastException on the
+    /// first crewman, because CustomBattleAgentOrigin hands back a CustomBattleCombatant). This
+    /// origin presents the REAL main party there — campaign-native for every model, and truthful:
+    /// the crew ARE the main party's men, so faces, colors and perk context all read right — while
+    /// every casualty callback is a NO-OP: no kill, no wound, no rout ever reaches the campaign
+    /// (vanilla's SimpleAgentOrigin was almost this, but its SetKilled truly kills heroes).
+    /// All-vanilla types: soft-dependency clean.</summary>
+    internal sealed class SeaScoutAgentOrigin : IAgentOriginBase
+    {
+        private readonly CharacterObject _troop;
+        private Banner _banner;
+        private readonly UniqueTroopDescriptor _descriptor;
+        private readonly bool _hasThrownWeapon;
+        private readonly bool _hasSpear;
+        private readonly bool _hasShield;
+        private readonly bool _hasHeavyArmor;
+
+        public SeaScoutAgentOrigin(CharacterObject troop, Banner banner)
+        {
+            _troop = troop;
+            _banner = banner;
+            _descriptor = new UniqueTroopDescriptor(Game.Current.NextUniqueTroopSeed);
+            Rank = MBRandom.RandomInt(10000);
+            AgentOriginUtilities.GetDefaultTroopTraits(troop, out _hasThrownWeapon, out _hasSpear,
+                out _hasShield, out _hasHeavyArmor);
+        }
+
+        public BasicCharacterObject Troop => _troop;
+
+        /// <summary>The fix in one line: campaign models cast this to PartyBase — give them the
+        /// real one.</summary>
+        public IBattleCombatant BattleCombatant => PartyBase.MainParty;
+
+        public Banner Banner => _banner;
+        public bool IsUnderPlayersCommand => true;
+        public bool IsInSameArmyAsPlayer => false;
+        public uint FactionColor => PartyBase.MainParty?.MapFaction?.Color ?? 0u;
+        public uint FactionColor2 => PartyBase.MainParty?.MapFaction?.Color2 ?? 0u;
+        public int Rank { get; }
+        public int Seed => CharacterHelper.GetPartyMemberFaceSeed(PartyBase.MainParty, _troop, Rank);
+        public int UniqueSeed => _descriptor.UniqueSeed;
+        bool IAgentOriginBase.HasThrownWeapon => _hasThrownWeapon;
+        bool IAgentOriginBase.HasHeavyArmor => _hasHeavyArmor;
+        bool IAgentOriginBase.HasShield => _hasShield;
+        bool IAgentOriginBase.HasSpear => _hasSpear;
+
+        // A free ride costs no one anything — the pledge, enforced at the origin.
+        public void SetWounded() { }
+        public void SetKilled() { }
+        public void SetRouted(bool isOrderRetreat) { }
+        public void OnAgentRemoved(float agentHealth) { }
+        void IAgentOriginBase.OnScoreHit(BasicCharacterObject victim, BasicCharacterObject captain,
+            int damage, bool isFatal, bool isTeamKill, WeaponComponentData attackerWeapon) { }
+        public void SetBanner(Banner banner) { _banner = banner; }
+        TroopTraitsMask IAgentOriginBase.GetTraitsMask()
+            => AgentOriginUtilities.GetDefaultTraitsMask(this);
+    }
+
+    /// <summary>The ride's troop supplier: a plain ordered list of <see cref="SeaScoutAgentOrigin"/>s
+    /// (player first — the first spawn batch must carry the helmsman), no campaign writeback, no
+    /// custom-battle types. The empty-list instance serves the empty horizon.</summary>
+    internal sealed class SeaScoutTroopSupplier : IMissionTroopSupplier
+    {
+        private readonly List<IAgentOriginBase> _all;
+        private readonly BasicCharacterObject? _general;
+        private int _supplied;
+
+        public SeaScoutTroopSupplier(List<IAgentOriginBase> origins, BasicCharacterObject? general)
+        {
+            _all = origins;
+            _general = general;
+        }
+
+        public int NumRemovedTroops => 0;
+        public int NumTroopsNotSupplied => _all.Count - _supplied;
+        public bool AnyTroopRemainsToBeSupplied => _supplied < _all.Count;
+
+        public IEnumerable<IAgentOriginBase> SupplyTroops(int numberToAllocate)
+        {
+            var batch = new List<IAgentOriginBase>();
+            while (numberToAllocate-- > 0 && _supplied < _all.Count) batch.Add(_all[_supplied++]);
+            return batch;
+        }
+
+        public IAgentOriginBase? SupplyOneTroop()
+            => _supplied < _all.Count ? _all[_supplied++] : null;
+
+        public IEnumerable<IAgentOriginBase> GetAllTroops() => _all;
+        public BasicCharacterObject? GetGeneralCharacter() => _general;
+        public int GetNumberOfPlayerControllableTroops() => _all.Count;
     }
 
     /// <summary>The ride's deployment controller: vanilla's naval one wearing a FLIGHT RECORDER —

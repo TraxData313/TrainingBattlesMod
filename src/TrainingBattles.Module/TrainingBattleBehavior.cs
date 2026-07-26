@@ -315,8 +315,11 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_time",
                 BattleSceneCatalog.ChooseTimeOfDayOptionText,
                 TimeOfDayCondition, _ => ChooseTimeOfDay(() => GameMenu.SwitchToMenu(MenuId)));
+            // The label is a text VARIABLE: ashore the classic ride-out line, afloat the
+            // flagship's own (set fresh in ScoutCondition on every menu frame — Anton's naming,
+            // 2026.07.26). The encounter-menu door keeps the shared const; it never sails.
             starter.AddGameMenuOption(MenuId, "training_scout",
-                BattleSceneCatalog.ScoutBattlefieldOptionText,
+                "{=TB_opt_scout_dyn}{TB_SCOUT_OPT}",
                 ScoutCondition, _ => ScoutGround());
             starter.AddGameMenuOption(MenuId, "training_ground",
                 BattleSceneCatalog.SelectBattlefieldOptionText,
@@ -939,6 +942,9 @@ namespace TrainingBattles
             if (TrainingGroundPool(out _).Count == 0) return false;
             if (MainPartyAtSea() && MobileParty.MainParty.Ships.Count == 0)
                 return false; // a sea scout rides the flagship — no hull, no ride
+            MBTextManager.SetTextVariable("TB_SCOUT_OPT", MainPartyAtSea()
+                ? "Scout out the sea with your flagship"
+                : "Ride out and scout a battlefield", false);
             if (Hero.MainHero?.IsWounded == true)
             {
                 args.IsEnabled = false;
