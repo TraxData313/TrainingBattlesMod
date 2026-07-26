@@ -35,8 +35,11 @@ A mod for *Mount & Blade II: Bannerlord* built on two pillars:
 - **Disorganized** after - they had to form up etc
 - **Cooldown** - you have to wait before you can do another drill (24 in game hours by default)
 
-![The muster menu](Screenshots/20260724114356_1.jpg)
-*The muster menu (hotkey `G` on the map): set the ground and the hour, divide the men, pick your side — or just send them in and watch from the hill.*
+![The muster menu](Screenshots/20260726180245_1.jpg)
+*The muster menu (hotkey `G` on the map): set the ground and the hour, divide the men, pick your side — and the (?) option spells out the officers' full reckoning before you pay a denar.*
+
+![The muster at sea](Screenshots/20260726180311_1.jpg)
+*The same muster afloat (War Sails): scout with the flagship, divide the ships at your word, or lay down a phantom fleet for the mock enemy.*
 
 ![A drill in full swing](Screenshots/20260724115152_1.jpg)
 *Your two halves meet on the real terrain of your map position. Nobody truly dies.*
@@ -47,6 +50,9 @@ the whole company against it. The phantoms never touch your roster and vanish af
 your own men follow the normal training rules. The test bench for "how would we fare
 against X?". At sea the mock enemy **sails**: lay down the phantom fleet — any culture's
 hulls, fitted as well as you please — and its ships vanish with its men.
+
+![Composing a mock enemy](Screenshots/20260724115022_1.jpg)
+*Composing a mock enemy: every troop in the game, 500 of each on the shelf, any mix up to 1000 men.*
 
 **Castle siege drills** — at your **own castle** the muster becomes a **siege drill**: storm
 your own walls or hold them, on the castle's real scene at its true wall level. The
@@ -59,8 +65,17 @@ and influence** for the show of arms. The mock enemy comes to the walls too: the
 besiege you when you hold them, or reinforce the garrison when you storm. The drill waits
 behind its own option on the castle menu.
 
-![Composing a mock enemy](Screenshots/20260724115022_1.jpg)
-*Composing a mock enemy: every troop in the game, 500 of each on the shelf, any mix up to 1000 men.*
+![The castle door](Screenshots/20260726173241_1.jpg)
+*Arrive at your own castle and the option is waiting: "Hold a training siege on these walls."*
+
+![The siege muster](Screenshots/20260726173418_1.jpg)
+*The siege muster armed: the halves divided, the garrison and militia counted on the walls, the engineer's equipment picked and priced.*
+
+![Storming the walls](Screenshots/20260726175150_1.jpg)
+*Your half storms your own walls — real scene, real wall level, and the training-orange shields tell friend from drill-foe.*
+
+![The defense holds the towers](Screenshots/20260726174929_1.jpg)
+*Holding the walls: the engineer's engines manned on the towers while the mock columns muster below.*
 
 
 ## Pillar 2 — Scouting & choosing your ground
