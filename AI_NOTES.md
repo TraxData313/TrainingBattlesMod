@@ -176,6 +176,38 @@ against the decompiled corpus and closed what remained):
   Mission.AfterStart). No-op unless TrainingActive; covers field/sea/siege alike (field/sea
   were already orange via the dressed clan — now doubly guaranteed).
 
+PLAYTEST ROUND 3 (2026.07.26 morning, TWO clean DEFENSE battles at Tirby Castle — every step
+in the ledger, aftermath numbers verified row by row against last_drill_report.txt): the
+defend road WORKS. Anton's follow-ups, all shipped same morning:
+- ORANGE MAP LOOTERS during the drill window are BY DESIGN and cannot be dropped: agents'
+  SHIELD heraldry comes from `PartyGroupAgentOrigin.Banner` = the map FACTION's banner for
+  leaderless parties (decompile-verified — the party's CustomBanner is NOT consulted), so the
+  lender clan must wear the training banner while the mission runs. Dressed at launch,
+  restored at the aftermath; "became normal after clicking menus" = the map icons' lazy
+  visual rebuild catching up to the restore (SetVisualAsDirty is immediate, the engine
+  rebuilds on its own schedule).
+- AUTO-RESOLVE FOR SIEGES (was deliberately blocked): vanilla's own ordered assault
+  (MenuHelper.EncounterOrderAttack) turned out to be the SAME InitSimulation +
+  StartBattleSimulation road the field send-troops drill already rides — no strategy
+  machinery needed; the walls' advantage lives in the simulation models. LaunchSiegeBattle
+  takes `simulate`, forks after the sides are seated (both roads share the whole encounter
+  build), and rides vanilla's road verbatim. Details: BattleSimulation's ctor arms
+  PlayerSiege ITSELF (isSimulation: true) for siege assaults, so the attack road's own
+  StartPlayerSiege stands down when simulating; the engineer's engines are MISSION data and
+  sit out the sim — their bill is NOT charged on the send road (send option has its own
+  TB_SEND_COST_SUFFIX; picks stay armed for a later led assault, tooltip says so); tick
+  trigger (b) ("player bailed to a foreign menu") now stands down while
+  `encounter.BattleSimulation != null` — the castle sim runs with the settlement menu
+  context alive underneath the simulation view (the field one exits to the bare map), and
+  without the guard it would have finalized the drill mid-simulation. Break In from the sim
+  opens the siege mission through vanilla's road: no bench engines (campaign containers are
+  empty by design), but the orange team paint still applies.
+- Numbers check (Anton's ask): battle 1 kia 126 → 7 truly died (5.6% vs 2.55% expected —
+  unlucky rolls, within binomial variance), battle 2 kia 80 → died 2, wounded 20, downed
+  104 — every band lands on its configured chance; the XP officer's kept-% and the clamp
+  restore (+1184 xp battle 2) verified per stack. "(0 xp kept)" drills are stacks whose
+  clamp losses exceeded visible earnings — the documented conservative choice, not a bug.
+
 PLAYTEST RISKS (in rough order of worry):
 1. ATTACK road novelties: same-faction garrison forced onto the enemy side (agent hostility
    flags?), LeaveSettlement/EnterSettlement mid-menu, `AddInsideSettlementParties` may push a

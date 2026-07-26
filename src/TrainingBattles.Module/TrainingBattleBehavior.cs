@@ -355,7 +355,7 @@ namespace TrainingBattles
                 "{=TB_opt_begin}Begin the battle — {TB_BEGIN_SIDE}{TB_COST_SUFFIX}",
                 args => BeginCondition(args), _ => BeginBattle(_playerDefendsChoice));
             starter.AddGameMenuOption(MenuId, "training_send_troops",
-                "{=TB_opt_send2}Send the men in — watch it resolve from the hill{TB_COST_SUFFIX}",
+                "{=TB_opt_send3}Send the men in — watch it resolve from the {TB_WATCH_FROM}{TB_SEND_COST_SUFFIX}",
                 SendTroopsCondition, _ => LaunchTraining(_playerDefendsChoice, simulate: true));
             starter.AddGameMenuOption(MenuId, "training_cancel",
                 "{=TB_opt_cancel}Cancel training",
@@ -1103,21 +1103,33 @@ namespace TrainingBattles
 
         private bool SendTroopsCondition(MenuCallbackArgs args)
         {
-            // No hill to watch a siege from — the send-troops road stays a field affair (the
-            // siege simulation runs vanilla's own strategy machinery we deliberately never arm).
-            if (_siegeSettlement != null) return false;
+            // Sieges auto-resolve too since 2026.07.26 (Anton's ask): vanilla's own ordered
+            // assault IS the same InitSimulation road the field drill rides — the walls'
+            // advantage comes from the simulation models, the engineer's engines sit out
+            // (they are mission data; the sim never opens a mission unless you Break In).
             args.optionLeaveType = GameMenuOption.LeaveType.Continue;
-            return ReadyToBegin(args);
+            MBTextManager.SetTextVariable("TB_WATCH_FROM",
+                _siegeSettlement != null ? "keep" : (MainPartyAtSea() ? "quarterdeck" : "hill"), false);
+            var shown = ReadyToBegin(args, forSend: true);
+            if (shown && args.IsEnabled && _siegeSettlement != null && CountEngines(_siegeAtkPick) + CountEngines(_siegeDefPick) > 0)
+            {
+                args.Tooltip = new TextObject("{=TB_tip_send_siege}The engineer's engines sit out an "
+                    + "auto-resolve (and are not billed for one) — lead the assault yourself to field them.");
+            }
+            return shown;
         }
 
         /// <summary>The shared gate for every "start the drill" option: a divided company and, when
         /// training costs wages, enough gold in the purse to fill the pay-chest. Also stamps the
-        /// "(N denars)" suffix the Begin/send option labels carry.</summary>
-        private bool ReadyToBegin(MenuCallbackArgs args)
+        /// "(N denars)" suffix the Begin/send option labels carry — each option its own variable,
+        /// because a siege AUTO-RESOLVE is cheaper (no engine bill) than leading the same assault.</summary>
+        private bool ReadyToBegin(MenuCallbackArgs args, bool forSend = false)
         {
             if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             var costNow = ComputeTrainingCost();
-            MBTextManager.SetTextVariable("TB_COST_SUFFIX",
+            if (forSend && _siegeSettlement != null)
+                costNow = Math.Max(0, costNow - SiegeEquipmentBill());
+            MBTextManager.SetTextVariable(forSend ? "TB_SEND_COST_SUFFIX" : "TB_COST_SUFFIX",
                 costNow > 0 ? " (" + costNow + " denars)" : string.Empty, false);
             var mockDrill = _pickedTeam == null && _mockEnemyTeam != null;
             MBTextManager.SetTextVariable("TB_BEGIN_SIDE",
@@ -1297,8 +1309,12 @@ namespace TrainingBattles
                 //     casualties so far. (Letting that menu live re-starts the fight as a PURE
                 //     VANILLA battle with all our protections closed — Anton lost real upgrade
                 //     XP to exactly that.)
+                //     Never while a battle SIMULATION is live: the castle auto-resolve runs
+                //     with the settlement's menu context alive underneath the simulation view
+                //     (the field one exits to the bare map), and without this guard the "player
+                //     bailed to a foreign menu" read would finalize the drill mid-simulation.
                 var encounter = PlayerEncounter.Current;
-                if (encounter != null && mapState.AtMenu
+                if (encounter != null && encounter.BattleSimulation == null && mapState.AtMenu
                     && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != MenuId)
                 {
                     FinishTrainingBattle();
@@ -1869,7 +1885,10 @@ namespace TrainingBattles
             }
 
             // The pay-chest is counted over the WHOLE company (both halves drill), before the split.
+            // An auto-resolved siege fields no bench engines — the engine bill sits out with them.
             var cost = ComputeTrainingCost();
+            if (simulate && _siegeSettlement != null)
+                cost = Math.Max(0, cost - SiegeEquipmentBill());
             if (cost > 0 && (Hero.MainHero?.Gold ?? 0) < cost)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
@@ -2055,7 +2074,7 @@ namespace TrainingBattles
             // above — validation, the crossing, morale, pay, snapshots, flags.
             if (_siegeSettlement != null)
             {
-                LaunchSiegeBattle(opponent, playerDefends);
+                LaunchSiegeBattle(opponent, playerDefends, simulate);
                 return;
             }
 
@@ -2130,7 +2149,7 @@ namespace TrainingBattles
         /// SiegeCompleted, so the capture/sack/devastation machinery never sees a drill. The
         /// mission gets its engines as plain MissionSiegeWeapon data (the engineer's bench);
         /// with the siege event's own construction lists empty, vanilla's writeback no-ops.</summary>
-        private void LaunchSiegeBattle(MobileParty opponent, bool playerDefends)
+        private void LaunchSiegeBattle(MobileParty opponent, bool playerDefends, bool simulate)
         {
             var siege = _siegeSettlement!;
             var main = MobileParty.MainParty;
@@ -2192,8 +2211,12 @@ namespace TrainingBattles
                 EnterSettlementAction.ApplyForParty(opponent, siege);
                 _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
                 DeactivateDrillBlockade(_drillSiegeEvent); // a port castle + own fleet raises one
-                try { PlayerSiege.StartPlayerSiege(BattleSideEnum.Attacker, isSimulation: false, siege); }
-                catch { /* the siege HUD is cosmetics; the drill fights on without it */ }
+                // The auto-resolve arms PlayerSiege ITSELF (BattleSimulation's ctor calls
+                // StartPlayerSiege with isSimulation: true for siege assaults) — only the
+                // led-in-person road wants the HUD armed here.
+                if (!simulate)
+                    try { PlayerSiege.StartPlayerSiege(BattleSideEnum.Attacker, isSimulation: false, siege); }
+                    catch { /* the siege HUD is cosmetics; the drill fights on without it */ }
                 TbLog.Info("siege", "siege event up | besieger: you");
                 PlayerEncounter.Start();
                 PlayerEncounter.Current.SetupFields(PartyBase.MainParty, siege.Party);
@@ -2207,6 +2230,29 @@ namespace TrainingBattles
             }
             TbLog.Info("siege", "sides seated | attacker " + (mapEvent.AttackerSide?.LeaderParty?.Name?.ToString() ?? "?")
                 + " | defender " + (mapEvent.DefenderSide?.LeaderParty?.Name?.ToString() ?? "?"));
+
+            // The AUTO-RESOLVE road (Anton's ask, 2026.07.26): vanilla's own ordered assault —
+            // MenuHelper.EncounterOrderAttack verbatim: leave the menu, InitSimulation over the
+            // live Siege event, start the simulation view. The walls' advantage lives in the
+            // simulation models; the engineer's engines are mission data and sit out (their
+            // bill was never charged on this road; the bench picks stay armed for a later
+            // led-in-person assault). MapEventEnded + the tick run the aftermath, as on the
+            // field's send-troops road — trigger (b) knows to stand down while a simulation
+            // is live.
+            if (simulate)
+            {
+                TbLog.Info("siege", "assault auto-resolves | " + siege.Name
+                    + " | player " + (playerDefends ? "defends" : "attacks")
+                    + " | engines sit out");
+                GameMenu.ExitToLast();
+                PlayerEncounter.InitSimulation(null, null);
+                if (PlayerEncounter.Current?.BattleSimulation != null
+                    && Game.Current.GameStateManager.ActiveState is MapState mapState)
+                {
+                    mapState.StartBattleSimulation();
+                }
+                return;
+            }
 
             // The mission: the castle's own scene at its true wall level, the walls' true
             // health, and the engineer's engines on both sides.
@@ -3495,6 +3541,7 @@ namespace TrainingBattles
                 ref xpRestored, ref xpKeptFromDrill);
             if (mainSnapshot != null && opponentSnapshot != null)
             {
+                if (_friendPartySnapshots.Count > 0) report.AppendLine("— the company —");
                 var before = Combine(ToDictionary(mainSnapshot), ToDictionary(opponentSnapshot));
                 var after = ToDictionary(main.MemberRoster);
                 foreach (var pair in before)
