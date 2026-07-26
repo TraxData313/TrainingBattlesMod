@@ -2158,12 +2158,17 @@ namespace TrainingBattles
                 TbLog.Info("siege", "siege event up | besieger: the opposing half (camp-swapped)");
                 StartBattleAction.ApplyStartAssaultAgainstWalls(opponent, siege);
                 mapEvent = siege.Party.MapEvent;
-                TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL"));
+                TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL")
+                    + " | defenders auto-joined " + (mapEvent?.DefenderSide?.Parties?.Count ?? -1)
+                    + " | encounter live " + (PlayerEncounter.Current != null));
                 if (mapEvent == null) throw new InvalidOperationException("the assault event did not form");
                 KeepSiegeEventThroughFinalize(mapEvent);
                 if (PlayerEncounter.Current != null)
                 {
+                    // The settlement-visit encounter (being inside IS an encounter) joins the
+                    // defense — vanilla's own join_siege_event road.
                     PlayerEncounter.JoinBattle(BattleSideEnum.Defender);
+                    TbLog.Info("siege", "player joined the defense (JoinBattle over the visit encounter)");
                 }
                 else
                 {
@@ -2171,8 +2176,9 @@ namespace TrainingBattles
                     // party on the defense directly.
                     PlayerEncounter.Start();
                     PartyBase.MainParty.MapEventSide = mapEvent.DefenderSide;
+                    TbLog.Info("siege", "player joined the defense (FALLBACK: fresh encounter + direct seat"
+                        + " — the visit encounter was unexpectedly gone)");
                 }
-                TbLog.Info("siege", "player joined the defense");
                 SeatFriendliesOnTheWalls(mapEvent, siege);
             }
             else
@@ -2185,6 +2191,7 @@ namespace TrainingBattles
                 TbLog.Info("siege", "walked out of the gate");
                 EnterSettlementAction.ApplyForParty(opponent, siege);
                 _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
+                DeactivateDrillBlockade(_drillSiegeEvent); // a port castle + own fleet raises one
                 try { PlayerSiege.StartPlayerSiege(BattleSideEnum.Attacker, isSimulation: false, siege); }
                 catch { /* the siege HUD is cosmetics; the drill fights on without it */ }
                 TbLog.Info("siege", "siege event up | besieger: you");
@@ -2261,7 +2268,13 @@ namespace TrainingBattles
         {
             var main = MobileParty.MainParty;
             var lastAttacker = siege.LastAttackerParty; // founding a siege stamps this — restore below
+            var mainPosition = main.Position;           // founding TELEPORTS the founder to the camp
+                                                        // spot outside the walls — but the defending
+                                                        // player never left the castle; restore below
+            TbLog.Info("siege", "founding the drill siege (besieger: the hero-led main party, camp to be swapped)");
             var siegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
+            TbLog.Info("siege", "siege event founded | settlement.SiegeEvent set "
+                + (siege.SiegeEvent == siegeEvent) + " | blockade " + siegeEvent.IsBlockadeActive);
             try
             {
                 var camp = siegeEvent.BesiegerCamp;
@@ -2280,19 +2293,45 @@ namespace TrainingBattles
                 factionField.SetValue(camp, opponent.MapFaction);
                 campOnParty.SetValue(opponent, camp);
                 try { siege.LastAttackerParty = lastAttacker; } catch { }
+                try { main.Position = mainPosition; } catch { }
+                // A PORT castle with the fleet at anchor ACTIVATES A BLOCKADE the instant the
+                // ship-owning main party founds the siege (SiegeEvent ctor, HasPort + Ships.Any)
+                // — and the shipless opposing half cannot hold one. Stand it down.
+                DeactivateDrillBlockade(siegeEvent);
                 TbLog.Info("siege", "camp swapped to the opposing half | camp leader "
-                    + (camp.LeaderParty?.Name?.ToString() ?? "NULL"));
+                    + (camp.LeaderParty?.Name?.ToString() ?? "NULL")
+                    + " | camp faction " + (camp.MapFaction?.Name?.ToString() ?? "NULL")
+                    + " | main party freed " + (main.BesiegerCamp == null));
                 return siegeEvent;
             }
-            catch
+            catch (Exception ex)
             {
                 // The swap failed — tear the WHOLE siege down before rethrowing; a half-built
                 // siege left on the settlement is exactly what crashed round 2.
+                TbLog.Info("siege", "CAMP SWAP FAILED — dismantling the half-built siege: " + ex.Message);
                 try { siegeEvent.FinalizeSiegeEvent(); } catch { }
                 try { if (siege.SiegeEvent != null) siege.FinalizeSiegeEvent(); } catch { }
                 try { siege.LastAttackerParty = lastAttacker; } catch { }
+                try { main.Position = mainPosition; } catch { }
                 throw;
             }
+        }
+
+        /// <summary>Stands down a blockade the drill siege's founding may have raised (a port
+        /// castle + the player's own hulls at anchor light one automatically). The switch is
+        /// vanilla's internal <c>DeactivateBlockade</c> — reflection, no Harmony; a miss only
+        /// leaves a cosmetic blockade that FinalizeSiegeEvent clears on every exit road.</summary>
+        private static void DeactivateDrillBlockade(SiegeEvent siegeEvent)
+        {
+            try
+            {
+                if (!siegeEvent.IsBlockadeActive) return;
+                typeof(SiegeEvent).GetMethod("DeactivateBlockade", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                    ?.Invoke(siegeEvent, null);
+                TbLog.Info("siege", "the founding raised a blockade (port castle + own fleet) — stood down: "
+                    + (!siegeEvent.IsBlockadeActive));
+            }
+            catch (Exception ex) { TbLog.Info("siege", "blockade stand-down failed (cosmetic): " + ex.Message); }
         }
 
         /// <summary>The last net under every siege-drill exit: if the drill's settlement STILL
@@ -2304,8 +2343,11 @@ namespace TrainingBattles
             var siege = _siegeSettlement;
             if (siege?.SiegeEvent == null) return;
             TbLog.Info("siege", "ghost siege found at " + siege.Name + " — dismantling");
-            try { siege.SiegeEvent.FinalizeSiegeEvent(); } catch { }
-            try { if (siege.SiegeEvent != null) siege.FinalizeSiegeEvent(); } catch { }
+            var ghost = siege.SiegeEvent;
+            // Settlement side first — same menu-push dodge as DismantleDrillSiege.
+            try { siege.FinalizeSiegeEvent(); } catch { }
+            try { ghost.FinalizeSiegeEvent(); } catch { }
+            TbLog.Info("siege", "ghost siege gone " + (siege.SiegeEvent == null));
         }
 
         /// <summary>Sets the map event's private _keepSiegeEvent flag the moment the event is
@@ -2333,16 +2375,28 @@ namespace TrainingBattles
         /// their own lord, and without this the walls would stand empty of their keepers.</summary>
         private void SeatFriendliesOnTheWalls(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent, Settlement siege)
         {
+            var seated = 0;
+            var already = 0;
             foreach (var (party, _) in _friendPartySnapshots)
             {
                 try
                 {
                     if (party == null || party.CurrentSettlement != siege) continue;
                     if (party.Party.MapEventSide == null)
+                    {
                         party.Party.MapEventSide = mapEvent.DefenderSide;
+                        seated++;
+                    }
+                    else already++;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    TbLog.Info("siege", "seating " + (party?.Name?.ToString() ?? "?") + " FAILED: " + ex.Message);
+                }
             }
+            TbLog.Info("siege", "friendlies on the walls | seated now " + seated
+                + " | already on a side " + already
+                + " | defender parties " + (mapEvent.DefenderSide?.Parties?.Count ?? -1));
         }
 
         /// <summary>Every friendly party inside the settlement that the siege event will drag
@@ -2375,8 +2429,20 @@ namespace TrainingBattles
             var siegeEvent = _drillSiegeEvent;
             _drillSiegeEvent = null;
             if (siegeEvent == null) return;
-            try { siegeEvent.FinalizeSiegeEvent(); }
-            catch { }
+            // Unhook the SETTLEMENT first (its own FinalizeSiegeEvent is idempotent — resets the
+            // siege state and nulls Settlement.SiegeEvent). With the reference already cleared,
+            // the event's finalize skips its "you sit inside the besieged settlement" branch —
+            // which would SwitchToMenu("siege_attacker_left") MID-teardown: on the defend road
+            // the player does sit inside, and a menu-less moment there would throw and abandon
+            // the rest of the teardown, leaving a ghost siege in the save.
+            try { siegeEvent.BesiegedSettlement?.FinalizeSiegeEvent(); } catch { }
+            try
+            {
+                siegeEvent.FinalizeSiegeEvent();
+                TbLog.Info("siege", "drill siege dismantled | settlement clear "
+                    + (_siegeSettlement?.SiegeEvent == null));
+            }
+            catch (Exception ex) { TbLog.Info("siege", "drill siege dismantle FAILED: " + ex.Message); }
         }
 
         /// <summary>Walls exactly as they stood — the belt to the "only bombardment ticks damage
@@ -2391,8 +2457,9 @@ namespace TrainingBattles
             {
                 for (var i = 0; i < snapshot.Count && i < siege.SettlementWallSectionHitPointsRatioList.Count; i++)
                     siege.SetWallSectionHitPointsRatioAtIndex(i, snapshot[i]);
+                TbLog.Info("siege", "walls restored | " + snapshot.Count + " sections");
             }
-            catch { }
+            catch (Exception ex) { TbLog.Info("siege", "wall restore FAILED: " + ex.Message); }
         }
 
         /// <summary>A crash mid-siege-drill leaves the SiegeEvent in the save. On load, any siege
@@ -2708,6 +2775,53 @@ namespace TrainingBattles
         }
 
         // ------------------------------ the training colors ------------------------------
+
+        /// <summary>Paints every ENEMY mission team in the training colors, called from
+        /// <see cref="SubModule.OnMissionBehaviorInitialize"/> — after the mission's teams exist
+        /// (MissionCombatantsLogic's init built them) and BEFORE any agent spawns (uniform tint
+        /// is read from Team.Color at spawn; verified in Mission.SpawnTroop). Field and sea
+        /// drills already get this look through the dressed lender clan, but a SIEGE's wall
+        /// team answers to the SETTLEMENT: its colors are the castle owner's map-faction pair —
+        /// the player's own — and no clan dressing can reach them (Anton's castle playtest,
+        /// 2026.07.25: the defending training force wore his kingdom's colors). Team's Color/
+        /// Color2/Banner have no setters, so the auto-property backing fields are written by
+        /// reflection — cosmetics only, any miss is logged and swallowed.</summary>
+        internal static void PaintEnemyMissionTeams(TaleWorlds.MountAndBlade.Mission mission)
+        {
+            if (!TrainingActive) return;
+            var config = Instance?._config;
+            if (config == null || !config.UseOpponentBanner) return;
+            try
+            {
+                var player = mission?.PlayerTeam;
+                if (mission == null || player == null) return;
+                var banner = new Banner(config.OpponentBannerCode);
+                var color = banner.GetPrimaryColor();
+                var color2 = banner.GetFirstIconColor();
+                var teamType = typeof(TaleWorlds.MountAndBlade.Team);
+                var colorField = teamType.GetField("<Color>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+                var color2Field = teamType.GetField("<Color2>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+                var bannerField = teamType.GetField("<Banner>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (colorField == null || color2Field == null || bannerField == null)
+                {
+                    TbLog.Info("colors", "mission team paint skipped — Team's fields moved (game update?)");
+                    return;
+                }
+                var painted = 0;
+                foreach (var team in mission.Teams)
+                {
+                    if (team == null || team.Side == player.Side) continue;
+                    colorField.SetValue(team, color);
+                    color2Field.SetValue(team, color2);
+                    bannerField.SetValue(team, banner);
+                    painted++;
+                }
+                if (painted > 0)
+                    TbLog.Info("colors", "painted " + painted + " enemy mission team(s) in the training"
+                        + " colors (player side " + player.Side + ")");
+            }
+            catch (Exception ex) { TbLog.Info("colors", "mission team paint failed (cosmetic): " + ex.Message); }
+        }
 
         /// <summary>Dresses the opposing half in the training banner. The banner itself goes on the
         /// party (<c>SetCustomBanner</c> — the team's flag). The team COLORS and the men's shield
@@ -3055,6 +3169,9 @@ namespace TrainingBattles
         /// no aftermath, no cooldown.</summary>
         private void AbortLiveBattle()
         {
+            TbLog.Info("drill", "abort begins | siege " + (_siegeSettlement?.Name?.ToString() ?? "no")
+                + " | encounter " + (PlayerEncounter.Current != null)
+                + " | opponent " + (_opponentParty != null));
             // Finish(false): a failed CASTLE launch must not also throw the player out of
             // their own castle (crash round 2's insult on top of injury); the field and sea
             // drills never sit inside a settlement, so nothing changes for them.
@@ -3112,10 +3229,14 @@ namespace TrainingBattles
                 try
                 {
                     if (PlayerEncounter.Current == null)
+                    {
                         EncounterManager.StartSettlementEncounter(MobileParty.MainParty, abortedSiege);
+                        TbLog.Info("drill", "abort: castle visit re-opened at " + abortedSiege.Name);
+                    }
                 }
-                catch { }
+                catch (Exception ex) { TbLog.Info("drill", "abort: castle re-entry FAILED: " + ex.Message); }
             }
+            TbLog.Info("drill", "abort done");
         }
 
         // ------------------------------ the aftermath ------------------------------
@@ -3126,6 +3247,10 @@ namespace TrainingBattles
             _battleRan = false;
             var main = MobileParty.MainParty;
             var opponent = _opponentParty;
+            TbLog.Info("drill", "aftermath begins | siege " + (_siegeSettlement?.Name?.ToString() ?? "no")
+                + " | encounter " + (PlayerEncounter.Current != null)
+                + " | mapEvent " + (main?.MapEvent?.EventType.ToString() ?? "none")
+                + " | atMenu " + (Campaign.Current?.CurrentMenuContext?.GameMenu?.StringId ?? "none"));
 
             bool playerWon = _pendingPlayerWon ?? false;
             try
@@ -3543,16 +3668,20 @@ namespace TrainingBattles
                     if (mainParty?.CurrentSettlement == siegeSettlement)
                     {
                         if (PlayerEncounter.Current == null)
+                        {
                             EncounterManager.StartSettlementEncounter(mainParty, siegeSettlement);
+                            TbLog.Info("siege", "aftermath: back inside " + siegeSettlement.Name + " (defender road)");
+                        }
                     }
                     else if (mainParty != null && mainParty.CurrentSettlement == null
                         && mainParty.MapEvent == null && PlayerEncounter.Current == null
                         && siegeSettlement.SiegeEvent == null)
                     {
                         EncounterManager.StartSettlementEncounter(mainParty, siegeSettlement);
+                        TbLog.Info("siege", "aftermath: walked back through the gate of " + siegeSettlement.Name);
                     }
                 }
-                catch { /* worst case the player rides back in themselves */ }
+                catch (Exception ex) { TbLog.Info("siege", "aftermath castle re-entry FAILED: " + ex.Message); }
             }
         }
 

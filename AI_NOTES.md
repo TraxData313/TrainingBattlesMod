@@ -136,6 +136,46 @@ sweep now also finalizes any LEADERLESS siege on a player-owned settlement (no v
 stands leaderless). (3) Abort uses `Finish(false)` (nobody gets ejected by a failed launch)
 and re-opens the castle's settlement encounter so the menu works again.
 
+HARDENING PASS (2026.07.26, pre-round-3 — Anton reported "defense totally crashed": that was
+crash round 2 above; its camp-swap fix landed 21:40, EIGHT MINUTES after his 21:32 crash, so
+the repo's defend road is newer than anything he has played. Audited the whole swapped shape
+against the decompiled corpus and closed what remained):
+- Verified sound against vanilla: `AddInsideSettlementParties` auto-joins garrison/militia to
+  the defense and EXCLUDES the main party (so no `InterruptEncounter` menu fires mid-launch);
+  `Town.GetDefenderParties` excludes caravans/villagers (our snapshot exclusion matches
+  vanilla exactly); `CheckNearbyPartiesToJoinPlayerMapEvent` early-outs for IsSiegeAssault
+  (no nearby lord can wander into a siege drill); `JoinBattle(Defender)` reads
+  `EncounteredBattle` = the visit encounter's settlement MapEvent — our exact shape.
+- FIXED — founding teleport: `StartSiegeEvent(castle, main)` on the defend road moves the
+  main party to the besieger-camp spot outside the walls (`OnPartyJoinedSiegeInternal` sets
+  Position) while the defender never left the castle; position snapshotted and restored.
+- FIXED — port-castle blockade: the ctor ACTIVATES a blockade when the settlement HasPort and
+  the founding besieger owns ships (the player's fleet at anchor!) — the swapped-in temp
+  party is shipless and the drill wants no blockade at all. `DeactivateDrillBlockade`
+  (reflection to the internal `DeactivateBlockade`) stands it down on BOTH roads.
+- FIXED — teardown menu push: `SiegeEvent.FinalizeSiegeEvent` calls
+  `GameMenu.SwitchToMenu("siege_attacker_left")` when the player sits inside the besieged
+  settlement (defend road: always). At a menu-less moment that throw would abandon the rest
+  of the teardown → ghost siege in the save. Both dismantlers now call the SETTLEMENT's own
+  idempotent `FinalizeSiegeEvent()` FIRST (nulls Settlement.SiegeEvent → vanilla's menu
+  branch can't match) before finalizing the event.
+- LOGGING — every siege step now writes to training_battles.log: founding, blockade state,
+  swap result (camp leader/faction, main freed), defenders auto-joined count, which join
+  branch ran (visit-encounter JoinBattle vs fallback), seated/already counts, dismantle and
+  wall-restore outcomes, aftermath/abort entry state (encounter? mapEvent? menu?), castle
+  re-entry. A round-3 failure names its exact step.
+- ORANGE WALLS (Anton's ask): the siege wall team wore the CASTLE OWNER's faction colors —
+  the player's own — because mission team color/banner come from the side LEADER combatant,
+  and a settlement's `PrimaryColorPair` is its map faction's (verified:
+  MissionCombatantsLogic.AddEnemyTeam + PartyBase.PrimaryColorPair + Mission.SpawnTroop
+  ClothingColor1/2 = team colors at spawn). Clan dressing can never reach it. New
+  `PaintEnemyMissionTeams` (static, TrainingBattleBehavior) writes the training banner's
+  colors + banner onto every enemy team's backing fields (`<Color>k__BackingField` etc. —
+  Team has no setters) from `SubModule.OnMissionBehaviorInitialize` — which runs AFTER
+  MissionCombatantsLogic built the teams and BEFORE any agent spawns (verified in
+  Mission.AfterStart). No-op unless TrainingActive; covers field/sea/siege alike (field/sea
+  were already orange via the dressed clan — now doubly guaranteed).
+
 PLAYTEST RISKS (in rough order of worry):
 1. ATTACK road novelties: same-faction garrison forced onto the enemy side (agent hostility
    flags?), LeaveSettlement/EnterSettlement mid-menu, `AddInsideSettlementParties` may push a

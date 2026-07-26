@@ -78,5 +78,15 @@ namespace TrainingBattles
             TrainingBattleBehavior.Instance?.TickHotkey();
             UI.TrainingWindow.Tick(); // the custom windows' Escape road; cheap when none is up
         }
+
+        public override void OnMissionBehaviorInitialize(Mission mission)
+        {
+            base.OnMissionBehaviorInitialize(mission);
+            // The drill's opponents wear the training orange whatever side of whatever mission
+            // they hold — the SIEGE wall team especially, whose colors come from the castle
+            // owner's faction (the player's own) and no clan dressing can reach. Teams exist
+            // at this hook; no agent has spawned yet. No-op unless a drill is live.
+            TrainingBattleBehavior.PaintEnemyMissionTeams(mission);
+        }
     }
 }

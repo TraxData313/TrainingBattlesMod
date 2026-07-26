@@ -304,7 +304,16 @@ before deploying or the DLL is locked.
   `MapEventSide` positively. Walls are damaged only by campaign bombardment ticks, never by
   the mission. Being inside a settlement IS a PlayerEncounter — stand it down with
   `Finish(false)` (keeps the men inside) before starting the drill's own; a fresh
-  `EncounterManager.StartSettlementEncounter` re-opens the castle at the end.
+  `EncounterManager.StartSettlementEncounter` re-opens the castle at the end. MORE (the
+  2026.07.26 hardening pass): founding a siege TELEPORTS the founder to the camp spot
+  (restore Position when the founder never left the castle); the SiegeEvent ctor ACTIVATES
+  a BLOCKADE at a port settlement when the founder owns ships (the player's fleet!) — stand
+  it down; `SiegeEvent.FinalizeSiegeEvent` pushes SwitchToMenu("siege_attacker_left") when
+  the player sits inside — call the Settlement's own idempotent `FinalizeSiegeEvent()` FIRST
+  so that branch can't match; and a siege's WALL TEAM wears the SETTLEMENT map faction's
+  colors (the player's own at an owned castle) — no clan dressing reaches it, so
+  `PaintEnemyMissionTeams` rewrites the enemy Team's color/banner backing fields from
+  `SubModule.OnMissionBehaviorInitialize` (after teams exist, before agents spawn).
 
 ## Build & deploy
 
