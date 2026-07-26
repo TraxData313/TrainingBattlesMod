@@ -156,4 +156,32 @@ public class AftermathMathTests
     {
         Assert.Equal(expected, AftermathMath.XpKeptPercentForSkill(skill, min, max));
     }
+
+    // ---- the drill instructors -----------------------------------------------
+
+    [Fact]
+    public void InstructorBonusPercent_SumsLinearContributions()
+    {
+        // Skill 300 earns the full rate, 150 half of it, 0 nothing.
+        Assert.Equal(5.0, AftermathMath.InstructorBonusPercent(new[] { 300 }, 5.0), precision: 10);
+        Assert.Equal(7.5, AftermathMath.InstructorBonusPercent(new[] { 300, 150 }, 5.0), precision: 10);
+        Assert.Equal(7.5, AftermathMath.InstructorBonusPercent(new[] { 300, 150, 0 }, 5.0), precision: 10);
+    }
+
+    [Fact]
+    public void InstructorBonusPercent_ClampsSkillsAndRate()
+    {
+        // Skills clamp into 0..300; a negative rate teaches nothing (never subtracts).
+        Assert.Equal(5.0, AftermathMath.InstructorBonusPercent(new[] { 500 }, 5.0), precision: 10);
+        Assert.Equal(0.0, AftermathMath.InstructorBonusPercent(new[] { -100 }, 5.0), precision: 10);
+        Assert.Equal(0.0, AftermathMath.InstructorBonusPercent(new[] { 300, 300 }, -5.0), precision: 10);
+    }
+
+    [Fact]
+    public void InstructorBonusPercent_NobodyTeachesNothing()
+    {
+        Assert.Equal(0.0, AftermathMath.InstructorBonusPercent(System.Array.Empty<int>(), 5.0));
+        Assert.Equal(0.0, AftermathMath.InstructorBonusPercent(null!, 5.0));
+        Assert.Equal(0.0, AftermathMath.InstructorBonusPercent(new[] { 300 }, 0.0));
+    }
 }

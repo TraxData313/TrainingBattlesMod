@@ -71,12 +71,24 @@ What a real general does before the battle: know the field — and pick the hour
 *Choose the ground: the map patch's own scene plus every battlefield of the local terrain type.*
 
 
+## Your companions matter
+
+The drill yard runs on your officers — every role you fill makes training better:
+
+- **Quartermaster** *(the **First Mate** at sea)* — sets the share of XP the men keep from a drill; a great one even earns bonus XP
+- **Your skilled fighters** — the best fighter companions instruct on the yard, adding to the XP kept
+- **Steward** — a well-run camp: shortens the time it takes to organize the next drill
+- **Surgeon** — fewer incidents in training: fewer real deaths among the fallen, fewer men who stay wounded
+- **Scout** *(the **Navigator** at sea)* — wins you the ground: out-scouting the enemy unlocks the battlefield and hour picks in real battles
+
+All of it tunable in MCM — each officer has their own group of knobs.
+
 
 ## The knobs
 
 Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod Configuration Menu (MCM)**. MCM is a soft dependency — without it the config file alone runs the show.
 
-- **Officer knobs** — the Quartermaster's XP band, the Surgeon's death/wounded bands, the scouting duel ratios (each officer has its own MCM group)
+- **Officer knobs** — the Quartermaster's XP band, the fighter-instructor bonus, the Steward cooldown speed-up, the Surgeon's death/wounded bands, the scouting duel ratios (each officer has its own MCM group)
 - **Drill knobs** — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
 - **Ground & time knobs** — time of day for battles, the real-battle scout toggles (defending and attacking separately)
 - **Misc** — the mock-enemy toggle, the hotkey (default `G` on the campaign map), debug logging

@@ -14,7 +14,10 @@ the drill's one real cost, zeroable for the old no-deaths pledge), some wake wou
 Anton's 2026.07.25 playtest), and there is deliberately NO wounded→death path; earned XP is kept at a percent the XP OFFICER sets (the QUARTERMASTER's
 LEADERSHIP on land — Anton's call over Steward — the FIRST MATE's Boatswain at sea; a config
 band, default 40% at skill 0 rising linearly to 100% at 300, cap 200 — past 100 the drill
-grants bonus XP), the army goes disorganized, and a cooldown (default 24h) gates the next
+grants bonus XP; since 2026.07.26 the best-fighting companions INSTRUCT on top: top 3 by
+their best weapon skill add up to +5% each, same cap), the army goes disorganized, and a
+cooldown (default 24h, since 2026.07.26 DIVIDED by the quartermaster's Steward — /1 at
+skill 0 to /4 at 300, castle clocks included) gates the next
 drill (cost: 1 day's wages ashore, 2 at sea; castle/city/army rates come with those drills). Since 2026.07.23 the player can also CHOOSE the
 battlefield and SCOUT it alone — a free walk-around mission, no battle, no cost — from TWO
 doors: the training muster (any scene of the local terrain type, the patch's own marked
@@ -119,8 +122,10 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   Officers.cs                 WHO answers for WHAT: duty→officer map, land and sea (XP =
                               Quartermaster/Leadership ashore, First Mate/Boatswain afloat;
                               ground = Scout/Scouting ashore, Navigator/Shipmaster afloat;
-                              casualties = Surgeon/Medicine everywhere) — naval skills found
-                              by string id, no NavalDLC assembly reference
+                              casualties = Surgeon/Medicine everywhere; the cooldown clock =
+                              Quartermaster/Steward everywhere; drill INSTRUCTORS = the
+                              best-fighting companions by best weapon skill, player excluded)
+                              — naval skills found by string id, no NavalDLC assembly reference
   TbLog.cs                    the rolling debug ledger (training_battles.log, ~1 MB trim):
                               drills, duels, picks, officer resolutions, config loads —
                               last_drill_report.txt stays the per-stack deep witness

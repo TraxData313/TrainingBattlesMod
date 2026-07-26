@@ -47,6 +47,18 @@ namespace TrainingBattles
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public int? XpKeptPercent { get; set; }
 
+        /// <summary>The drill INSTRUCTORS' stake (Anton's polish, 2026.07.26): the party's
+        /// best-fighting companions — each judged by the best of their six weapon skills —
+        /// ADD to the kept-XP percent on top of the XP officer's band, this many percentage
+        /// points each at weapon skill 300 (linear from 0 at skill 0). The 200% cap still
+        /// rules the total. 0 = instructors teach nothing. Default 5.</summary>
+        public double XpInstructorBonusPercentAt300 { get; set; } = 5.0;
+
+        /// <summary>How many instructors are counted, best fighters first. Default 3 — a
+        /// handful of champions runs the drill yard; a bench of twenty would not fit on it.
+        /// 0 disables the bonus entirely.</summary>
+        public int XpInstructorMaxCount { get; set; } = 3;
+
         // ---- The SURGEON's three bands (Anton, 2026.07.25) --------------------------------
         // Each casualty outcome scales LINEARLY with the effective surgeon's Medicine from the
         // AtMedicine0 end (no doctor) to the AtMedicine300 end (a master), read through
@@ -190,6 +202,13 @@ namespace TrainingBattles
         /// <summary>In-game hours between training battles (0 = unlimited). Default 24.</summary>
         public int CooldownHours { get; set; } = 24;
 
+        /// <summary>The QUARTERMASTER's stake in the clock (Anton's polish, 2026.07.26): the
+        /// cooldown — this field clock AND each castle's — is DIVIDED by a factor scaling
+        /// linearly with the quartermaster's Steward (the player's own when nobody holds the
+        /// role) from /1 at skill 0 to this ceiling at skill 300. Default 4: a master
+        /// quartermaster turns the camp around in a quarter of the time. 1 = the polish off.</summary>
+        public double CooldownDivisorAtSteward300 { get; set; } = 4.0;
+
         /// <summary>Whether the party becomes DISORGANIZED after a training battle (slower on the
         /// map for a while, the vanilla post-battle state). Default true — drilling is tiring.</summary>
         public bool DisorganizedAfterTraining { get; set; } = true;
@@ -297,6 +316,9 @@ namespace TrainingBattles
             DownedWoundedPercentAtMedicine0 = ClampChance(DownedWoundedPercentAtMedicine0);
             DownedWoundedPercentAtMedicine300 = ClampChance(DownedWoundedPercentAtMedicine300);
             CooldownHours = Clamp(CooldownHours, 0, 168);
+            CooldownDivisorAtSteward300 = ClampDouble(CooldownDivisorAtSteward300, 1.0, 10.0);
+            XpInstructorBonusPercentAt300 = ClampDouble(XpInstructorBonusPercentAt300, 0.0, 50.0);
+            XpInstructorMaxCount = Clamp(XpInstructorMaxCount, 0, 10);
             HeroHealthRestorePercent = Clamp(HeroHealthRestorePercent, 0, 100);
             TrainingCostWagesLand = Clamp(TrainingCostWagesLand, 0, 30);
             TrainingCostWagesSea = Clamp(TrainingCostWagesSea, 0, 60);
@@ -399,7 +421,10 @@ namespace TrainingBattles
             }
             // v12 (2026.07.25, the castle update): the castle siege drill and its engineer —
             // all new keys with safe defaults, nothing to migrate.
-            ConfigVersion = 12;
+            // v13 (2026.07.26, the companions polish): the quartermaster's Steward speeds the
+            // cooldown and the best-fighting companions instruct for bonus kept-XP — all new
+            // keys with safe defaults, nothing to migrate.
+            ConfigVersion = 13;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

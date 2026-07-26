@@ -73,6 +73,9 @@ namespace TrainingBattles.Mcm
             s.CastleDrillInfluencePer100Men = (float)c.CastleDrillInfluencePer100Men;
             s.XpKeptMinPercent = c.XpKeptMinPercent;
             s.XpKeptMaxPercent = c.XpKeptMaxPercent;
+            s.XpInstructorBonusPercentAt300 = (float)c.XpInstructorBonusPercentAt300;
+            s.XpInstructorMaxCount = c.XpInstructorMaxCount;
+            s.CooldownDivisorAtSteward300 = (float)c.CooldownDivisorAtSteward300;
             s.RealDeathPercentAtMedicine0 = (float)c.RealDeathPercentAtMedicine0;
             s.RealDeathPercentAtMedicine300 = (float)c.RealDeathPercentAtMedicine300;
             s.KiaWoundedPercentAtMedicine0 = (float)c.KiaWoundedPercentAtMedicine0;
@@ -114,6 +117,9 @@ namespace TrainingBattles.Mcm
             c.CastleDrillInfluencePer100Men = s.CastleDrillInfluencePer100Men;
             c.XpKeptMinPercent = s.XpKeptMinPercent;
             c.XpKeptMaxPercent = s.XpKeptMaxPercent;
+            c.XpInstructorBonusPercentAt300 = s.XpInstructorBonusPercentAt300;
+            c.XpInstructorMaxCount = s.XpInstructorMaxCount;
+            c.CooldownDivisorAtSteward300 = s.CooldownDivisorAtSteward300;
             c.RealDeathPercentAtMedicine0 = s.RealDeathPercentAtMedicine0;
             c.RealDeathPercentAtMedicine300 = s.RealDeathPercentAtMedicine300;
             c.KiaWoundedPercentAtMedicine0 = s.KiaWoundedPercentAtMedicine0;

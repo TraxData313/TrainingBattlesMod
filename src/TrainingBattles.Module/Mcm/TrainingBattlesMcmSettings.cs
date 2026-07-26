@@ -51,6 +51,16 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("The Quartermaster — drill XP", GroupOrder = 1)]
         public int XpKeptMaxPercent { get; set; } = 100;
 
+        [SettingPropertyFloatingInteger("Instructor bonus at weapon skill 300 (%)", 0f, 50f, "0.0'%'", Order = 2, RequireRestart = false,
+            HintText = "Your best-fighting companions instruct the drill: each adds up to this many points to the XP kept (linear with their best weapon skill, 0 at skill 0). Added on top of the officer's band; the 200% cap still rules. 0 = off. Default 5.")]
+        [SettingPropertyGroup("The Quartermaster — drill XP", GroupOrder = 1)]
+        public float XpInstructorBonusPercentAt300 { get; set; } = 5.0f;
+
+        [SettingPropertyInteger("Instructors counted", 0, 10, "0", Order = 3, RequireRestart = false,
+            HintText = "How many companions instruct, best fighters first. Default 3.")]
+        [SettingPropertyGroup("The Quartermaster — drill XP", GroupOrder = 1)]
+        public int XpInstructorMaxCount { get; set; } = 3;
+
         // ---- The Surgeon — the fallen -------------------------------------------------
         // Three bands, each scaled linearly by the surgeon's Medicine from the "no doctor"
         // end (skill 0) to the "master doctor" end (skill 300). No wounded man ever dies.
@@ -137,42 +147,47 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int CooldownHours { get; set; } = 24;
 
-        [SettingPropertyInteger("Land drill cost (days of wages)", 0, 30, "0", Order = 1, RequireRestart = false,
+        [SettingPropertyFloatingInteger("Steward divides the cooldown (at 300)", 1f, 10f, "'/'0.0", Order = 1, RequireRestart = false,
+            HintText = "Your QUARTERMASTER's Steward (yours, when nobody holds the role) speeds the camp: every drill cooldown — the field clock and each castle's — is divided by a factor rising from /1 at Steward 0 to this at 300. Default /4. Set 1 to turn the speed-up off.")]
+        [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
+        public float CooldownDivisorAtSteward300 { get; set; } = 4.0f;
+
+        [SettingPropertyInteger("Land drill cost (days of wages)", 0, 30, "0", Order = 2, RequireRestart = false,
             HintText = "A land drill costs this many days of wages for every soldier on the field — equipment, upkeep, and rewards to keep the good fighters motivated. 0 = free. Default 1. (Future castle, city and army drills will get their own rates.)")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int TrainingCostWagesLand { get; set; } = 1;
 
-        [SettingPropertyInteger("Sea drill cost (days of wages)", 0, 60, "0", Order = 2, RequireRestart = false,
+        [SettingPropertyInteger("Sea drill cost (days of wages)", 0, 60, "0", Order = 3, RequireRestart = false,
             HintText = "The sea drill's rate — rigging wears, spars crack, salt eats everything. Default 2, double the land drill.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int TrainingCostWagesSea { get; set; } = 2;
 
-        [SettingPropertyInteger("Castle drill cost (days of wages)", 0, 60, "0", Order = 3, RequireRestart = false,
+        [SettingPropertyInteger("Castle drill cost (days of wages)", 0, 60, "0", Order = 4, RequireRestart = false,
             HintText = "The castle siege drill's rate, paid for every soul on the field — both halves, garrison and militia alike; a siege takes real organization. Picked siege engines add their own price on top (the Engineer group). Default 5.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int CastleTrainingCostWages { get; set; } = 5;
 
-        [SettingPropertyInteger("Castle drill cooldown (in-game hours)", 0, 720, "0", Order = 4, RequireRestart = false,
+        [SettingPropertyInteger("Castle drill cooldown (in-game hours)", 0, 720, "0", Order = 5, RequireRestart = false,
             HintText = "Rest between castle drills AT THE SAME CASTLE — each castle keeps its own clock, separate from the field drill's. 0 = unlimited. Default 168 (one week).")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int CastleTrainingCooldownHours { get; set; } = 168;
 
-        [SettingPropertyBool("Deal the company in half by default", Order = 5, RequireRestart = false,
+        [SettingPropertyBool("Deal the company in half by default", Order = 6, RequireRestart = false,
             HintText = "Opening the divide screen with no pick made deals every man and companion 50/50 into the two halves first (still fully editable). Default on.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public bool AutoSplitInHalf { get; set; } = true;
 
-        [SettingPropertyBool("Disorganized after training", Order = 6, RequireRestart = false,
+        [SettingPropertyBool("Disorganized after training", Order = 7, RequireRestart = false,
             HintText = "The party is disorganized for a while after a drill. Default on.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public bool DisorganizedAfterTraining { get; set; } = true;
 
-        [SettingPropertyFloatingInteger("Castle drill renown (per 100 men)", 0f, 10f, "0.0", Order = 7, RequireRestart = false,
+        [SettingPropertyFloatingInteger("Castle drill renown (per 100 men)", 0f, 10f, "0.0", Order = 8, RequireRestart = false,
             HintText = "A castle siege drill is a grand muster and the realm notices: renown earned per 100 friendly men on the field (both halves, garrison and militia), once per drill. Paid at the drill's end, never through battle rewards — kills and loot stay worthless in training. 0 = none. Default 1.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public float CastleDrillRenownPer100Men { get; set; } = 1.0f;
 
-        [SettingPropertyFloatingInteger("Castle drill influence (per 100 men)", 0f, 10f, "0.0", Order = 8, RequireRestart = false,
+        [SettingPropertyFloatingInteger("Castle drill influence (per 100 men)", 0f, 10f, "0.0", Order = 9, RequireRestart = false,
             HintText = "The same muster's influence — the kingdom sees a lord who keeps a sharp garrison. 0 = none. Default 1.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public float CastleDrillInfluencePer100Men { get; set; } = 1.0f;

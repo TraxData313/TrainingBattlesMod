@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace TrainingBattles.Core
 {
@@ -50,6 +51,25 @@ namespace TrainingBattles.Core
             if (hi < lo) hi = lo;
             return (int)Math.Round(lo + (hi - lo) * (ClampSkill(officerSkill) / (double)OfficerSkillCap),
                 MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>
+        /// The drill INSTRUCTORS' stake (Anton's polish, 2026.07.26): each good-fighter
+        /// companion sent to the drill adds percentage points to the kept-XP rate, linear from
+        /// 0 at fighting skill 0 to <paramref name="perInstructorAtSkillCap"/> at skill
+        /// <see cref="OfficerSkillCap"/> (skills clamped into the band, a negative rate counts
+        /// as 0). The caller picks WHO instructs (the top fighters by their best weapon skill)
+        /// and adds the sum onto the XP officer's band — the <see cref="MaxKeepPercent"/> cap
+        /// still rules the total. A null or empty roster teaches nothing.
+        /// </summary>
+        public static double InstructorBonusPercent(IEnumerable<int> fighterSkills, double perInstructorAtSkillCap)
+        {
+            if (fighterSkills == null) return 0.0;
+            var per = perInstructorAtSkillCap < 0.0 ? 0.0 : perInstructorAtSkillCap;
+            var total = 0.0;
+            foreach (var skill in fighterSkills)
+                total += per * (ClampSkill(skill) / (double)OfficerSkillCap);
+            return total;
         }
 
         /// <summary>

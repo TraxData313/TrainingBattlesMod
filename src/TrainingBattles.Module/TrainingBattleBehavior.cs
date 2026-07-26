@@ -499,8 +499,9 @@ namespace TrainingBattles
             if (_config.CastleTrainingCooldownHours <= 0 || settlement == null) return true;
             var last = ReadCastleStamp(settlement);
             var now = CampaignTime.Now.ToHours;
-            hoursRemaining = TrainingCooldown.HoursRemaining(now, last, _config.CastleTrainingCooldownHours);
-            return TrainingCooldown.IsReady(now, last, _config.CastleTrainingCooldownHours);
+            var hours = EffectiveCooldownHours(_config.CastleTrainingCooldownHours, out _);
+            hoursRemaining = TrainingCooldown.HoursRemaining(now, last, hours);
+            return TrainingCooldown.IsReady(now, last, hours);
         }
 
         private float ReadCastleStamp(Settlement settlement)
@@ -656,10 +657,21 @@ namespace TrainingBattles
             if (!DrillCooldownReady(out var remaining))
                 line += " Next drill in " + FormatRemaining(remaining) + ".";
             else if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
-                line += " One siege drill per " + _config.CastleTrainingCooldownHours + " hours at each castle.";
+                line += " One siege drill per " + CooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.";
             else if (_siegeSettlement == null && _config.CooldownHours > 0)
-                line += " One drill per " + _config.CooldownHours + " hours.";
+                line += " One drill per " + CooldownNote(_config.CooldownHours) + ".";
             return line;
+        }
+
+        /// <summary>"18 hours (Quartermaster Ansif (Steward 75) speeds the camp)" — the wait
+        /// actually served, with the officer who earned the discount named; the plain config
+        /// hours when nobody speeds anything.</summary>
+        private string CooldownNote(int configHours)
+        {
+            var hours = EffectiveCooldownHours(configHours, out var quartermaster);
+            if (hours >= configHours) return configHours + " hours";
+            return hours.ToString("0.#") + " hours ("
+                + quartermaster.Describe() + " speeds the camp)";
         }
 
         /// <summary>The muster's cooldown, whichever clock owns this drill: the castle's own in
@@ -700,25 +712,53 @@ namespace TrainingBattles
             return total;
         }
 
-        /// <summary>"85% XP kept (Quartermaster Ansif (Leadership 140))." — the XP officer by
-        /// name, so the player sees WHO sets the rate and how good they are: the quartermaster's
-        /// Leadership on land, the First Mate's Boatswain at sea (see <see cref="Officers"/>).
-        /// The rate runs linearly from the config floor at skill 0 to the ceiling at 300; past
-        /// 100% the drill grants bonus XP.</summary>
+        /// <summary>"85% XP kept (Quartermaster Ansif (Leadership 140); instructors +7%: Rolf
+        /// (Two Handed 220), Borcha (Bow 180))." — the XP officer by name, so the player sees
+        /// WHO sets the rate and how good they are: the quartermaster's Leadership on land, the
+        /// First Mate's Boatswain at sea (see <see cref="Officers"/>), plus the best-fighting
+        /// companions instructing on top (Anton's polish, 2026.07.26). The band runs linearly
+        /// from the config floor at skill 0 to the ceiling at 300; past 100% the drill grants
+        /// bonus XP.</summary>
         private string XpKeptNote()
         {
-            var pct = EffectiveXpKeptPercent(out var officer);
-            return pct + "% XP kept (" + officer.Describe() + ").";
+            var pct = EffectiveXpKeptPercent(out var officer, out var instructors);
+            var note = pct + "% XP kept (" + officer.Describe();
+            var bonus = InstructorBonusPercent(instructors);
+            if (bonus > 0)
+            {
+                var names = new List<string>();
+                foreach (var instructor in instructors)
+                    if (instructor.Hero != null && instructor.Skill > 0)
+                        names.Add(instructor.Hero.Name + " (" + instructor.SkillName + " " + instructor.Skill + ")");
+                note += "; instructors +" + bonus + "%: " + string.Join(", ", names);
+            }
+            return note + ").";
         }
 
         /// <summary>The drill's live XP-kept percent: <see cref="AftermathMath.XpKeptPercentForSkill"/>
-        /// over the party's XP officer. A missing officer scores as skill 0 — the honest floor,
-        /// never a crash.</summary>
-        private int EffectiveXpKeptPercent(out Officers.Officer officer)
+        /// over the party's XP officer, plus the drill instructors' bonus (the top-fighting
+        /// companions, <see cref="Officers.Instructors"/>), the total capped at
+        /// <see cref="AftermathMath.MaxKeepPercent"/>. A missing officer scores as skill 0 —
+        /// the honest floor, never a crash.</summary>
+        private int EffectiveXpKeptPercent(out Officers.Officer officer, out List<Officers.Officer> instructors)
         {
             officer = Officers.XpOfficer(MobileParty.MainParty, MainPartyAtSea());
-            return AftermathMath.XpKeptPercentForSkill(
-                officer.Skill, _config.XpKeptMinPercent, _config.XpKeptMaxPercent);
+            instructors = Officers.Instructors(MobileParty.MainParty, _config.XpInstructorMaxCount);
+            var pct = AftermathMath.XpKeptPercentForSkill(
+                officer.Skill, _config.XpKeptMinPercent, _config.XpKeptMaxPercent)
+                + InstructorBonusPercent(instructors);
+            return pct > AftermathMath.MaxKeepPercent ? AftermathMath.MaxKeepPercent : pct;
+        }
+
+        /// <summary>The instructors' summed bonus in whole percentage points (rounded once, so
+        /// the muster note and the kept rate always agree).</summary>
+        private int InstructorBonusPercent(List<Officers.Officer> instructors)
+        {
+            var skills = new List<int>(instructors.Count);
+            foreach (var instructor in instructors) skills.Add(instructor.Skill);
+            return (int)Math.Round(
+                AftermathMath.InstructorBonusPercent(skills, _config.XpInstructorBonusPercentAt300),
+                MidpointRounding.AwayFromZero);
         }
 
         /// <summary>"Of the fallen 1.6% truly die and 17.5% wake wounded; 8% of the downed stay
@@ -1327,8 +1367,20 @@ namespace TrainingBattles
         private bool CooldownReady(out double hoursRemaining)
         {
             var now = CampaignTime.Now.ToHours;
-            hoursRemaining = TrainingCooldown.HoursRemaining(now, _lastTrainingHours, _config.CooldownHours);
-            return TrainingCooldown.IsReady(now, _lastTrainingHours, _config.CooldownHours);
+            var hours = EffectiveCooldownHours(_config.CooldownHours, out _);
+            hoursRemaining = TrainingCooldown.HoursRemaining(now, _lastTrainingHours, hours);
+            return TrainingCooldown.IsReady(now, _lastTrainingHours, hours);
+        }
+
+        /// <summary>The wait the party actually serves: the configured hours divided by the
+        /// quartermaster's Steward factor (/1 at skill 0 up to the config ceiling at 300 —
+        /// Anton's polish, 2026.07.26; read live, so promoting a steward mid-wait bites at
+        /// once). Both clocks — the field drill's and each castle's — pass through here.</summary>
+        private double EffectiveCooldownHours(double configHours, out Officers.Officer quartermaster)
+        {
+            quartermaster = Officers.CooldownOfficer(MobileParty.MainParty);
+            return configHours / TrainingCooldown.DivisorForSkill(
+                quartermaster.Skill, _config.CooldownDivisorAtSteward300);
         }
 
         // ------------------------------ dividing the men ------------------------------
@@ -3282,7 +3334,7 @@ namespace TrainingBattles
             // The officers set this drill's rates — read once, before the loop, and spelled
             // out in the report (if a hero has not walked home yet the read falls back to the
             // leader; the report shows exactly whose skill was used).
-            var keptPercent = EffectiveXpKeptPercent(out var xpOfficer);
+            var keptPercent = EffectiveXpKeptPercent(out var xpOfficer, out var xpInstructors);
             var drillSurgeon = Officers.SurgeonOfficer(main);
             var deathChance = AftermathMath.ChancePercentForSkill(
                 _config.RealDeathPercentAtMedicine0, _config.RealDeathPercentAtMedicine300, drillSurgeon.Skill) / 100.0;
@@ -3292,8 +3344,15 @@ namespace TrainingBattles
                 _config.DownedWoundedPercentAtMedicine0, _config.DownedWoundedPercentAtMedicine300, drillSurgeon.Skill) / 100.0;
             var report = new StringBuilder();
             report.AppendLine("Training drill report — " + CampaignTime.Now + " | playerWon " + playerWon);
+            var instructorNames = new List<string>();
+            foreach (var instructor in xpInstructors)
+                if (instructor.Hero != null) instructorNames.Add(instructor.Describe());
             report.AppendLine("XP: " + keptPercent + "% kept (" + xpOfficer.Describe()
-                + ", band " + _config.XpKeptMinPercent + "-" + _config.XpKeptMaxPercent + "%)");
+                + ", band " + _config.XpKeptMinPercent + "-" + _config.XpKeptMaxPercent + "%"
+                + (instructorNames.Count > 0
+                    ? "; instructors +" + InstructorBonusPercent(xpInstructors) + "%: "
+                      + string.Join(", ", instructorNames)
+                    : "") + ")");
             report.AppendLine("Casualties: " + drillSurgeon.Describe()
                 + " | real death " + (deathChance * 100.0).ToString("0.##")
                 + "% | KIA→wounded " + (kiaWoundChance * 100.0).ToString("0.##")

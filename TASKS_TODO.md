@@ -2,8 +2,7 @@ BUGS:
 
 
 NEXT UPDATE:
-- [ ] Q master/Player Steward skill from 0 to 300 decreases the time wait from /1 to /4
-- [ ] Get the good fighter companions to contribute to keeping the XP as well
+- [ ] Playtest: Steward speeds the cooldown + fighter companions instruct for XP (built 2026.07.26)
 - [ ] Renown/influence for the CASTLE drill: built 2026.07.25, scales with men on the field (see AI_NOTES; field/sea drills too? not decided)
 - [ ] Playtest: CASTLE siege drill - own castle, garrison defends, engineer's bench (built, see AI_NOTES)
 - [ ] SEA scout ride SAILED 2026.07.26 - strip the crash-hunt debug spam (per-crewman log + reflection step-replication, see AI_NOTES), then normal playtest eyes

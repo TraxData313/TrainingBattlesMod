@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.CharacterDevelopment;
 using TaleWorlds.CampaignSystem.Party;
@@ -15,6 +16,10 @@ namespace TrainingBattles
     ///   the ground    Scout — Scouting                Navigator — Shipmaster
     ///   the fallen    Surgeon — Medicine              Surgeon — Medicine (same at sea)
     ///   the engines   Engineer — Engineering          (castle drills happen ashore)
+    ///   the clock     Quartermaster — Steward         Quartermaster — Steward (same at sea:
+    ///                                                 camp or hold, someone runs the stores)
+    ///   instructing   the best-fighting companions, by their best weapon skill (no single
+    ///                 officer — see <see cref="Instructors"/>; Anton's polish, 2026.07.26)
     ///
     /// Every Effective* role falls back to the party leader when unassigned — vanilla's own
     /// rule, verified in the decompiled MobileParty. The naval skills (Shipmaster, Boatswain)
@@ -77,6 +82,57 @@ namespace TrainingBattles
         /// ashore and afloat.</summary>
         public static Officer SurgeonOfficer(MobileParty? party) =>
             Resolve(party?.EffectiveSurgeon, DefaultSkills.Medicine, "Surgeon", "Medicine");
+
+        /// <summary>The officer whose Steward speeds the drill cooldown (Anton's polish,
+        /// 2026.07.26): a sharp quartermaster turns the camp around faster. The same role and
+        /// skill ashore and afloat — whoever runs the stores runs the clock.</summary>
+        public static Officer CooldownOfficer(MobileParty? party) =>
+            Resolve(party?.EffectiveQuartermaster, DefaultSkills.Steward, "Quartermaster", "Steward");
+
+        /// <summary>The drill INSTRUCTORS (Anton's polish, 2026.07.26): the party's
+        /// best-fighting companions, each judged by the best of the six weapon skills — good
+        /// fighters teach, so their presence raises the kept-XP rate (the arithmetic is
+        /// <see cref="Core.AftermathMath.InstructorBonusPercent"/>). The party leader is
+        /// excluded (the player drills, not lectures), the list comes sorted best-first and
+        /// cut to <paramref name="maxCount"/>. Role "Instructor", skill name = the weapon
+        /// that made the grade.</summary>
+        public static List<Officer> Instructors(MobileParty? party, int maxCount)
+        {
+            var list = new List<Officer>();
+            if (party?.MemberRoster == null || maxCount <= 0) return list;
+            try
+            {
+                foreach (var element in party.MemberRoster.GetTroopRoster())
+                {
+                    var hero = element.Character?.HeroObject;
+                    if (hero == null || hero == party.LeaderHero) continue;
+                    SkillObject? bestSkill = null;
+                    var best = -1;
+                    foreach (var skill in FighterSkills)
+                    {
+                        var value = 0;
+                        try { value = hero.GetSkillValue(skill); }
+                        catch { }
+                        if (value > best) { best = value; bestSkill = skill; }
+                    }
+                    if (bestSkill != null)
+                        list.Add(new Officer(hero, best, "Instructor",
+                            bestSkill.Name?.ToString() ?? bestSkill.StringId));
+                }
+            }
+            catch { }
+            list.Sort((a, b) => b.Skill.CompareTo(a.Skill));
+            if (list.Count > maxCount) list.RemoveRange(maxCount, list.Count - maxCount);
+            return list;
+        }
+
+        /// <summary>What makes a fighter: the six weapon skills (movement and command skills
+        /// deliberately excluded — an instructor teaches arms, not marching).</summary>
+        private static readonly SkillObject[] FighterSkills =
+        {
+            DefaultSkills.OneHanded, DefaultSkills.TwoHanded, DefaultSkills.Polearm,
+            DefaultSkills.Bow, DefaultSkills.Crossbow, DefaultSkills.Throwing,
+        };
 
         /// <summary>The officer whose Engineering unlocks the castle drill's siege equipment
         /// tiers (the castle update, 2026.07.25).</summary>
