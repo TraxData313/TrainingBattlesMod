@@ -150,7 +150,7 @@ PLAYTEST RISKS (in rough order of worry):
 5. The hour door: the drill uses EffectiveBattleHour through the same MapWeatherModel
    decorator; verify a siege drill at night actually opens dark.
 
-## Sea scout ride — BUILT 2026.07.25, awaiting playtest
+## Sea scout ride — SAILED 2026.07.26 ("worked as a charm" — Anton, round 5)
 
 The flagship free sail: at sea the muster's scout option now rides the FLAGSHIP instead of
 hiding — player + as many healthy men as the deck takes, alone on the chosen naval scene,
