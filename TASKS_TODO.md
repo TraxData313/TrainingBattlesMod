@@ -1,6 +1,7 @@
 BUGS:
 
 NEXT UPDATE:
+- [ ] Q master/Player Steward skill from 0 to 300 decreases the time wait from /1 to /4
 - [ ] Renown/influence for the CASTLE drill: built 2026.07.25, scales with men on the field (see AI_NOTES; field/sea drills too? not decided)
 - [ ] Playtest: CASTLE siege drill - own castle, garrison defends, engineer's bench (built, see AI_NOTES)
 - [ ] SEA scout ride: crash hunt round 4 - ride once, then read training_battles.log [sea-scout] lines (3 crashes so far, each further; flight recorder armed, see AI_NOTES)
