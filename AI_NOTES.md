@@ -208,6 +208,49 @@ defend road WORKS. Anton's follow-ups, all shipped same morning:
   restore (+1184 xp battle 2) verified per stack. "(0 xp kept)" drills are stacks whose
   clamp losses exceeded visible earnings — the documented conservative choice, not a bug.
 
+PLAYTEST ROUND 4 (2026.07.26 afternoon, Anton's attack-road AUTO-RESOLVE at Tirby — his
+diagnosis "this might not be auto resolve on a siege but on a rally out" was EXACTLY right):
+the sim fought a FIELD battle in disguise. The chain, decompile-verified: (1) StartBattle's
+inside-parties sweep (MapEvent.AddInsideSettlementParties) WALKS OUT any inside party that
+cannot legally join the defense — `SiegeEvent.CanPartyJoinSide` fails for the bandit-faction
+temp party, so LeaveSettlementAction ejects it (Anton's "1 guy outside swinging"; the old
+risk-1 note about guesting lords was the same sweep, aimed at us); (2) our late defender
+seat then added an OUTSIDE mobile party → MapEvent.AddInvolvedPartyInternal flips
+`_mapEventType` Siege→SiegeOutside (MapEvent.cs:643); (3) SiegeOutside's SimulationContext
+falls back to the map position — NO wall power in GetTroopPower, run-away semantics differ,
+and the winner/loot books ran on the wrong type (Victory banner shown over a battle his side
+visibly lost; loot line "You earned 100.0%"). The LED assault never noticed in two clean
+round-2 playtests because we open the siege mission OURSELVES — only the simulation reads
+the event type. Also: the sim ran over an UNPREPARED camp ("Building Siege Camp" HUD) —
+vanilla only ever orders an assault from a prepared one. And the ledger shows NO aftermath
+after the sim (Anton quit at the result panel — with the type fixed, Done → encounter menu
+→ trigger (b) should finalize; watch for it). FIXES (all three shipped): re-enter the temp
+party through the gate AFTER the sweep, BEFORE the seat (EnterSettlementAction again —
+CurrentSettlement != null at seat time means no flip); `EnsureSiegeAssaultType` belt after
+seating on BOTH roads (restores `_mapEventType` by reflection + loud "EVENT TYPE DEGRADED"
+log line if any other road ever degrades it); `PrepareDrillCamp` on both roads
+(SiegePreparations.SetProgress(1f) — public setter — so the HUD and the player-siege
+machinery stand in vanilla's ordered-assault state).
+
+PLAYTEST ROUND 5 (2026.07.26 evening, attack-road auto-resolve with the round-4 fixes IN):
+the sim itself ran RIGHT ("worked fine this time") — but after Victory vanilla pushed its
+re-startable "encounter" menu (Attack / Leave): Attack refought Anton ALONE against the
+walls (his men were sim-wounded), Retreat ran a REAL capture pass (garrison wounded into
+his wagons — while our aftermath restores those same men onto the walls: free prisoners
+minted), Leave dropped him into the castle. ROOT: `PlayerEncounter.BattleSimulation` is
+nulled only inside `PlayerEncounter.Finish` — after Done the sim OBJECT still hangs on the
+encounter, so trigger (b)'s `BattleSimulation == null` guard (added round 3 to keep the
+castle sim from finalizing mid-simulation) muzzled the finalize FOREVER on every sim road,
+field included (the guard postdates the field-sim playtests — field sims were re-broken by
+it too, untested since). FIXES: (b2) trigger — when the sim's result panel is CLOSED
+(`IsSimulationFinished` for Done, `IsPlayerRetreated` for Retreat — a retreat ends the
+panel with no winner) and the active menu is vanilla's "encounter", finalize immediately;
+during a LIVE sim the old guard still stands (the castle's underlying settlement menu no
+longer trips it). Plus 1b-final in the aftermath: the LAST prisoner net — any non-hero
+prisoner delta the drill added and the earlier sweeps didn't claim (own types walk home,
+mock types dissolve) is removed, with a ledger line each. Anton's SAVE from this round
+carries the minted prisoners — dismiss them by hand or reload a pre-drill save.
+
 PLAYTEST RISKS (in rough order of worry):
 1. ATTACK road novelties: same-faction garrison forced onto the enemy side (agent hostility
    flags?), LeaveSettlement/EnterSettlement mid-menu, `AddInsideSettlementParties` may push a
@@ -221,6 +264,50 @@ PLAYTEST RISKS (in rough order of worry):
    defender engines from the defender roster — should just work).
 5. The hour door: the drill uses EffectiveBattleHour through the same MapWeatherModel
    decorator; verify a siege drill at night actually opens dark.
+
+## Castle mock enemy — BUILT 2026.07.26, awaiting playtest
+
+Anton's three calls (settled in-session, 2026.07.26): (1) BOTH roads — the garrison and
+militia ALWAYS defend; defending, the phantoms besiege; storming, the phantoms REINFORCE the
+garrison on the walls (want garrison men beside you? take them into the party first — the
+split drill's rule already). (2) The player's OWN engineer builds every engine, both sides,
+and the player pays the equipment bill — exactly the bench as built, no change. (3) Same
+castle bill (5× wages, 7-day castle clock, renown+influence per 100 men) but the phantoms
+are INVISIBLE to it — no wage, no prestige headcount, "like they are not there"; don't
+overthink it, MCM's EnableMockEnemyTraining is the immersion valve.
+
+THE FIND: nearly everything already composed. The mock option sits on the SHARED muster menu
+with no siege gate (it showed at castles all along), LaunchTrainingCore builds the phantom
+party before the siege fork, LaunchSiegeBattle takes ANY opponent party — and the leaderless
+camp-swap (CreateDrillSiegeAroundOpponent), the attack road's EnterSettlementAction seat,
+SeatFriendliesOnTheWalls, the empty-opponent-snapshot aftermath, the phantom prisoner sweep,
+stale recovery (MockEnemyPartyIdPrefix was already in RecoverStaleDrillSieges), the Begin/
+summary labels ("you hold the walls against the mock enemy", "The mock enemy carried the
+walls") were ALL already written for both shapes. ComputeTrainingCost counts main party +
+garrison/militia only and CastleDrillRenown counts friendly men only — call (3) held for
+free.
+
+THE ONE REAL FIX — the death book: `HarvestBattleDead` summed `DiedInBattle` over EVERY
+party on BOTH sides, phantoms included. A mock enemy sharing a troop TYPE with the player's
+men (or the garrison — near-certain when the mock wears the realm's culture) inflated that
+type's KIA docket: the count is clamped to the roster hole, but a stack whose men were all
+merely downed (own DiedInBattle 0) would see phantom corpses fill the clamp and push every
+downed man into the real-death band. LATENT FIELD-MOCK BUG TOO — same-culture field mocks
+had it since the mock mode landed; any "mock drills kill too many" report predating this is
+explained. Fix: the harvest now skips the mock party's book (`_opponentIsMockEnemy &&
+eventParty.Party == _opponentParty.Party` — both still live at harvest time, it runs from
+OnMapEventEnded before the aftermath clears them). Split drills still sum both sides — that
+dead book is all ours.
+
+Also: MockEnemyCondition got a siege-aware tooltip (TB_tip_mock_siege) saying which side the
+phantoms take on each road.
+
+Playtest points: (a) defend road — phantoms assault, garrison beside you, phantom-manned
+attacker engines (bench atk picks); (b) attack road — phantoms INSIDE reinforcing the
+garrison, defender engines manned from the mixed defense; (c) same-culture mock at the
+castle — verify the KIA docket stays honest (last_drill_report.txt per stack: eventDead
+should NOT count phantom dead); (d) auto-resolve with a mock at the castle (engines sit
+out, cheaper); (e) aftermath ends back inside the castle, phantoms gone from wagons.
 
 ## Sea scout ride — SAILED 2026.07.26 ("worked as a charm" — Anton, round 5)
 

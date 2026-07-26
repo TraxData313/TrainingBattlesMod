@@ -1,5 +1,5 @@
 --- Short description: ---
-[b]Split up your boys in two teams and do a drill battle — on land or at sea (War Sails).
+[b]Split up your boys in two teams and do a drill battle — on land, at sea (War Sails), or a siege drill on your own castle walls.
 Pick your battleground (and time) before the drills — and before the real battles.[/b]
 
 
@@ -11,6 +11,7 @@ If one of these searches brought you here — yes, this is that mod:
 [list]
 [*]a mod for [b]practice battles[/b] / [b]sparring[/b] — train your troops with no losses (deaths near zero, can be turned fully off)
 [*]a mod for [b]naval training battles[/b] / practice [b]sea battles[/b] with your own fleet (War Sails)
+[*]a mod for [b]siege practice[/b] — storm or defend [b]your own castle walls[/b] in a mock siege
 [*]a mod to [b]change the time of day of battles[/b] — fight at [b]full bright daylight[/b], night, dawn, noon or evening
 [*]a mod to [b]pick the battlefield[/b] / [b]choose where you fight[/b] before a battle
 [*]a mod to [b]scout the battlefield before the battle[/b] — walk it on foot, see the real deployment lines
@@ -39,6 +40,8 @@ Press [b]G[/b] on the campaign map to open the muster.
 
 [b]Mock enemy[/b] [i](on by default, can be turned off)[/i] — compose a phantom enemy force from [b]every troop in the game[/b], all cultures in one picker screen, any mix, up to 1000 men — and drill the whole company against it. The phantoms never touch your roster and vanish afterward; your own men follow the normal training rules. The test bench for "how would we fare against X?". At sea the mock enemy [b]sails[/b]: lay down the phantom fleet — any culture's hulls, fitted as well as you please — and its ships vanish with its men.
 
+[b]Castle siege drills[/b] — at your [b]own castle[/b] the muster becomes a [b]siege drill[/b]: storm your own walls or hold them, on the castle's real scene at its true wall level. The [b]garrison and militia[/b] always stand with the defense (take them into your party first if you want them under your own banner), your [b]Engineer[/b] readies the siege equipment for both sides, and everyone on the field follows the same training rules — wounds healed, XP kept, the surgeon watching over the fallen. A grand muster is a public event: it costs more than a field drill, each castle keeps its own clock, and the realm takes note — a little [b]renown and influence[/b] for the show of arms. The mock enemy comes to the walls too: the phantoms besiege you when you hold them, or reinforce the garrison when you storm. The drill waits behind its own option on the castle menu.
+
 [size=4][b]Pillar 2 — Scouting & choosing your ground[/b][/size]
 
 What a real general does before the battle: know the field — and pick the hour.
@@ -63,6 +66,7 @@ The drill yard runs on your officers — every role you fill makes training bett
 [*][b]Your skilled fighters[/b] — the best fighter companions instruct on the yard, adding to the XP kept
 [*][b]Steward[/b] — a well-run camp: shortens the time it takes to organize the next drill
 [*][b]Surgeon[/b] — fewer incidents in training: fewer real deaths among the fallen, fewer men who stay wounded
+[*][b]Engineer[/b] — commands the siege drill's arsenal: higher Engineering unlocks heavier siege equipment for the wall drills
 [*][b]Scout[/b] [i](the [b]Navigator[/b] at sea)[/i] — wins you the ground: out-scouting the enemy unlocks the battlefield and hour picks in real battles
 [/list]
 
@@ -73,11 +77,22 @@ All of it tunable in MCM — each officer has their own group of knobs.
 Every parameter lives in a JSON config ([i]Documents\Mount and Blade II Bannerlord\Configs\TrainingBattles\config.json[/i]) [b]and[/b] in the in-game [url=https://www.nexusmods.com/mountandblade2bannerlord/mods/612]Mod Configuration Menu (MCM)[/url]. MCM is a soft dependency — without it the config file alone runs the show.
 
 [list]
-[*][b]Officer knobs[/b] — the Quartermaster's XP band, the fighter-instructor bonus, the Steward cooldown speed-up, the Surgeon's death/wounded bands, the scouting duel ratios (each officer has its own MCM group)
-[*][b]Drill knobs[/b] — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
+[*][b]Officer knobs[/b] — the Quartermaster's XP band, the fighter-instructor bonus, the Steward cooldown speed-up, the Surgeon's death/wounded bands, the Engineer's equipment tiers, the scouting duel ratios (each officer has its own MCM group)
+[*][b]Drill knobs[/b] — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), the castle drill's own pay, clock and prestige rates, disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
 [*][b]Ground & time knobs[/b] — time of day for battles, the real-battle scout toggles (defending and attacking separately)
-[*][b]Misc[/b] — the mock-enemy toggle, the hotkey (default [b]G[/b] on the campaign map), debug logging
+[*][b]Misc[/b] — the mock-enemy and castle-drill toggles, the hotkey (default [b]G[/b] on the campaign map), debug logging
 [/list]
+
+[size=4][b]The road ahead[/b][/size]
+
+Next milestones, in the order they'll likely land:
+
+[list]
+[*][b]Town training sieges[/b] — drill in your own [b]cities[/b]: bigger walls, bigger stakes, the Lord's Hall and all
+[*][b]Army training[/b] — drill while leading a hosted [b]army[/b]: march the whole banner against a mock enemy
+[/list]
+
+No dates promised — this is a hobby, and playtesting sets the pace.
 
 [size=4][b]Safe & compatible[/b][/size]
 

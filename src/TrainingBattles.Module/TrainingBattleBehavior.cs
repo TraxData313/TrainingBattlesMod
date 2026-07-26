@@ -241,6 +241,11 @@ namespace TrainingBattles
                     if (side?.Parties == null) continue;
                     foreach (var eventParty in side.Parties)
                     {
+                        // Phantom corpses are nobody's dead: a mock enemy sharing a troop TYPE
+                        // with the player's men — or the castle's garrison, near-certain when
+                        // the mock wears the realm's own culture — would otherwise inflate that
+                        // type's KIA docket and push merely-downed men into the real-death band.
+                        if (_opponentIsMockEnemy && eventParty?.Party == _opponentParty?.Party) continue;
                         var died = eventParty?.DiedInBattle;
                         if (died == null) continue;
                         foreach (var el in died.GetTroopRoster())
@@ -324,6 +329,11 @@ namespace TrainingBattles
             starter.AddGameMenuOption(MenuId, "training_ground",
                 BattleSceneCatalog.SelectBattlefieldOptionText,
                 GroundCondition, _ => ChooseGround());
+            // The (?) window (Anton's spam cut, 2026.07.26): the drill line above stays one
+            // glance, and every calculation — officers, bands, bill, clock — opens here.
+            starter.AddGameMenuOption(MenuId, "training_reckoning",
+                "{=TB_opt_reckon}How the numbers are reckoned (?)",
+                ReckoningCondition, _ => ShowReckoning());
             // The castle drill's engineer bench: which engines stand on each side of the walls.
             starter.AddGameMenuOption(MenuId, "training_siege_equip",
                 "{=TB_opt_equip}Prepare siege equipment — {TB_EQUIP_NOW}",
@@ -584,9 +594,7 @@ namespace TrainingBattles
                 var walls = FriendlyWallCount(_siegeSettlement);
                 head += "{newline} {newline}The garrison and militia stand with the DEFENSE — "
                      + walls + (walls == 1 ? " man" : " men")
-                     + " on the walls before the halves are counted, same training rules for "
-                     + "everyone. Take garrison men into your party first if you want them under "
-                     + "your own banner.";
+                     + " on the walls, same training rules for everyone.";
             }
             var text = head + "{newline} {newline}" + BattlefieldLine() + "{newline} {newline}" + TimeOfDayLine();
             if (_config.EnableSplitTraining || _config.EnableMockEnemyTraining)
@@ -629,38 +637,73 @@ namespace TrainingBattles
                 : "Time - the campaign clock" + (oneBattle ? " (your pick, next battle)." : " (default).");
         }
 
-        /// <summary>The whole drill contract in one line: wounded math, surgeon, XP, cost,
-        /// disorganized, cooldown — each piece only when it actually applies.</summary>
+        /// <summary>The drill contract at a GLANCE — one short line: the real stake, the kept
+        /// XP, the price, the clock. The officers and castle updates had grown this into a wall
+        /// of names and bands (Anton, 2026.07.26: "too much spam") — the full arithmetic with
+        /// every officer named lives behind the (?) option now (<see cref="OfficersReckoningText"/>).</summary>
         private string DrillSetupLine()
         {
-            var line = "Training battle - " + CasualtyNote() + " " + XpKeptNote();
+            // The real-death chance stays on the glance line — Anton's hard rule: the drill's
+            // one permanent cost is announced in the muster itself, never only behind a window.
+            var surgeon = Officers.SurgeonOfficer(MobileParty.MainParty);
+            var death = AftermathMath.ChancePercentForSkill(
+                _config.RealDeathPercentAtMedicine0, _config.RealDeathPercentAtMedicine300, surgeon.Skill);
+            var line = "Training battle - "
+                + (death > 0.0 ? death.ToString("0.##") + "% of the fallen truly die; " : "no true deaths; ")
+                + EffectiveXpKeptPercent(out _, out _) + "% XP kept.";
             var cost = ComputeTrainingCost();
             if (cost > 0)
-            {
-                line += " " + cost + " denars (" + CostDays()
-                      + FormatDaysWages(CostDays())
-                      + " a man"
-                      + (_siegeSettlement != null ? ", castle rates" : (MainPartyAtSea() ? ", sea rates" : ""))
-                      + (_siegeSettlement != null && SiegeEquipmentBill() > 0
-                          ? ", " + SiegeEquipmentBill() + " of it engines" : "")
-                      + ") for training equipment and troop rewards.";
-            }
-            if (_siegeSettlement != null)
-            {
-                var renown = CastleDrillRenown(out var influence);
-                if (renown > 0f || influence > 0f)
-                    line += " The realm notices a grand muster: +" + renown.ToString("0.#")
-                          + " renown, +" + influence.ToString("0.#") + " influence.";
-            }
+                line += " " + cost + " denars.";
             if (_config.DisorganizedAfterTraining)
                 line += " Party becomes disorganized.";
             if (!DrillCooldownReady(out var remaining))
                 line += " Next drill in " + FormatRemaining(remaining) + ".";
             else if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
-                line += " One siege drill per " + CooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.";
+                line += " One siege drill per " + ShortCooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.";
             else if (_siegeSettlement == null && _config.CooldownHours > 0)
-                line += " One drill per " + CooldownNote(_config.CooldownHours) + ".";
-            return line;
+                line += " One drill per " + ShortCooldownNote(_config.CooldownHours) + ".";
+            return line + " The (?) below reckons it in full.";
+        }
+
+        /// <summary>The (?) window's text: everything the glance line no longer carries — one
+        /// paragraph per officer, each named with his skill, plus the bill's parts, the castle
+        /// prestige and the quartermaster's clock. Built fresh on every opening, so it always
+        /// tells the live rates.</summary>
+        private string OfficersReckoningText()
+        {
+            var parts = new List<string>
+            {
+                "The surgeon tends the fallen. " + CasualtyNote() + " Heroes never truly die.",
+                "The XP officer sets the kept rate. " + XpKeptNote()
+            };
+            var cost = ComputeTrainingCost();
+            if (cost > 0)
+            {
+                var costLine = "The bill: " + cost + " denars — " + CostDays()
+                    + FormatDaysWages(CostDays()) + " for every soul on the field"
+                    + (_siegeSettlement != null ? " (castle rates)" : (MainPartyAtSea() ? " (sea rates)" : ""))
+                    + ", spent on training equipment and troop rewards";
+                if (_siegeSettlement != null && SiegeEquipmentBill() > 0)
+                    costLine += "; " + SiegeEquipmentBill() + " of it is the engineer's engines";
+                parts.Add(costLine + ".");
+            }
+            if (_siegeSettlement != null)
+            {
+                var renown = CastleDrillRenown(out var influence);
+                if (renown > 0f || influence > 0f)
+                    parts.Add("The realm notices a grand muster: +" + renown.ToString("0.#")
+                        + " renown, +" + influence.ToString("0.#") + " influence.");
+                parts.Add("The garrison and militia always stand with the defense; take garrison "
+                    + "men into your party first if you want them under your own banner.");
+            }
+            if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
+                parts.Add("The clock: one siege drill per "
+                    + CooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.");
+            else if (_siegeSettlement == null && _config.CooldownHours > 0)
+                parts.Add("The clock: one drill per " + CooldownNote(_config.CooldownHours) + ".");
+            if (_config.DisorganizedAfterTraining)
+                parts.Add("The party stands disorganized for a while after the drill.");
+            return string.Join("\n\n", parts);
         }
 
         /// <summary>"18 hours (Quartermaster Ansif (Steward 75) speeds the camp)" — the wait
@@ -672,6 +715,15 @@ namespace TrainingBattles
             if (hours >= configHours) return configHours + " hours";
             return hours.ToString("0.#") + " hours ("
                 + quartermaster.Describe() + " speeds the camp)";
+        }
+
+        /// <summary>The glance line's form of the same wait: "2.3 hours" — the served hours with
+        /// the Steward discount applied, nobody named. The (?) window's <see cref="CooldownNote"/>
+        /// names the officer who earned it.</summary>
+        private string ShortCooldownNote(int configHours)
+        {
+            var hours = EffectiveCooldownHours(configHours, out _);
+            return hours >= configHours ? configHours + " hours" : hours.ToString("0.#") + " hours";
         }
 
         /// <summary>The muster's cooldown, whichever clock owns this drill: the castle's own in
@@ -909,10 +961,16 @@ namespace TrainingBattles
             }
             else
             {
-                args.Tooltip = new TextObject("{=TB_tip_mock2}Build a phantom force from every troop in the "
-                    + "game — any cultures, any mix — and test the whole company against it. Your men follow "
-                    + "the normal training rules; the phantoms vanish afterward."
-                    + (MainPartyAtSea() ? " At sea, lay down their fleet too — the option below." : ""));
+                args.Tooltip = new TextObject(_siegeSettlement != null
+                    ? "{=TB_tip_mock_siege}Build a phantom force from every troop in the game — any "
+                        + "cultures, any mix — and hold a siege against it. Defending, the phantoms "
+                        + "besiege your walls; storming, they reinforce the garrison on the defense. "
+                        + "Your men and the walls' keepers follow the normal training rules; the "
+                        + "phantoms vanish afterward — unpaid, uncounted."
+                    : "{=TB_tip_mock2}Build a phantom force from every troop in the "
+                        + "game — any cultures, any mix — and test the whole company against it. Your men follow "
+                        + "the normal training rules; the phantoms vanish afterward."
+                        + (MainPartyAtSea() ? " At sea, lay down their fleet too — the option below." : ""));
             }
             return true;
         }
@@ -952,6 +1010,27 @@ namespace TrainingBattles
                 // Re-init the muster menu so its text shows (or drops) the chosen ground.
                 try { GameMenu.SwitchToMenu(MenuId); } catch { }
             });
+        }
+
+        /// <summary>The (?) option: shown whenever the drill line is (a drill mode on), always
+        /// enabled — reading the arithmetic costs nothing.</summary>
+        private bool ReckoningCondition(MenuCallbackArgs args)
+        {
+            if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
+            args.optionLeaveType = GameMenuOption.LeaveType.Conversation;
+            args.Tooltip = new TextObject("{=TB_tip_reckon}The full arithmetic behind the training "
+                + "line: the surgeon's bands, the XP officer and the instructors, the bill's parts "
+                + "and the camp clock — every officer named with his skill.");
+            return true;
+        }
+
+        /// <summary>The (?) window itself: a plain inquiry over <see cref="OfficersReckoningText"/>;
+        /// closing it changes nothing, so no re-init is needed.</summary>
+        private void ShowReckoning()
+        {
+            InformationManager.ShowInquiry(new InquiryData(
+                "The officers' reckoning", OfficersReckoningText(),
+                true, false, "Done", null, null, null), pauseGameActiveState: true);
         }
 
         private bool TimeOfDayCondition(MenuCallbackArgs args)
@@ -1317,6 +1396,23 @@ namespace TrainingBattles
                 if (encounter != null && encounter.BattleSimulation == null && mapState.AtMenu
                     && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != MenuId)
                 {
+                    FinishTrainingBattle();
+                    return;
+                }
+                // (b2) The sim's result panel was CLOSED (Done or Retreat) — vanilla activates
+                //     its re-startable "encounter" menu (Attack/Leave) while BattleSimulation
+                //     still hangs on the encounter (it is nulled only inside PlayerEncounter.
+                //     Finish), so trigger (b)'s `BattleSimulation == null` read stays muzzled
+                //     forever. Anton's castle auto-resolve, 2026.07.26: Attack refought him
+                //     alone against the walls, Retreat ran a REAL capture pass and minted the
+                //     garrison's wounded as prisoners. IsSimulationFinished covers Done,
+                //     IsPlayerRetreated covers Retreat (a retreat ends the panel undecided).
+                if (encounter?.BattleSimulation != null
+                    && (encounter.BattleSimulation.IsSimulationFinished || encounter.BattleSimulation.IsPlayerRetreated)
+                    && mapState.AtMenu
+                    && Campaign.Current.CurrentMenuContext?.GameMenu?.StringId == "encounter")
+                {
+                    TbLog.Info("drill", "post-sim encounter menu caught — finalizing before it can re-arm");
                     FinishTrainingBattle();
                     return;
                 }
@@ -2174,6 +2270,7 @@ namespace TrainingBattles
                 // raised by the same StartBattleAction an AI assault uses, and the player
                 // JOINS the defense — PlayerEncounter.JoinBattle, the join_siege_event road.
                 _drillSiegeEvent = CreateDrillSiegeAroundOpponent(siege, opponent);
+                PrepareDrillCamp(_drillSiegeEvent);
                 TbLog.Info("siege", "siege event up | besieger: the opposing half (camp-swapped)");
                 StartBattleAction.ApplyStartAssaultAgainstWalls(opponent, siege);
                 mapEvent = siege.Party.MapEvent;
@@ -2211,6 +2308,7 @@ namespace TrainingBattles
                 EnterSettlementAction.ApplyForParty(opponent, siege);
                 _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
                 DeactivateDrillBlockade(_drillSiegeEvent); // a port castle + own fleet raises one
+                PrepareDrillCamp(_drillSiegeEvent);
                 // The auto-resolve arms PlayerSiege ITSELF (BattleSimulation's ctor calls
                 // StartPlayerSiege with isSimulation: true for siege assaults) — only the
                 // led-in-person road wants the HUD armed here.
@@ -2224,10 +2322,25 @@ namespace TrainingBattles
                 TbLog.Info("siege", "assault event up | type " + (mapEvent?.EventType.ToString() ?? "NULL"));
                 if (mapEvent == null) throw new InvalidOperationException("the assault event did not form");
                 KeepSiegeEventThroughFinalize(mapEvent);
+                // StartBattle's inside-parties sweep WALKS OUT any inside party that cannot
+                // legally join the defense (MapEvent.AddInsideSettlementParties →
+                // CanPartyJoinSide fails for the bandit-faction temp party →
+                // LeaveSettlementAction) — and seating an OUTSIDE mobile party on the
+                // defender side flips the event Siege→SiegeOutside (MapEvent.
+                // AddInvolvedPartyInternal), which the SIMULATION reads as a plain field
+                // battle: no wall context, "Building Siege Camp" HUD, wrong books (Anton's
+                // "rally out" auto-resolve, 2026.07.26). Walk the half back through the
+                // gate BEFORE the seat.
+                if (opponent.CurrentSettlement != siege)
+                {
+                    TbLog.Info("siege", "the battle sweep walked the opposing half out of the gate — re-entering before the seat");
+                    EnterSettlementAction.ApplyForParty(opponent, siege);
+                }
                 if (opponent.Party.MapEventSide == null)
                     opponent.Party.MapEventSide = mapEvent.DefenderSide;
                 SeatFriendliesOnTheWalls(mapEvent, siege);
             }
+            EnsureSiegeAssaultType(mapEvent);
             TbLog.Info("siege", "sides seated | attacker " + (mapEvent.AttackerSide?.LeaderParty?.Name?.ToString() ?? "?")
                 + " | defender " + (mapEvent.DefenderSide?.LeaderParty?.Name?.ToString() ?? "?"));
 
@@ -2412,6 +2525,46 @@ namespace TrainingBattles
                     ?.SetValue(mapEvent, true);
             }
             catch { }
+        }
+
+        /// <summary>Completes the drill camp's siege preparations on the spot. Vanilla only
+        /// ever orders (or simulates) an assault from a PREPARED camp — the drill founds its
+        /// siege seconds before the battle, and an unprepared camp leaves the siege HUD on
+        /// "Building Siege Camp" with the player-siege machinery in its pre-assault state
+        /// (Anton's auto-resolve playtest, 2026.07.26). The progress setter is public
+        /// (SiegeEngineConstructionProgress.SetProgress) — no reflection needed.</summary>
+        private static void PrepareDrillCamp(SiegeEvent siegeEvent)
+        {
+            try
+            {
+                var preparations = siegeEvent?.BesiegerCamp?.SiegeEngines?.SiegePreparations;
+                if (preparations != null && preparations.Progress < 1f) preparations.SetProgress(1f);
+                TbLog.Info("siege", "camp preparations completed | ready "
+                    + (siegeEvent?.BesiegerCamp?.IsPreparationComplete == true));
+            }
+            catch (Exception ex) { TbLog.Info("siege", "camp preparation FAILED (HUD stays on building): " + ex.Message); }
+        }
+
+        /// <summary>The belt under the seating order: any defender-side mobile party standing
+        /// OUTSIDE the settlement at seat time silently flips the event Siege→SiegeOutside
+        /// (MapEvent.AddInvolvedPartyInternal) — and SiegeOutside SIMULATES as a plain field
+        /// battle (SimulationContext falls back to the map position: no wall power, run-away
+        /// rules, wrong result books). The led mission never reads the type — which is why two
+        /// clean attack-road playtests never saw this — but the auto-resolve does. The re-enter
+        /// before the seat is the fix; this restores the type if any other road degrades it.</summary>
+        private static void EnsureSiegeAssaultType(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
+        {
+            try
+            {
+                if (mapEvent == null || mapEvent.IsSiegeAssault) return;
+                var degraded = mapEvent.EventType;
+                typeof(TaleWorlds.CampaignSystem.MapEvents.MapEvent)
+                    .GetField("_mapEventType", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(mapEvent, TaleWorlds.CampaignSystem.MapEvents.MapEvent.BattleTypes.Siege);
+                TbLog.Info("siege", "EVENT TYPE DEGRADED to " + degraded + " — restored to Siege "
+                    + (mapEvent.IsSiegeAssault ? "(ok)" : "(RESTORE FAILED)"));
+            }
+            catch (Exception ex) { TbLog.Info("siege", "event type restore FAILED: " + ex.Message); }
         }
 
         /// <summary>Seats every snapshotted friendly party still inside the walls on the
@@ -3453,6 +3606,31 @@ namespace TrainingBattles
                     if (extra <= 0) continue;
                     var extraWounded = Math.Min(Math.Max(el.WoundedNumber - was.Wounded, 0), extra);
                     main.PrisonRoster.AddToCounts(character, -extra, false, -extraWounded);
+                }
+            }
+
+            // 1b-final. The LAST net under the wagons: any OTHER prisoner the drill added is
+            //     illegitimate — no drill runs long enough to take real prisoners, but a lost
+            //     race against vanilla's post-battle menus can run a real capture pass
+            //     (Anton's castle auto-resolve, 2026.07.26: Retreat on the zombie encounter
+            //     menu minted the garrison's wounded as prisoners, while RestoreFriendlyParties
+            //     was about to put those same men back on the walls — free prisoners). Own
+            //     types walked home above (their delta is now zero), mock types were swept;
+            //     whatever non-hero delta remains, goes.
+            if (prisonSnapshot != null)
+            {
+                var prisonBefore = ToDictionary(prisonSnapshot);
+                foreach (var el in new List<TroopRosterElement>(main.PrisonRoster.GetTroopRoster()))
+                {
+                    var character = el.Character;
+                    if (character == null || character.IsHero) continue;
+                    prisonBefore.TryGetValue(character, out var was);
+                    var extra = el.Number - was.Number;
+                    if (extra <= 0) continue;
+                    var extraWounded = Math.Min(Math.Max(el.WoundedNumber - was.Wounded, 0), extra);
+                    main.PrisonRoster.AddToCounts(character, -extra, false, -extraWounded);
+                    TbLog.Info("drill", "prisoner net: removed " + extra + " " + character.Name
+                        + " the drill's wagons gained");
                 }
             }
 

@@ -56,7 +56,12 @@ militia conscripted onto the defense by vanilla itself and protected by a PER-PA
 tiers on the engineer's-bench window (TrainingWindow frame), 5×-wages pay over everyone on the
 field plus each engine's man-day worth, a per-castle 7-day clock, and renown+influence per 100
 men (a grand muster is a public event — paid at the aftermath, never through the zeroed battle
-books). Awaiting playtest. Later: TOWN sieges (same code + Lord's Hall stage + own rates).
+books). Since 2026.07.26 the MOCK ENEMY comes to the walls too: the garrison and militia always
+defend (phantoms besiege when the player holds, reinforce the garrison when the player storms),
+the player's engineer arms both sides on the player's purse, and the phantoms are invisible to
+wages and prestige — the same session fixed HarvestBattleDead to skip the phantom party's death
+book (a latent field-mock bug: same-type phantom corpses inflated friendly KIA dockets).
+Awaiting playtest. Later: TOWN sieges (same code + Lord's Hall stage + own rates).
 
 ## Who does what — and how we work
 
@@ -299,7 +304,13 @@ before deploying or the DLL is locked.
   `_keepSiegeEvent` (reflection; vanilla's "siege continues" switch) makes FinalizeEvent skip
   the entire SiegeCompleted dispatch — no capture/sack/devastation, on every exit road; set it
   the moment the event exists. A defender-side mobile party with `CurrentSettlement == null`
-  silently flips the event Siege→SiegeOutside — seat defenders INSIDE first. On the attack
+  silently flips the event Siege→SiegeOutside — seat defenders INSIDE first. And "inside"
+  can be UNDONE under you: StartBattle's own sweep (AddInsideSettlementParties) WALKS OUT
+  any inside party that fails `SiegeEvent.CanPartyJoinSide(Defender)` — the bandit temp
+  party always fails it — so re-enter the party AFTER StartBattle, before seating; the LED
+  mission never reads the event type (we open it ourselves) but the auto-resolve SIMULATION
+  does, and SiegeOutside simulates a wall-less field battle (Anton's "rally out", fixed
+  2026.07.26 with a re-enter + type-restore belt + insta-prepared camp). On the attack
   road the garrison never auto-joins against its own lord (faction hostility check) — set
   `MapEventSide` positively. Walls are damaged only by campaign bombardment ticks, never by
   the mission. Being inside a settlement IS a PlayerEncounter — stand it down with
