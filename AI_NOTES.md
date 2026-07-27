@@ -49,6 +49,41 @@ fields with the far ones marked "another country"; then the same at a muster on 
 (the common case must be unchanged: patch scene first, then the 73 Plain fields, no "another
 country" marks at all).
 
+## War Horns CTD on the scout ride — FIXED (our side) 2026.07.27, awaiting the reporter
+
+froggyluv on Nexus (2026.07.26): the game CTDs when scouting the battle area with the War Cry /
+War Horns mod (by Ahmet) enabled. The stack he posted 2026.07.27 names the culprit exactly:
+
+```
+WarCryWarHornOrderHorns.CheckAndInitializeCaptainsOnceWarCry(Boolean debugMode)  line 306
+WarCryWarHornOrderHorns.WarCryMissionBehavior.OnMissionTick(Single dt)           line 903
+TaleWorlds.MountAndBlade.Mission.OnTick(...)
+```
+
+Their mission behavior ticks in EVERY mission and scans for formation captains. Our scout ride
+had NO TEAMS AT ALL — the player agent was spawned bare, so `Mission.PlayerTeam`,
+`Mission.PlayerEnemyTeam` and `agent.Team` were all null, and their captain scan dereferenced
+one of them. No vanilla mission is ever teamless: even the empty village/camp walk-arounds run
+SandBox's `MissionBasicTeamLogic` (two teams + a third ally team, colors from the map faction).
+We were the odd shape in the ecosystem, so we changed, not them — nothing in their code is
+reachable from ours.
+
+THE FIX (`ScoutMissionLogic.EarlyStart`, ScoutMission.cs): mirror `MissionBasicTeamLogic` —
+one Defender team, one Attacker team (the player's side carrying `Hero.MainHero.MapFaction`'s
+color pair, the empty side white), `Mission.PlayerTeam` set to the side being previewed, and the
+lone rider spawned INTO it (`AgentBuildData.Team`). Guarded by `Teams.Count > 0` so any behavior
+that got there first wins. Verified harmless: `Mission.IsFriendlyMission` is a plain field that
+only battle logics clear, so hold-Tab leaving is untouched; no combat/spawn/end logic rides
+along; both teams stay empty of agents.
+
+The SEA scout never had this hole — it is built on the naval custom-battle recipe, whose
+`SetupTeams` makes real teams.
+
+Not verifiable here (War Horns isn't installed, and its source is Ahmet's private repo): if the
+crash survives, the next thing to ask for is a fresh trace — a captain scan that walks
+`FormationsIncludingEmpty` and reads `formation.Captain` unguarded would still fall over on
+empty formations, and that would be a null check only they can add.
+
 ## Ship divide GUI + phantom fleets — BUILT 2026.07.25, awaiting playtest
 
 Both landed in one session, on the mod's FIRST custom Gauntlet windows (`UI\TrainingWindow` —

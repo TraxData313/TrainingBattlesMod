@@ -301,6 +301,11 @@ before deploying or the DLL is locked.
   tick only (every 4th hour while moving at sea: the Navigator alone, Shipmaster ≈ 1.4 ×
   party speed; crew never gain from sailing) — missions freeze the clock, so a free sail
   teaches nothing by itself.
+- A TEAMLESS mission is a mod-compatibility trap. No vanilla mission is ever teamless — even
+  the empty village/camp walk-arounds run SandBox's `MissionBasicTeamLogic` — so third-party
+  mission behaviors tick in assuming `Mission.PlayerTeam` / `PlayerEnemyTeam` / `agent.Team`
+  exist and null-ref when they don't (War Horns' captain scan CTD'd the land scout ride,
+  Nexus 2026.07.27). Any custom mission should wear the two-team skin even with no fighters.
 - SIEGE drills (the castle update's finds): the siege MISSION runs on plain data
   (`OpenSiegeMissionWithDeployment` + `MissionSiegeWeapon.CreateCampaignWeapon`), but the
   mission-end engine writeback null-refs without a campaign `SiegeEvent` — create a real one

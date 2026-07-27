@@ -19,4 +19,4 @@ NEXT UPDATEs or NOT FULLY DECIDED:
 - [ ] Training while leading an ARMY (research done — army vs mock enemy first; see AI_NOTES)
 - [ ] A menu door besides the hotkey (party-screen or clan-screen button)
 - [ ] Scouting with companions (see AI_NOTES)
-- [ ] War Horns mod CTD on scout ride (Nexus report 2026.07.26) — likely their mission hook assumes battle teams; decompile War Horns, maybe guard our side (not crucial)
+- [ ] War Horns CTD on scout ride — our teamless mission was the hole; teams added, shipped in v1.3.2 — ask the reporter to retest (see AI_NOTES)

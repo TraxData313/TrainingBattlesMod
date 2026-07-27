@@ -141,6 +141,31 @@ namespace TrainingBattles
             _realEncounter = realEncounter;
         }
 
+        /// <summary>The ride is a battlefield without a battle — but OTHER MODS' mission behaviors
+        /// assume a battle's SHAPE. A teamless mission is the one thing no vanilla mission ever is
+        /// (even the empty village/camp scenes run SandBox's MissionBasicTeamLogic), so a third-party
+        /// tick that reaches for Mission.PlayerTeam / agent.Team / PlayerEnemyTeam finds null and
+        /// takes the game down with it — War Horns' captain scan did exactly that (Nexus report,
+        /// 2026.07.26). So the scout mission now wears the same two-team skin vanilla wears: one team
+        /// per side, the player's carrying their faction's colors, PlayerTeam set, the lone rider
+        /// spawned INTO it. No agents on either side, no combat logic, nothing else changes — but
+        /// every "give me the teams" reflex in the modding ecosystem now finds what it expects.</summary>
+        public override void EarlyStart()
+        {
+            base.EarlyStart();
+            if (Mission.Teams.Count > 0) return;   // never fight a behavior that got there first
+            var playerIsAttacker = _playerSide == BattleSideEnum.Attacker;
+            var own1 = Hero.MainHero.MapFaction.Color;
+            var own2 = Hero.MainHero.MapFaction.Color2;
+            Mission.Teams.Add(BattleSideEnum.Defender,
+                playerIsAttacker ? uint.MaxValue : own1,
+                playerIsAttacker ? uint.MaxValue : own2);
+            Mission.Teams.Add(BattleSideEnum.Attacker,
+                playerIsAttacker ? own1 : uint.MaxValue,
+                playerIsAttacker ? own2 : uint.MaxValue);
+            Mission.PlayerTeam = playerIsAttacker ? Mission.AttackerTeam : Mission.DefenderTeam;
+        }
+
         public override void AfterStart()
         {
             base.AfterStart();
@@ -175,6 +200,7 @@ namespace TrainingBattles
                 .Equipment(character.FirstBattleEquipment)
                 .CivilianEquipment(false)
                 .TroopOrigin(new SimpleAgentOrigin(character))
+                .Team(Mission.PlayerTeam)
                 .Controller(AgentControllerType.Player));
             agent.WieldInitialWeapons();
             InformationManager.DisplayMessage(new InformationMessage(
