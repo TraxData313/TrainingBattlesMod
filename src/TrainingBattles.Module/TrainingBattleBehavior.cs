@@ -999,12 +999,13 @@ namespace TrainingBattles
 
         private void ChooseGround()
         {
-            var candidates = TrainingGroundPool(out var localCount);
+            var candidates = TrainingGroundPool(out var localCount, out var nativeCount);
             if (candidates.Count < 2) return;
             BattleSceneCatalog.ShowPicker(
                 BattleSceneCatalog.SelectPickerTitle,
-                "The battlefields for this kind of country. Pick where the drill is fought.",
-                candidates, localCount, _chosenSceneId, offerFate: true, sceneId =>
+                "The battlefields open to the drill — this country's own first. Pick where the "
+                + "drill is fought.",
+                candidates, localCount, nativeCount, _chosenSceneId, offerFate: true, sceneId =>
             {
                 _chosenSceneId = sceneId;
                 // Re-init the muster menu so its text shows (or drops) the chosen ground.
@@ -1087,7 +1088,7 @@ namespace TrainingBattles
 
         private void ScoutGround()
         {
-            var candidates = TrainingGroundPool(out var localCount);
+            var candidates = TrainingGroundPool(out var localCount, out var nativeCount);
             if (candidates.Count == 0) return;
             if (candidates.Count == 1)
             {
@@ -1099,7 +1100,7 @@ namespace TrainingBattles
                 "Pick a battlefield and ride out alone. Walk the ground, stand on your deployment line, "
                 + "and see if the deploy is good for your battle — if the map is fine but the lines are "
                 + "bad, take another map or another spot.",
-                candidates, localCount, null, offerFate: false, sceneId =>
+                candidates, localCount, nativeCount, null, offerFate: false, sceneId =>
             {
                 if (sceneId != null) LaunchScout(sceneId);
             });
@@ -1134,15 +1135,18 @@ namespace TrainingBattles
         }
 
         private static List<SingleplayerBattleSceneData> TrainingGroundPool(out int localCount)
+            => TrainingGroundPool(out localCount, out _);
+
+        private static List<SingleplayerBattleSceneData> TrainingGroundPool(out int localCount, out int nativeCount)
         {
             try
             {
                 return BattleSceneCatalog.WiderPoolAt(
-                    MobileParty.MainParty.Position, MainPartyAtSea(), out localCount);
+                    MobileParty.MainParty.Position, MainPartyAtSea(), out localCount, out nativeCount);
             }
             catch
             {
-                localCount = 0;
+                localCount = nativeCount = 0;
                 return new List<SingleplayerBattleSceneData>();
             }
         }

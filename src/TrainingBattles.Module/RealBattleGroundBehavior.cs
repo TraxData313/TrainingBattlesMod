@@ -296,12 +296,14 @@ namespace TrainingBattles
 
         private void SurveyGround()
         {
-            var candidates = Candidates(out var localCount);
+            var candidates = Candidates(out var localCount, out var nativeCount);
             if (candidates.Count == 0) return;
             BattleSceneCatalog.ShowPicker(
                 BattleSceneCatalog.SelectPickerTitle,
-                "These battlefields fit the ground you stand on. Pick where your line will form.",
-                candidates, localCount, TrainingBattlesSceneModel.PendingSceneId, offerFate: true, sceneId =>
+                "The battlefields open to this fight — the ground you truly stand on first. "
+                + "Pick where your line will form.",
+                candidates, localCount, nativeCount, TrainingBattlesSceneModel.PendingSceneId,
+                offerFate: true, sceneId =>
             {
                 TrainingBattlesSceneModel.PendingSceneId = sceneId;
                 TbLog.Info("ground", "real-battle survey pick: " + (sceneId ?? "fate"));
@@ -325,7 +327,7 @@ namespace TrainingBattles
         private void ScoutGround()
         {
             if (!GroundToolsAllowed(out var mapEvent)) return;
-            var candidates = Candidates(out var localCount);
+            var candidates = Candidates(out var localCount, out var nativeCount);
             if (candidates.Count == 0) return;
             var playerSide = mapEvent.PlayerSide;
             var direction = RealEncounterDirection(mapEvent);
@@ -338,7 +340,8 @@ namespace TrainingBattles
                 BattleSceneCatalog.ScoutPickerTitle,
                 "Pick a battlefield and ride out alone — the fight waits. The first entries are the "
                 + "ground you truly stand on; select the battlefield to make another field the real one.",
-                candidates, localCount, TrainingBattlesSceneModel.PendingSceneId, offerFate: false, sceneId =>
+                candidates, localCount, nativeCount, TrainingBattlesSceneModel.PendingSceneId,
+                offerFate: false, sceneId =>
             {
                 if (sceneId != null) LaunchScout(sceneId, playerSide, direction);
             });
@@ -371,18 +374,22 @@ namespace TrainingBattles
         }
 
         private static List<SingleplayerBattleSceneData> Candidates(out int localCount)
+            => Candidates(out localCount, out _);
+
+        private static List<SingleplayerBattleSceneData> Candidates(out int localCount, out int nativeCount)
         {
             try
             {
-                // The same wider same-terrain pool the training muster offers, the true local
-                // ground marked first — strict patch alone is one scene in this game's data,
-                // which is no choice at all.
+                // The same tiered pool the training muster offers, the true local ground marked
+                // first — strict patch alone is one scene in this game's data, which is no choice
+                // at all, and most terrains own no scene of their own to widen into either.
                 return BattleSceneCatalog.WiderPoolAt(
-                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter(), out localCount);
+                    MobileParty.MainParty.Position, PlayerEncounter.IsNavalEncounter(),
+                    out localCount, out nativeCount);
             }
             catch
             {
-                localCount = 0;
+                localCount = nativeCount = 0;
                 return new List<SingleplayerBattleSceneData>();
             }
         }

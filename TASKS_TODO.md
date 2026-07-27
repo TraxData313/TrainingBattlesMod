@@ -1,4 +1,5 @@
 BUGS:
+- [x] No "Select the battlefield" vs bandits + scout ride skipped its picker — starved scene pool, tiers added 2026.07.27 (see AI_NOTES)
 - [ ] Orange Looters - Orange (train color) looters still are seen appearing after a mock castle or sea battle, but now they at least turn normal looters after a screen is opened and closed (line the inventory)
 
 

@@ -34,8 +34,12 @@ MCM's alone, so a pick can never silently pin every later battle's sky. The real
 so the true attacker→defender direction is known and the previewed lines/ends/facings are
 the coming battle's own. DATA
 TRUTH found in this version's sp_battle_scenes.xml: each map patch is claimed by AT MOST
-ONE land scene, so vanilla's "random among variants" never fires — the wider terrain-type
-pool is what keeps the pickers alive. SCOPE (settled 2026.07.23 after one reversal): the
+ONE land scene, so vanilla's "random among variants" never fires — a wider pool is what keeps
+the pickers alive, and since 2026.07.27 that pool is TIERED, because every land scene the game
+ships is tagged Plain/Steppe/Desert/Swamp and NOTHING else (patch → terrain type → scenes
+listing the terrain among their features → kin terrains → the whole board; see
+BattleSceneCatalog and AI_NOTES). Before that, a party in forest, hills or snow matched one
+single scene and both ground pickers silently vanished — Anton's bandit fights, 2026.07.27. SCOPE (settled 2026.07.23 after one reversal): the
 split-army drill is THE CORE — always on, its `EnableSplitTraining` key lives in config.json
 as a hand-edit escape hatch only, deliberately NOT in MCM (Anton: not cheating; scout-only
 players simply don't drill). `EnableMockEnemyTraining` (default ON since v9 2026.07.25, the

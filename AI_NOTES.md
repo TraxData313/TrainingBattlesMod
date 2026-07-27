@@ -4,6 +4,51 @@ TASKS_TODO.md is Anton's board: short idea lines, readable at a glance. The deta
 research pointers and gotchas behind those ideas live HERE, one section per idea. When picking
 up a TODO line, read its section first.
 
+## The starved scene pool — FIXED 2026.07.27, awaiting playtest
+
+Anton attacking bandits: no "Select the battlefield" option at all, and "Ride out and scout a
+battlefield" dropped him straight into a field without ever showing the picker. ONE cause,
+two faces — the candidate pool was exactly 1: the survey option needs `Count >= 2` to appear,
+and `ScoutGround` skips the picker at `Count == 1`.
+
+THE DATA TRUTH (both shipped `sp_battle_scenes.xml`, SandBox + NavalDLC): every LAND battle
+scene in the game is tagged `Plain` (73), `Steppe` (30), `Desert` (14) or `Swamp` (7) — no
+other terrain owns a battlefield. Naval: `CoastalSea` 12, `River` 11, `UnderBridge` 5,
+`OpenSea` 2. The `TerrainType` enum has 24 members. So a party standing on Forest, Mountain,
+Snow, Canyon, Bridge, Fording, RuralArea, Beach, Cliff, Lake or Water matched NOTHING in the
+"wider same-terrain pool" — and since the 154 claimed map patches are each claimed by exactly
+one scene, the pool was the single patch scene. Bandits camp in woods and hills, which is why
+Anton hit it there and not on the plains.
+
+THE FIX (`BattleSceneCatalog.WiderPoolAt`, now tiered — nearest ground first):
+1. the scenes the map patch claims (`localCount` — labelled "this ground");
+2. every scene of the local terrain TYPE (vanilla's own fallback, unchanged);
+3. every scene that LISTS the local terrain in its `<TerrainTypes>` block — the data's
+   secondary-feature list, previously unread by us AND by vanilla (Mountain appears in 14
+   scenes, Water 7, River 7, Canyon 2, Lake 1, Dune 1): a Plain field with a mountain in it is
+   a real answer for a party in the mountains. Tiers 1-3 = `nativeCount`, the country you
+   truly stand in;
+4. the KIN terrains (`KinTerrains` — Forest→Plain/Swamp/Steppe, Snow→Plain/Steppe,
+   Mountain→Steppe/Plain/Desert, Canyon/Dune→Desert, bridges and river crossings→River/
+   UnderBridge/Plain/Swamp, Lake→River/CoastalSea, Water→CoastalSea/OpenSea, etc.). Standing
+   in Forest, this block is sorted by `ForestDensity` descending — the thickest fields first;
+5. if STILL under 2 entries, the whole board (vanilla's own last-ditch shape).
+
+The naval-ness filter runs on every tier, so a sea pool can never take a field (or the
+reverse) — that's why one kin table serves both. Everything past `nativeCount` is labelled
+"— another country" in the picker, so a Battanian forest fight on a Vlandian plain map is the
+player's informed choice, never a silent swap. `WiderPoolAt` keeps its old 3-arg overload;
+the 4-arg one adds `nativeCount`.
+
+Diagnosis aid: `training_battles.log` now carries a `[ground] scene pool: land | terrain
+Forest | patch 1 | native 1 | pool 58` line, written once per CHANGED answer (menu conditions
+call the pool every frame). Next "the option isn't there" report is one grep away.
+
+PLAYTEST: attack bandits in woods/hills — both options present, both pickers listing many
+fields with the far ones marked "another country"; then the same at a muster on the plains
+(the common case must be unchanged: patch scene first, then the 73 Plain fields, no "another
+country" marks at all).
+
 ## Ship divide GUI + phantom fleets — BUILT 2026.07.25, awaiting playtest
 
 Both landed in one session, on the mod's FIRST custom Gauntlet windows (`UI\TrainingWindow` —

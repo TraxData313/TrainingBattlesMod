@@ -66,32 +66,136 @@ namespace TrainingBattles
 
         /// <summary>The scene the patch truly owns first (Anton's playtest + the shipped
         /// sp_battle_scenes.xml showed each map patch is claimed by AT MOST ONE land scene in this
-        /// game version — vanilla's "random among several" is legacy), then every other scene of
-        /// the local terrain type. <paramref name="localCount"/> says how many entries at the front
-        /// are the ground the player actually stands on.</summary>
+        /// game version — vanilla's "random among several" is legacy), then the widening tiers.
+        /// <paramref name="localCount"/> says how many entries at the front are the ground the
+        /// player actually stands on.</summary>
         public static List<SingleplayerBattleSceneData> WiderPoolAt(CampaignVec2 position, bool isNaval, out int localCount)
+            => WiderPoolAt(position, isNaval, out localCount, out _);
+
+        /// <summary>The full pool in TIERS, nearest ground first (the 2026.07.27 fix — Anton
+        /// found no "Select the battlefield" and a scout ride that skipped its picker while
+        /// attacking bandits in the woods; both are the same starved pool):
+        /// <list type="number">
+        /// <item>the scenes the map patch itself claims — <paramref name="localCount"/>;</item>
+        /// <item>every scene of the local terrain TYPE (vanilla's own fallback);</item>
+        /// <item>every scene that LISTS this terrain among its features (the data's
+        /// &lt;TerrainTypes&gt; block — a Plain field with a mountain in it);</item>
+        /// <item>the KIN terrains (see <see cref="KinTerrains"/>);</item>
+        /// <item>last resort, the whole board.</item>
+        /// </list>
+        /// Tiers 1-3 are the country the player truly stands in — <paramref name="nativeCount"/>
+        /// marks where that ends so the picker can say so. Tiers 4-5 exist because THE SHIPPED
+        /// DATA HAS NO BATTLEFIELD FOR MOST TERRAINS: every land scene in the game is tagged
+        /// Plain, Desert, Steppe or Swamp, so a party standing on Forest, Mountain, Snow, Canyon,
+        /// Bridge, RuralArea or Beach matched nothing at all and the pool collapsed to the one
+        /// patch scene — which hid the ground choice (it needs two) and made the scout ride
+        /// launch without ever asking.</summary>
+        public static List<SingleplayerBattleSceneData> WiderPoolAt(CampaignVec2 position, bool isNaval,
+            out int localCount, out int nativeCount)
         {
             var result = CandidatesAt(position, isNaval);
-            localCount = result.Count;
+            localCount = nativeCount = result.Count;
             try
             {
                 var scenes = GameSceneDataManager.Instance?.SingleplayerBattleScenes;
                 var wrapper = Campaign.Current?.MapSceneWrapper;
-                if (scenes != null && wrapper != null)
+                if (scenes == null || wrapper == null) return result;
+                wrapper.GetEnvironmentTerrainTypesCount(in position, out var terrain);
+                Absorb(result, scenes, isNaval, scene => scene.Terrain == terrain);
+                Absorb(result, scenes, isNaval, scene => Features(scene).Contains(terrain));
+                nativeCount = result.Count;
+                foreach (var kin in KinTerrains(terrain))
                 {
-                    wrapper.GetEnvironmentTerrainTypesCount(in position, out var terrain);
-                    foreach (var scene in scenes)
-                    {
-                        if (scene.IsNaval != isNaval || scene.Terrain != terrain) continue;
-                        var known = false;
-                        foreach (var have in result)
-                            if (have.SceneID == scene.SceneID) { known = true; break; }
-                        if (!known) result.Add(scene);
-                    }
+                    var from = result.Count;
+                    Absorb(result, scenes, isNaval,
+                        scene => scene.Terrain == kin || Features(scene).Contains(kin));
+                    // Standing in the woods, the thickest fields come first — the closest thing
+                    // the data has to the ground under your feet.
+                    if (terrain == TerrainType.Forest)
+                        result.Sort(from, result.Count - from,
+                            Comparer<SingleplayerBattleSceneData>.Create(
+                                (a, b) => b.ForestDensity.CompareTo(a.ForestDensity)));
                 }
+                // Nothing kin either (a terrain we never foresaw): the whole board beats no choice.
+                if (result.Count < 2) Absorb(result, scenes, isNaval, _ => true);
+                LogPoolOnce(terrain, isNaval, localCount, nativeCount, result.Count);
             }
             catch { }
             return result;
+        }
+
+        private static List<TerrainType> Features(SingleplayerBattleSceneData scene)
+            => scene.TerrainTypes ?? _noFeatures;
+
+        private static readonly List<TerrainType> _noFeatures = new List<TerrainType>();
+
+        /// <summary>Appends every scene of the right naval-ness that passes <paramref name="wanted"/>
+        /// and is not already in the pool — the tiers stay in order, no scene twice.</summary>
+        private static void Absorb(List<SingleplayerBattleSceneData> pool,
+            IEnumerable<SingleplayerBattleSceneData> scenes, bool isNaval,
+            Func<SingleplayerBattleSceneData, bool> wanted)
+        {
+            foreach (var scene in scenes)
+            {
+                if (scene.IsNaval != isNaval || !wanted(scene)) continue;
+                var known = false;
+                foreach (var have in pool)
+                    if (have.SceneID == scene.SceneID) { known = true; break; }
+                if (!known) pool.Add(scene);
+            }
+        }
+
+        /// <summary>What a terrain may BORROW when the shipped data gives it no battlefield of its
+        /// own — ordered nearest-looking first. Land and sea share one table; the naval-ness filter
+        /// keeps a sea pool from ever taking a field (and the reverse).</summary>
+        private static TerrainType[] KinTerrains(TerrainType terrain)
+        {
+            switch (terrain)
+            {
+                case TerrainType.Forest:
+                    return new[] { TerrainType.Plain, TerrainType.Swamp, TerrainType.Steppe };
+                case TerrainType.Snow:
+                    return new[] { TerrainType.Plain, TerrainType.Steppe };
+                case TerrainType.Mountain:
+                    return new[] { TerrainType.Steppe, TerrainType.Plain, TerrainType.Desert };
+                case TerrainType.Canyon:
+                    return new[] { TerrainType.Desert, TerrainType.Steppe };
+                case TerrainType.Dune:
+                    return new[] { TerrainType.Desert, TerrainType.Steppe };
+                case TerrainType.RuralArea:
+                case TerrainType.Beach:
+                case TerrainType.Cliff:
+                    return new[] { TerrainType.Plain, TerrainType.Steppe };
+                case TerrainType.Bridge:
+                case TerrainType.UnderBridge:
+                case TerrainType.Fording:
+                case TerrainType.River:
+                case TerrainType.NonNavigableRiver:
+                    return new[] { TerrainType.River, TerrainType.UnderBridge, TerrainType.Plain, TerrainType.Swamp };
+                case TerrainType.Lake:
+                    return new[] { TerrainType.River, TerrainType.CoastalSea, TerrainType.Plain };
+                case TerrainType.Water:
+                    return new[] { TerrainType.CoastalSea, TerrainType.OpenSea, TerrainType.River };
+                case TerrainType.CoastalSea:
+                    return new[] { TerrainType.OpenSea, TerrainType.River };
+                case TerrainType.OpenSea:
+                    return new[] { TerrainType.CoastalSea };
+                default:
+                    return new[] { TerrainType.Plain, TerrainType.Steppe, TerrainType.Desert, TerrainType.Swamp };
+            }
+        }
+
+        /// <summary>Menu conditions call the pool every frame — one line per changed answer, so
+        /// the next "the option isn't there" report is one grep away.</summary>
+        private static string? _lastPoolLogged;
+
+        private static void LogPoolOnce(TerrainType terrain, bool isNaval, int localCount, int nativeCount, int total)
+        {
+            var line = (isNaval ? "sea" : "land") + " | terrain " + terrain
+                + " | patch " + localCount + " | native " + nativeCount + " | pool " + total;
+            if (line == _lastPoolLogged) return;
+            _lastPoolLogged = line;
+            TbLog.Info("ground", "scene pool: " + line);
         }
 
         public static string Describe(SingleplayerBattleSceneData scene)
@@ -108,12 +212,16 @@ namespace TrainingBattles
 
         /// <summary>The one ground-choice dialog, shared by every door (training survey, scout
         /// ride, real-defense choice). The first <paramref name="localCount"/> candidates are
-        /// marked as the ground the player stands on; <paramref name="offerFate"/> adds the
-        /// "let the game pick" entry. <paramref name="onDecided"/> receives the chosen SceneID
-        /// (null for fate) and is not called at all on Cancel.</summary>
+        /// marked as the ground the player stands on, and everything from
+        /// <paramref name="nativeCount"/> on is marked as borrowed from another country (see
+        /// <see cref="WiderPoolAt(CampaignVec2,bool,out int,out int)"/> — most terrains own no
+        /// battlefield at all in the shipped data, so the far tiers are the choice);
+        /// <paramref name="offerFate"/> adds the "let the game pick" entry.
+        /// <paramref name="onDecided"/> receives the chosen SceneID (null for fate) and is not
+        /// called at all on Cancel.</summary>
         public static void ShowPicker(string title, string description,
-            List<SingleplayerBattleSceneData> candidates, int localCount, string? currentChoice,
-            bool offerFate, Action<string?> onDecided)
+            List<SingleplayerBattleSceneData> candidates, int localCount, int nativeCount,
+            string? currentChoice, bool offerFate, Action<string?> onDecided)
         {
             var elements = new List<InquiryElement>();
             if (offerFate)
@@ -127,6 +235,7 @@ namespace TrainingBattles
                 var scene = candidates[i];
                 var label = Describe(scene);
                 if (i < localCount) label += " — this ground";
+                else if (i >= nativeCount) label += " — another country";
                 if (scene.SceneID == currentChoice) label += " — current";
                 elements.Add(new InquiryElement(scene.SceneID, label, null, true, scene.SceneID));
             }
