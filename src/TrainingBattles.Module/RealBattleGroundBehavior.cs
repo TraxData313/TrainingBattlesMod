@@ -26,7 +26,17 @@ namespace TrainingBattles
     /// <see cref="ModConfig.ChooseGroundWhenAttacking"/>, both default on). The survey pick is
     /// handed to <see cref="TrainingBattlesSceneModel"/> and eaten by the next mission start; the
     /// choice clears when the player's map event ends, however it ends, so a battle that never
-    /// happens leaves nothing armed. The scout leaves the encounter untouched: campaign time is
+    /// happens leaves nothing armed.
+    ///
+    /// NEAR A VILLAGE both tools change shape (2026.07.28). Vanilla hangs the nearest village
+    /// within 3 map units on any land field battle the player is in and then fights it INSIDE that
+    /// village, never asking our SceneModel — so the survey option shows itself disabled with the
+    /// truth, and the scout ride walks the village instead of a field it will never see. See
+    /// <see cref="BattleSceneCatalog.VillageBattlegroundFor"/>. Moving such a battle back OUT onto
+    /// a chosen field is deliberately NOT done here: it would rewrite campaign consequences that
+    /// read MapEventSettlement (see AI_NOTES).
+    ///
+    /// The scout leaves the encounter untouched: campaign time is
     /// frozen inside missions and the encounter menu re-activates on return (the same
     /// mission-under-a-menu shape as vanilla's pre-battle conversation) — FIRST PLAYTEST POINT.
     /// </summary>
@@ -270,6 +280,18 @@ namespace TrainingBattles
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             if (!GroundToolsAllowed(out var mapEvent)) return false;
+            // Fought inside a village, the ground is not ours to pick — vanilla opens the
+            // village's own scene and never asks our SceneModel at all. Say so instead of
+            // offering a choice the game will discard (Anton's near-village looter fight,
+            // 2026.07.28); the scout option beside this one rides the village itself.
+            if (BattleSceneCatalog.VillageBattlegroundFor(mapEvent, out var village) != null)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_survey_village}This fight will be fought "
+                    + "inside " + village!.Name + " — the village IS the battlefield, and its ground "
+                    + "is not yours to choose. Ride out and scout it instead.");
+                return true;
+            }
             var candidates = Candidates(out _);
             if (candidates.Count < 2) return false; // nothing to choose between
             if (!ScoutingDuelWon(mapEvent, out var mine, out var theirs, out var required))
@@ -316,8 +338,15 @@ namespace TrainingBattles
         private bool ScoutGroundCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Mission;
-            if (!GroundToolsAllowed(out _)) return false;
+            if (!GroundToolsAllowed(out var mapEvent)) return false;
             if (PlayerEncounter.IsNavalEncounter()) return false; // no lone ride on open water
+            if (BattleSceneCatalog.VillageBattlegroundFor(mapEvent, out var village) != null)
+            {
+                args.Tooltip = new TextObject("{=TB_tip_scout_village}This fight will be fought "
+                    + "inside " + village!.Name + ". Ride in alone and walk its lanes, walls and "
+                    + "yards before you commit. No time passes; the fight waits for your return.");
+                return true;
+            }
             if (Candidates(out _).Count == 0) return false;
             args.Tooltip = new TextObject(
                 "{=TB_tip_scout_real}Ride out alone and walk the field before you commit. The armies stand where they stand, so the lines and facings you see are the coming battle's true ones. No time passes; the fight waits for your return.");
@@ -327,10 +356,24 @@ namespace TrainingBattles
         private void ScoutGround()
         {
             if (!GroundToolsAllowed(out var mapEvent)) return;
-            var candidates = Candidates(out var localCount, out var nativeCount);
-            if (candidates.Count == 0) return;
             var playerSide = mapEvent.PlayerSide;
             var direction = RealEncounterDirection(mapEvent);
+            // Near a village there is nothing to choose BETWEEN: the village is the battlefield.
+            var villageScene = BattleSceneCatalog.VillageBattlegroundFor(mapEvent, out var village);
+            if (villageScene != null)
+            {
+                TbLog.Info("scout", "village ride: " + villageScene + " (" + village!.Name
+                    + ") | side " + playerSide);
+                try { ScoutMission.OpenForVillageEncounter(villageScene, playerSide, direction); }
+                catch (System.Exception ex)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: could not ride into the village (" + ex.Message + ")."));
+                }
+                return;
+            }
+            var candidates = Candidates(out var localCount, out var nativeCount);
+            if (candidates.Count == 0) return;
             if (candidates.Count == 1)
             {
                 LaunchScout(candidates[0].SceneID, playerSide, direction);

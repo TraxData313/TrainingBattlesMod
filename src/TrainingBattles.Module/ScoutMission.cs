@@ -34,6 +34,12 @@ namespace TrainingBattles
     /// direction comes from where the attacker actually stands — and the encounter-menu scout
     /// (<see cref="OpenForRealEncounter"/>) passes exactly that, so scouting an imminent battle
     /// previews its true lines, ends and facings included.
+    ///
+    /// ONE BATTLEFIELD IS NOT A MAP-PATCH SCENE: a fight near a village is fought inside the
+    /// village (<see cref="OpenForVillageEncounter"/>), whose scene is a settlement LOCATION with
+    /// no patch data and its own combat scene level. There the ground is certain but the
+    /// deployment path is vanilla's own random pick — <see cref="LinesTruth"/> keeps the ride's
+    /// report honest about which of the three cases the player is looking at.
     /// </summary>
     internal static class ScoutMission
     {
@@ -59,6 +65,20 @@ namespace TrainingBattles
         /// <paramref name="timeOfDayOverride"/> (-1 = campaign clock) swaps the campaign atmosphere
         /// for one of vanilla custom battle's fixed-hour presets — see <see cref="AtmosphereFor"/>.</summary>
         public static MissionInitializerRecord CreatePatchAwareRecord(string sceneId, Vec2 encounterDirection, int timeOfDayOverride = -1)
+            => CreateRecord(sceneId, encounterDirection, timeOfDayOverride, hasMapPatch: true, sceneLevels: "");
+
+        /// <summary>The SETTLEMENT-scene record: a village battlefield is not a map-patch scene at
+        /// all (it is the settlement's own <c>village_center</c> location), so it carries no patch
+        /// data and must name its combat scene LEVEL — exactly what vanilla's own village battle
+        /// passes (see <see cref="BattleSceneCatalog.VillageBattlegroundFor"/>). Without patch data
+        /// the deployment path is picked at RANDOM — vanilla's village battle is too, so this is
+        /// the honest shape, not a shortcut; the ride's report says so.</summary>
+        public static MissionInitializerRecord CreateSettlementRecord(string sceneId, string sceneLevels,
+            Vec2 encounterDirection, int timeOfDayOverride = -1)
+            => CreateRecord(sceneId, encounterDirection, timeOfDayOverride, hasMapPatch: false, sceneLevels);
+
+        private static MissionInitializerRecord CreateRecord(string sceneId, Vec2 encounterDirection,
+            int timeOfDayOverride, bool hasMapPatch, string sceneLevels)
         {
             var position = MobileParty.MainParty.Position;
             var wrapper = Campaign.Current.MapSceneWrapper;
@@ -73,7 +93,8 @@ namespace TrainingBattles
                 PlayingInCampaignMode = true,
                 RandomTerrainSeed = MBRandom.RandomInt(10000),
                 AtmosphereOnCampaign = AtmosphereFor(position, timeOfDayOverride),
-                SceneHasMapPatch = true,
+                SceneLevels = sceneLevels,
+                SceneHasMapPatch = hasMapPatch,
                 DecalAtlasGroup = 2,
                 PatchCoordinates = patch.normalizedCoordinates,
                 PatchEncounterDir = encounterDirection,
@@ -90,11 +111,27 @@ namespace TrainingBattles
                 ?? Campaign.Current.Models.MapWeatherModel.GetAtmosphereModel(position);
         }
 
+        /// <summary>How much the previewed deployment lines can be trusted — the ride's report says
+        /// exactly this and never more.</summary>
+        internal enum LinesTruth
+        {
+            /// <summary>A muster scout: the drill will form these very lines (fixed approach), but a
+            /// real defence here would have the enemy's own approach decide which end is theirs.</summary>
+            Drill,
+            /// <summary>A real encounter on a map-patch battlefield: both armies stand frozen, so the
+            /// direction is known and the lines, ends and facings are the coming battle's own.</summary>
+            Exact,
+            /// <summary>A settlement battlefield (a village): the GROUND is certainly the coming
+            /// battle's, but with no map patch vanilla picks the deployment path at random — so the
+            /// lines shown are one of several the fight may open on.</summary>
+            GroundOnly,
+        }
+
         /// <summary>The training/muster scout: assumed approach direction, the player previews the
         /// defender's line (a drill later forms exactly these lines). <paramref name="timeOfDayOverride"/>
         /// is the pinned battle hour (-1 = campaign clock), so the preview lighting is the drill's.</summary>
         public static void Open(string sceneId, int timeOfDayOverride = -1)
-            => Open(sceneId, AssumedEncounterDirection, BattleSideEnum.Defender, realEncounter: false, timeOfDayOverride);
+            => Open(sceneId, AssumedEncounterDirection, BattleSideEnum.Defender, LinesTruth.Drill, null, timeOfDayOverride);
 
         /// <summary>The REAL-encounter scout, launched from the encounter menu while the armies
         /// stand facing each other: the true approach direction and the player's true side, so the
@@ -103,11 +140,24 @@ namespace TrainingBattles
         /// the ride the encounter menu re-activates (the same mission-under-a-menu shape as
         /// vanilla's pre-battle conversation).</summary>
         public static void OpenForRealEncounter(string sceneId, BattleSideEnum playerSide, Vec2 encounterDirection)
-            => Open(sceneId, encounterDirection, playerSide, realEncounter: true);
+            => Open(sceneId, encounterDirection, playerSide, LinesTruth.Exact, null);
 
-        private static void Open(string sceneId, Vec2 encounterDirection, BattleSideEnum playerSide, bool realEncounter, int timeOfDayOverride = -1)
+        /// <summary>The NEAR-A-VILLAGE scout (2026.07.28): this fight will be fought inside the
+        /// village, so the ride walks the village itself at its combat scene level — the real
+        /// battlefield instead of the open field vanilla would have used had no village been
+        /// near. See <see cref="BattleSceneCatalog.VillageBattlegroundFor"/> for the rule.</summary>
+        public static void OpenForVillageEncounter(string sceneId, BattleSideEnum playerSide, Vec2 encounterDirection)
+            => Open(sceneId, encounterDirection, playerSide, LinesTruth.GroundOnly,
+                BattleSceneCatalog.VillageBattleSceneLevels);
+
+        /// <param name="settlementSceneLevels">Non-null for a settlement battlefield — the scene
+        /// level to load, and the signal that this scene carries no map patch.</param>
+        private static void Open(string sceneId, Vec2 encounterDirection, BattleSideEnum playerSide,
+            LinesTruth truth, string? settlementSceneLevels, int timeOfDayOverride = -1)
         {
-            var rec = CreatePatchAwareRecord(sceneId, encounterDirection, timeOfDayOverride);
+            var rec = settlementSceneLevels == null
+                ? CreatePatchAwareRecord(sceneId, encounterDirection, timeOfDayOverride)
+                : CreateSettlementRecord(sceneId, settlementSceneLevels, encounterDirection, timeOfDayOverride);
             MissionState.OpenNew(MissionName, rec, _ => new MissionBehavior[]
             {
                 new MissionOptionsComponent(),
@@ -117,7 +167,7 @@ namespace TrainingBattles
                 new MissionBoundaryPlacer(),
                 new MissionBoundaryCrossingHandler(10f),
                 new EquipmentControllerLeaveLogic(),
-                new ScoutMissionLogic(playerSide, realEncounter),
+                new ScoutMissionLogic(playerSide, truth),
             });
         }
     }
@@ -128,17 +178,17 @@ namespace TrainingBattles
     internal sealed class ScoutMissionLogic : MissionLogic
     {
         private readonly BattleSideEnum _playerSide;
-        private readonly bool _realEncounter;
+        private readonly ScoutMission.LinesTruth _truth;
 
         /// <param name="playerSide">Whose line the player stands on. The muster scout always
         /// previews the defender's; a real encounter passes the player's true side.</param>
-        /// <param name="realEncounter">True when scouting an IMMINENT battle from the encounter
-        /// menu — the record then carries the enemy's true approach, so the report may promise
-        /// the lines instead of hedging.</param>
-        public ScoutMissionLogic(BattleSideEnum playerSide = BattleSideEnum.Defender, bool realEncounter = false)
+        /// <param name="truth">How far the previewed lines may be trusted — the report says that
+        /// and no more (see <see cref="ScoutMission.LinesTruth"/>).</param>
+        public ScoutMissionLogic(BattleSideEnum playerSide = BattleSideEnum.Defender,
+            ScoutMission.LinesTruth truth = ScoutMission.LinesTruth.Drill)
         {
             _playerSide = playerSide;
-            _realEncounter = realEncounter;
+            _truth = truth;
         }
 
         /// <summary>The ride is a battlefield without a battle — but OTHER MODS' mission behaviors
@@ -181,13 +231,26 @@ namespace TrainingBattles
                 frame = ownFrame;
                 var toEnemy = enemyFrame.origin.AsVec2 - ownFrame.origin.AsVec2;
                 direction = toEnemy.Normalized();
-                deploymentReport = _realEncounter
-                    ? "You stand where YOUR line will form — the enemy's line is about "
-                        + (int)toEnemy.Length + " paces ahead. Their approach is known, so these "
-                        + "are the true lines and facings of the coming battle."
-                    : "You stand where YOUR line would form — the enemy's line is about "
-                        + (int)toEnemy.Length + " paces ahead. A drill here forms exactly these lines; "
-                        + "in a real defence the enemy's approach decides which end is theirs.";
+                var paces = (int)toEnemy.Length;
+                switch (_truth)
+                {
+                    case ScoutMission.LinesTruth.Exact:
+                        deploymentReport = "You stand where YOUR line will form — the enemy's line is about "
+                            + paces + " paces ahead. Their approach is known, so these are the true "
+                            + "lines and facings of the coming battle.";
+                        break;
+                    case ScoutMission.LinesTruth.GroundOnly:
+                        deploymentReport = "This IS the ground you will fight on. One of the village's "
+                            + "own lines forms about " + paces + " paces from the other — but a village "
+                            + "battle has no fixed approach, so walk the whole place: the fight may open "
+                            + "from any of them.";
+                        break;
+                    default:
+                        deploymentReport = "You stand where YOUR line would form — the enemy's line is about "
+                            + paces + " paces ahead. A drill here forms exactly these lines; in a real "
+                            + "defence the enemy's approach decides which end is theirs.";
+                        break;
+                }
             }
             else
             {

@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.Encounters;
+using TaleWorlds.CampaignSystem.MapEvents;
+using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.Core;
 
 namespace TrainingBattles
@@ -33,6 +36,42 @@ namespace TrainingBattles
         /// <summary>The shared picker-dialog titles, one per tool, same everywhere.</summary>
         public const string SelectPickerTitle = "Choose the ground";
         public const string ScoutPickerTitle = "Scout the ground";
+
+        /// <summary>The scene-LEVEL a village battlefield loads under — vanilla's own
+        /// (PlayerEncounter.StartVillageBattleMission passes it): the village scene's combat
+        /// variant, with the battle spawn paths. A village scene loaded without it is the
+        /// peaceful walk-around level.</summary>
+        public const string VillageBattleSceneLevels = "land_raid";
+
+        /// <summary>THE GROUND A REAL FIELD BATTLE WILL TRULY BE FOUGHT ON when a village is near
+        /// (researched 2026.07.28 — Anton's "Basil Near Village Looter Atk" save). Vanilla's
+        /// <c>MapEvent.Initialize</c> hangs the nearest village within
+        /// <c>EncounterModel.GetSettlementBeingNearFieldBattleRadius</c> (3.0 map units) on ANY
+        /// land field battle the player is in — the event stays a FieldBattle, only
+        /// <c>MapEventSettlement</c> changes — and <c>MenuHelper.EncounterAttackConsequence</c>
+        /// then forks to <c>PlayerEncounter.StartVillageBattleMission</c>, which opens the
+        /// VILLAGE's own scene and never asks <c>SceneModel.GetBattleSceneForMapPatch</c>. So on
+        /// these fights our survey pick can change nothing and the field our scout used to ride
+        /// was never the battlefield. Returns the village's scene id, or null when this battle
+        /// really is fought on the open map patch.</summary>
+        public static string? VillageBattlegroundFor(MapEvent? mapEvent, out Settlement? village)
+        {
+            village = null;
+            try
+            {
+                if (mapEvent == null || !mapEvent.IsFieldBattle) return null;
+                var settlement = mapEvent.MapEventSettlement;
+                if (settlement == null || !settlement.IsVillage) return null;
+                // A sea-borne raider takes the ship road instead (MenuHelper's own fork); the
+                // lone scout never rides open water anyway.
+                if (PlayerEncounter.IsNavalEncounter()) return null;
+                var scene = settlement.LocationComplex?.GetScene("village_center", 1);
+                if (string.IsNullOrEmpty(scene)) return null;
+                village = settlement;
+                return scene;
+            }
+            catch { return null; }
+        }
 
         public static List<SingleplayerBattleSceneData> CandidatesAt(CampaignVec2 position, bool isNaval)
         {

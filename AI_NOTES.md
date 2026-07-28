@@ -49,6 +49,97 @@ fields with the far ones marked "another country"; then the same at a muster on 
 (the common case must be unchanged: patch scene first, then the 73 Plain fields, no "another
 country" marks at all).
 
+## Battles NEAR A VILLAGE ignore the ground choice — 1+2 BUILT + PLAYTESTED 2026.07.28
+
+Anton, "Basil Near Village Looter Atk" save: attacking looters near a village, the real battle
+happens IN THE VILLAGE — but the scout ride and "this ground" both show a plain field with
+scattered trees, and the village is nowhere in the picker. Both observations are correct, and
+the cause is entirely vanilla's; our two options are the ones telling a lie.
+
+THE VILLAGE RULE (`MapEvent.Initialize`, CampaignSystem, lines ~776-800). For a FIELD BATTLE
+on land that the main party is in, vanilla looks for the nearest village inside
+`EncounterModel.GetSettlementBeingNearFieldBattleRadius` (**3.0 map units**, DefaultEncounterModel)
+and, if it finds one, sets `MapEventSettlement = village.Settlement` AND moves `MapEvent.Position`
+to the village. The event TYPE stays `FieldBattle` — only the settlement pointer changes.
+Then `MenuHelper.EncounterAttackConsequence` forks on that pointer:
+
+- `mapEventSettlement != null && IsVillage` → `PlayerEncounter.StartVillageBattleMission()` →
+  `CampaignMission.OpenBattleMission(settlement.LocationComplex.GetScene("village_center", 1),
+  usesTownDecalAtlas: false, "land_raid")`. A normal battle mission, in the VILLAGE's own scene,
+  at its `land_raid` scene level. **`SceneModel.GetBattleSceneForMapPatch` is never called** — so
+  `TrainingBattlesSceneModel.PendingSceneId` is never read, and the survey pick does nothing.
+  No map-patch data either (`SceneHasMapPatch` stays false), so vanilla's own spawn-path pick in
+  a village is RANDOM, not the deterministic one our scout previews.
+- settlement null → the field branch we already decorate (patch scene + `SceneHasMapPatch`).
+
+Village scenes are per-settlement: `settlements.xml` gives each village's `village_center` its
+own `scene_name` — 274 villages over **86 distinct scenes** (`empire_village_003`,
+`battania_village_j`, `aserai_village_e`, …), five cultures. None of them live in
+`GameSceneDataManager.SingleplayerBattleScenes`, which is why `BattleSceneCatalog` cannot see
+them: our catalog is the sp_battle_scenes list, and villages are settlement LOCATIONS.
+
+Good news that fell out of the same read: `CreateSandBoxMissionInitializerRecord` still fills
+`AtmosphereOnCampaign` from `MapWeatherModel.GetAtmosphereModel`, so our HOUR pin already works
+in village battles. Only the ground tools are blind there.
+
+THE BRIDGE DOUBT — not us. There is no bridge battlefield in the game. Confirmed three ways:
+`sp_battle_scenes.xml` has zero scenes tagged Bridge/UnderBridge on land (only Plain 57,
+Steppe 30, Desert 14, Swamp 7 among the 80 uncommented entries) and zero named `*bridge*`;
+`SandBoxCore\SceneObj` ships 98 `battle_terrain_*` folders, none bridge/forest/snow/river; and
+154 of the 158 map-patch indices are claimed (only 0, 52, 54, 64 are orphans), each by exactly
+one scene. Standing mid-bridge on the campaign map, the patch under you belongs to the
+surrounding region's ordinary field — vanilla loads that same field. Anton's session log agrees:
+`[ground] scene pool: land | terrain Plain | patch 1 | native 56 | pool 96`. Our pool is reading
+the data correctly; the data has no bridge to give.
+
+WHAT WAS BUILT (1 and 2, 2026.07.28 — all no-Harmony, every API public):
+
+1. HONESTY. `BattleSceneCatalog.VillageBattlegroundFor(mapEvent, out village)` is the one place
+   that answers "will this fight actually be inside a village?" — field battle + `MapEventSettlement`
+   is a village + not naval (vanilla's sea-raider fork takes the ship road instead) — and returns
+   the village's `village_center` scene id. `RealBattleGroundBehavior.SurveyGroundCondition` now
+   shows the survey option DISABLED there, naming the village: the pick would have been discarded
+   by vanilla, so it is never offered. Note `GroundToolsAllowed` still passes these fights —
+   `IsFieldBattle` stays true near a village, only the settlement pointer changes.
+   The MUSTER is unaffected: our own drill builds its own record and never reaches vanilla's
+   village fork (verified) — a drill near a village still fights the map-patch field.
+2. SCOUT THE VILLAGE. `ScoutGround` detects the same case and rides the village itself —
+   `ScoutMission.OpenForVillageEncounter` → `CreateSettlementRecord`, which is the patch-aware
+   record minus the patch (`SceneHasMapPatch = false`) plus `SceneLevels = "land_raid"`
+   (`BattleSceneCatalog.VillageBattleSceneLevels`, vanilla's own). No picker is shown: there is
+   nothing to choose between, the village IS the battlefield. Because there is no patch data,
+   `BattleSpawnPathSelector` picks the deployment path at RANDOM — vanilla's village battle does
+   the same — so the ride's report must not promise lines. Hence `ScoutMission.LinesTruth`
+   (Drill / Exact / GroundOnly), which replaced the old `realEncounter` bool and drives the
+   three report wordings; the village one says the ground is certain and the approach is not.
+   Log line: `[scout] village ride: <scene> (<village>) | side <side>`.
+
+NOT BUILT, deliberately:
+
+3. ACTUALLY CHOOSE — moving a near-village battle back out onto a field of the player's choosing.
+   Held as a design call for Anton, not a bug fix: it changes where a REAL battle happens, and
+   every road to it touches campaign consequences. Two roads, both public API, no Harmony:
+   a. `MapEvent.OverrideMapEventSettlementForRaidToFieldBattleSwitch(null)` — a genuine public
+      setter (vanilla uses it for the raid→field switch). Null it when the player picks a field,
+      and vanilla's own attack branch runs the field path and asks our SceneModel. Cheapest, but
+      the pointer also feeds post-battle relation gain near villages, `FactionHelper`'s
+      defend-settlement AI scan, and MenuHelper's caravan/villager mission fork — needs a restore
+      path and a careful read of the map-event-end consequences.
+   b. Our own "Attack — on the chosen ground" option that replicates the field branch
+      (`BeHostileAction.ApplyEncounterHostileAction` → our rec → `CampaignMission.OpenBattleMission`
+      → `PlayerEncounter.StartAttackMission` → `BeginWait`), leaving `MapEventSettlement` alone so
+      every campaign consequence stays vanilla. Safer for the campaign, worse for mod
+      compatibility (mods hooking vanilla's option never see ours).
+4. VILLAGE AS A DRILL GROUND — muster on the village green. NOT as free as first estimated: both
+   pickers are typed to the game's own `List<SingleplayerBattleSceneData>`, and a village is not
+   one of those, so this needs our own candidate record (scene id + scene levels + has-patch +
+   label + tier) threaded through `ShowPicker` and both doors. The mission plumbing is already
+   there (`CreateSettlementRecord`); it is the catalog's type that has to give.
+
+PLAYTESTED 2026.07.28 on the "Basil Near Village Looter Atk" save — "works fine" (Anton): the
+survey option greyed and named the village, the scout ride entered that village, and the battle
+was the same ground. Fields away from villages unchanged.
+
 ## War Horns CTD on the scout ride — FIXED (our side) 2026.07.27, awaiting the reporter
 
 froggyluv on Nexus (2026.07.26): the game CTDs when scouting the battle area with the War Cry /

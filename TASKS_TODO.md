@@ -1,6 +1,7 @@
 BUGS:
 - [x] No "Select the battlefield" vs bandits + scout ride skipped its picker — starved scene pool, tiers added 2026.07.27 (see AI_NOTES)
 - [ ] Orange Looters - Orange (train color) looters still are seen appearing after a mock castle or sea battle, but now they at least turn normal looters after a screen is opened and closed (line the inventory)
+- [x] Battles near a VILLAGE are fought IN the village — ground pick greyed + named, scout ride goes into the village (built + PLAYTESTED OK 2026.07.28; bridges are fine, the game ships no bridge scene at all — see AI_NOTES)
 
 
 NEXT UPDATE:
@@ -15,6 +16,8 @@ NEXT UPDATE:
 - [x] Playtest check: one plain naval battle without training — loot/ships back to normal (see AI_NOTES)
 
 NEXT UPDATEs or NOT FULLY DECIDED:
+- [ ] Pull a near-village battle OUT of the village onto a chosen field? (changes real campaign consequences — your call; see AI_NOTES)
+- [ ] Village green as a DRILL ground (needs the picker's candidate type widened — see AI_NOTES)
 - [ ] TOWN siege training — castles landed 2026.07.25; towns ride the same code (own pay/cooldown, Lord's Hall stage; see AI_NOTES)
 - [ ] Training while leading an ARMY (research done — army vs mock enemy first; see AI_NOTES)
 - [ ] A menu door besides the hotkey (party-screen or clan-screen button)
