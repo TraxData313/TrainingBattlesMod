@@ -46,7 +46,10 @@ namespace TrainingBattles
     /// in method bodies here and in <see cref="SeaScoutMissionViews"/> — never in a base class,
     /// interface, field type, or method signature — so assembly scans (view creators, savegame,
     /// MCM) succeed without the DLC, and these bodies can only run when the party is at sea,
-    /// which without War Sails is impossible.
+    /// which without War Sails is impossible. NO EXCEPTIONS since 2026.07.28: this ride's
+    /// deployment controller must DERIVE from a naval type, and while it sat here it made the
+    /// whole mod fail to load for every player without War Sails (v1.3.0-v1.3.3). It now lives in
+    /// the naval SATELLITE assembly, fetched through <see cref="NavalBridge"/>.
     ///
     /// HULL SAFETY: MissionShip proxies its campaign Ship LIVE (HitPoints => ShipOrigin.HitPoints,
     /// damage flows through ShipOrigin.OnShipDamaged) — a scraped rock would scar the real hull.
@@ -171,6 +174,13 @@ namespace TrainingBattles
             TbLog.Info("sea-scout", "Riding out: scene=" + sceneId + " flagship='" + (flagship.Name?.ToString() ?? "?")
                 + "' crew=" + crew.Count + "/" + crewCap + " hour=" + timeOfDayOverride);
 
+            // The flight-recording deployment controller lives in the NAVAL SATELLITE assembly
+            // (it must DERIVE from a War Sails type, and a naval base type in this assembly is
+            // what broke startup for every player without the DLC — see NavalBridge's class doc).
+            // If the satellite cannot be had, the DLC's own controller sails the ride unrecorded.
+            var deploymentController = NavalBridge.CreateSeaScoutDeploymentController()
+                ?? (MissionBehavior)new NavalDeploymentMissionController(isPlayerAttacker: false);
+
             NavalMissionState.OpenNew(MissionName, rec, mission => new MissionBehavior[]
             {
                 new NavalShipsLogic(),
@@ -199,7 +209,7 @@ namespace TrainingBattles
                 new MissionBoundaryPlacer(),
                 new MissionBoundaryCrossingHandler(30f),
                 new BasicLeaveMissionLogic(),
-                new SeaScoutDeploymentController(),
+                deploymentController,
                 new NavalDeploymentHandler(isPlayerAttacker: false),
                 new SeaScoutRideLogic(hullSnapshot),
             });
@@ -298,168 +308,6 @@ namespace TrainingBattles
         public IEnumerable<IAgentOriginBase> GetAllTroops() => _all;
         public BasicCharacterObject? GetGeneralCharacter() => _general;
         public int GetNumberOfPlayerControllableTroops() => _all.Count;
-    }
-
-    /// <summary>The ride's deployment controller: vanilla's naval one wearing a FLIGHT RECORDER —
-    /// a TbLog line at every phase boundary of the team-setup tick (crash round 2 died somewhere
-    /// inside it, between the flagship's spawn and the formation stage, with nothing to say where)
-    /// — plus one targeted self-heal: vanilla's SetupTeams dereferences Mission.InitialPlayerAgent
-    /// UNGUARDED right after the player side stands up, so if the player agent is missing after
-    /// base setup (the round-2 prime suspect), the recorder spawns the hero onto the flagship by
-    /// hand (the same SpawnExistingHero road vanilla's captain reassignment rides) instead of
-    /// letting the deref kill the mission.
-    ///
-    /// SOFT-DEPENDENCY NOTE: this class carries a NavalDLC BASE TYPE — the one sanctioned break
-    /// of the bodies-only rule, same shape as the MCM settings class (a foreign base type in this
-    /// assembly, proven harmless on installs without that module). Everything else keeps the rule.</summary>
-    internal sealed class SeaScoutDeploymentController : NavalDeploymentMissionController
-    {
-        private int _loggedTicks;
-
-        public SeaScoutDeploymentController() : base(isPlayerAttacker: false) { }
-
-        public override void OnBehaviorInitialize()
-        {
-            TbLog.Info("sea-scout", "deploy: behavior-init begin");
-            base.OnBehaviorInitialize();
-            TbLog.Info("sea-scout", "deploy: behavior-init done");
-        }
-
-        public override void AfterStart()
-        {
-            TbLog.Info("sea-scout", "deploy: after-start begin");
-            base.AfterStart();
-            TbLog.Info("sea-scout", "deploy: after-start done");
-        }
-
-        public override void OnMissionTick(float dt)
-        {
-            // SetupTeams runs inside the base's first tick — sandwich the first few so a crash
-            // inside leaves "tick N begin" as the last word.
-            bool log = _loggedTicks < 3;
-            if (log) TbLog.Info("sea-scout", "deploy: tick " + _loggedTicks + " begin (setupOver=" + TeamSetupOver + ")");
-            base.OnMissionTick(dt);
-            if (log)
-            {
-                TbLog.Info("sea-scout", "deploy: tick " + _loggedTicks + " end (setupOver=" + TeamSetupOver + ")");
-                _loggedTicks++;
-            }
-        }
-
-        protected override void OnSetupTeamsOfSide(BattleSideEnum side)
-        {
-            TbLog.Info("sea-scout", "deploy: setup side " + side + " begin");
-            if (side == PlayerSide)
-            {
-                // Round-3 recorder: the crash lives INSIDE this base call for the player side,
-                // between the flagship's spawn and the formation stage, and the base gives no
-                // finer boundary to log at — so replicate its exact four steps (verified against
-                // the decompile) with a log between each, reaching the two internal ones by
-                // reflection. A managed exception gets its FULL inner stack into our log before
-                // anything dies.
-                SetUpPlayerSideStepByStep(side);
-            }
-            else
-            {
-                base.OnSetupTeamsOfSide(side);
-            }
-            var player = Mission.InitialPlayerAgent;
-            TbLog.Info("sea-scout", "deploy: setup side " + side + " done; player agent "
-                + (player != null ? "spawned" : "MISSING"));
-            if (side == PlayerSide && player == null) SpawnPlayerByHand();
-        }
-
-        /// <summary>NavalDeploymentMissionController.OnSetupTeamsOfSide's own four steps, spelled
-        /// out with the flight recorder between them. Two are internal to the DLC — reflection
-        /// reaches them; a signature miss falls back to the plain base call (crash intact, but
-        /// honest).</summary>
-        private void SetUpPlayerSideStepByStep(BattleSideEnum side)
-        {
-            var missionLogic = Mission.GetMissionBehavior<DefaultNavalMissionLogic>();
-            var spawnLogic = Mission.GetMissionBehavior<DefaultNavalMissionAgentSpawnLogic>();
-            var deploy = typeof(DefaultNavalMissionLogic).GetMethod("DeployBattleSide",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            var allocate = typeof(DefaultNavalMissionAgentSpawnLogic).GetMethod("AllocateAndDeployInitialTroops",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            var sideOver = typeof(DefaultNavalMissionAgentSpawnLogic).GetMethod("OnSideDeploymentOver",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            if (missionLogic == null || spawnLogic == null || deploy == null || allocate == null || sideOver == null)
-            {
-                TbLog.Info("sea-scout", "deploy: step-by-step unavailable (reflection miss) — plain base call");
-                base.OnSetupTeamsOfSide(side);
-                return;
-            }
-            var args = new object[] { side };
-            try
-            {
-                TbLog.Info("sea-scout", "deploy: step 1/4 DeployBattleSide (ship spawn)");
-                deploy.Invoke(missionLogic, args);
-                TbLog.Info("sea-scout", "deploy: step 2/4 AllocateAndDeployInitialTroops (crew spawn)");
-                allocate.Invoke(spawnLogic, args);
-                TbLog.Info("sea-scout", "deploy: step 3/4 agent AI states");
-                SetupAgentAIStatesForSide(side);
-                TbLog.Info("sea-scout", "deploy: step 4/4 OnSideDeploymentOver");
-                sideOver.Invoke(spawnLogic, args);
-                TbLog.Info("sea-scout", "deploy: player side fully set up");
-            }
-            catch (Exception ex)
-            {
-                var inner = (ex as System.Reflection.TargetInvocationException)?.InnerException ?? ex;
-                TbLog.Info("sea-scout", "deploy: STEP FAILED — " + inner.GetType().Name + ": " + inner.Message
-                    + Environment.NewLine + inner.StackTrace);
-                throw;
-            }
-        }
-
-        /// <summary>The self-heal: vanilla's player-team allocation should have put the player on
-        /// the flagship's deck; if it did not, do it ourselves before SetupTeams' unguarded
-        /// InitialPlayerAgent dereference turns the miss into a native crash.</summary>
-        private void SpawnPlayerByHand()
-        {
-            try
-            {
-                var agents = Mission.GetMissionBehavior<NavalAgentsLogic>();
-                var ships = Mission.GetMissionBehavior<NavalShipsLogic>();
-                var origin = agents?.FindTroopOrigin((TeamSideEnum)0, o => o.Troop.IsPlayerCharacter);
-                var assignment = ships != null ? ships.GetShipAssignment((TeamSideEnum)0, FormationClass.Infantry) : null;
-                TbLog.Info("sea-scout", "deploy: hand-spawn — origin " + (origin != null ? "found" : "NULL")
-                    + ", flagship assignment " + (assignment != null && assignment.MissionShip != null ? "set" : "NULL"));
-                if (origin == null || agents == null || assignment?.MissionShip == null) return;
-                agents.SpawnExistingHero(origin, assignment.MissionShip, out var agent);
-                TbLog.Info("sea-scout", "deploy: hand-spawn " + (agent != null ? "SUCCEEDED" : "returned null")
-                    + "; InitialPlayerAgent now " + (Mission.InitialPlayerAgent != null ? "set" : "STILL MISSING"));
-            }
-            catch (Exception ex)
-            {
-                TbLog.Info("sea-scout", "deploy: hand-spawn FAILED: " + ex.GetType().Name + " " + ex.Message);
-            }
-        }
-
-        protected override void SetupAIOfEnemySide(BattleSideEnum enemySide)
-        {
-            TbLog.Info("sea-scout", "deploy: enemy AI setup begin (side " + enemySide + ")");
-            base.SetupAIOfEnemySide(enemySide);
-            TbLog.Info("sea-scout", "deploy: enemy AI setup done");
-        }
-
-        protected override void OnSetupTeamsFinished()
-        {
-            TbLog.Info("sea-scout", "deploy: setup-finished begin");
-            base.OnSetupTeamsFinished();
-            TbLog.Info("sea-scout", "deploy: setup-finished done (auto-finish check follows)");
-        }
-
-        protected override void BeforeDeploymentFinished()
-        {
-            TbLog.Info("sea-scout", "deploy: finish begin");
-            base.BeforeDeploymentFinished();
-        }
-
-        protected override void AfterDeploymentFinished()
-        {
-            base.AfterDeploymentFinished();
-            TbLog.Info("sea-scout", "deploy: finish done — under sail");
-        }
     }
 
     /// <summary>Skips the deployment phase (the ride opens sailing, not planning) and heals the

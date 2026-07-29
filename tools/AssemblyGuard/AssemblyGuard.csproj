@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The soft-dependency guard. Reads a built module assembly's METADATA ONLY (no game DLLs, no
+       loading, nothing to install), so it runs anywhere and answers the one question a developer
+       who OWNS every optional module can never answer by playing: would this assembly still load
+       for someone who does not? -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AssemblyGuard</AssemblyName>
+    <RootNamespace>TrainingBattles.Tools</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

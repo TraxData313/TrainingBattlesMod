@@ -4,6 +4,57 @@ TASKS_TODO.md is Anton's board: short idea lines, readable at a glance. The deta
 research pointers and gotchas behind those ideas live HERE, one section per idea. When picking
 up a TODO line, read its section first.
 
+## The startup "dependency error" without War Sails — FIXED 2026.07.28 (naval satellite)
+
+Nexus report (Darilon, 2026.07.28): "1.3 and beyond gets a dependency error on game start. 1.2
+runs fine… I don't have War Sails but it's optional according to this mods description." Correct
+on every count — the mod was unloadable for every player without the DLC from v1.3.0 on.
+
+THE MECHANISM (verified in the game's own decompiled loader, not inferred):
+`Module.AddSubModule` → `CollectModuleAssemblyTypes` calls `moduleAssembly.GetTypes()`, and a
+`ReflectionTypeLoadException` there returns `AssemblyLoader.AssemblyLoadResult.CriticalError` →
+`HandleSubmoduleLoadError` → the startup error dialog, module not loaded, nothing recoverable.
+`GetTypes()` LOADS every type, and loading a type eagerly resolves its BASE TYPE, its INTERFACES
+and its FIELD types. Method BODIES are the opposite: JIT-compiled on first call, so a naval type
+inside a body costs nothing until that method runs — which is why the bodies-only rule works.
+
+THE OFFENDER: `SeaScoutDeploymentController : NavalDeploymentMissionController`, added with the
+sea scout ride in v1.3.0 and sitting in the module assembly. Its class doc called it "the one
+sanctioned break" of the bodies-only rule, "proven harmless, same shape as the MCM settings
+class". It was neither harmless nor proven — and the MCM precedent it leaned on is itself the
+same bug (below). The rule has NO exceptions now.
+
+THE FIX: a satellite assembly. `src/TrainingBattles.Naval/` (net472, references NavalDLC and the
+module — the arrow points ONE way, the module never references it) holds the controller;
+`NavalBridge` in the module loads it BY HAND from the module's own bin folder, and only after
+confirming NavalDLC is already in the AppDomain, then builds the controller through
+`Activator.CreateInstance` and hands it back as a plain `MissionBehavior`. SubModule.xml never
+names the satellite, so the game itself never touches it. If the satellite cannot be had, the
+ride falls back to the DLC's own `NavalDeploymentMissionController` in a method body — the ride
+still sails, only the flight recorder goes quiet. deploy.ps1/package.ps1 now build the satellite
+project (which builds the module transitively) and copy TrainingBattles.Naval.dll beside the
+module DLL.
+
+THE GUARD (`tools/AssemblyGuard`): the reason this shipped at all is that it CANNOT be reproduced
+on a machine that owns War Sails — the mod works perfectly there. The guard reads a built
+assembly's metadata (no game DLLs, no install, no loading) and reports every forbidden assembly
+found in a type's base type, interfaces or field types; method signatures are warnings only
+(lazy, but some frameworks reflect over them). Verified against the shipped zips in dist\:
+v1.2.0 clean of NavalDLC, v1.3.0 and v1.3.3 both flagged on `SeaScoutDeploymentController`, HEAD
+clean. package.ps1 now runs it as a release gate (War Sails hard, MCM advisory).
+
+THE SECOND DOOR — MCM, unfixed: the same guard flags
+`TrainingBattlesMcmSettings : AttributeGlobalSettings<T>` (an MCMv5 base type, plus two
+`Dropdown<T>` backing fields) in EVERY version since v1.0.0. By the identical mechanism, a player
+without MCM installed cannot load the mod either — while the manifest and the mod page both call
+MCM optional. Nobody has reported it (MCM is near-universal, and our reporter clearly has it:
+v1.2 ran for them), but it is the same defect. The fix is the same shape — a
+`TrainingBattles.Mcm.dll` satellite holding the settings class, force-loaded from `McmBridge`
+once MCM is confirmed present. THE RISK to weigh before doing it: MCM discovers settings classes
+by scanning loaded assemblies, so the satellite must be loaded EARLY (OnSubModuleLoad) or the
+settings menu silently disappears for everyone — a far more visible regression than the bug it
+fixes. Wants its own session and an MCM-menu playtest.
+
 ## The starved scene pool — FIXED 2026.07.27, awaiting playtest
 
 Anton attacking bandits: no "Select the battlefield" option at all, and "Ride out and scout a

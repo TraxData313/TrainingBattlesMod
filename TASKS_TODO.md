@@ -1,4 +1,8 @@
+SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
+- (empty — v1.3.4 took the last one out the door)
+
 BUGS:
+- [ ] Same bug, second door: no MCM = mod won't load either (since v1.0.0) — MCM satellite, own session + menu playtest (see AI_NOTES)
 - [x] No "Select the battlefield" vs bandits + scout ride skipped its picker — starved scene pool, tiers added 2026.07.27 (see AI_NOTES)
 - [ ] Orange Looters - Orange (train color) looters still are seen appearing after a mock castle or sea battle, but now they at least turn normal looters after a screen is opened and closed (line the inventory)
 - [x] Battles near a VILLAGE are fought IN the village — ground pick greyed + named, scout ride goes into the village (built + PLAYTESTED OK 2026.07.28; bridges are fine, the game ships no bridge scene at all — see AI_NOTES)

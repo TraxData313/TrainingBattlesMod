@@ -80,8 +80,8 @@ real opinions, push back, propose things.
 
 - **TASKS_TODO.md** — ANTON'S board (his rule, 2026.07.25): short idea lines only, readable
   at a fast glance. Claude NEVER writes paragraphs here — at most a "(see AI_NOTES)" or a
-  tiny "(check X when doing Y)" tag on a line. Sections: BUGS / NEXT UPDATE / NOT FULLY
-  DECIDED.
+  tiny "(check X when doing Y)" tag on a line. Sections: SHIPPING NEXT / BUGS / NEXT UPDATE /
+  NOT FULLY DECIDED.
 - **AI_NOTES.md** — Claude's detail companion: one section per TODO idea with the designs,
   research pointers and gotchas. Read the idea's section before picking up its TODO line;
   keep it in sync when ideas land or die.
@@ -94,6 +94,14 @@ real opinions, push back, propose things.
   `tools\deploy.ps1`) so the installed module matches the session's code; Anton playtests
   straight after. The deploy fails while the game runs (DLL lock) — say so and hand Anton
   the deploy line instead of leaving it silently undone.
+- **RELEASE RHYTHM (Anton, 2026.07.28): fixes collect, versions do not.** Do NOT bump
+  `module/SubModule.xml`'s version when a fix lands — work accumulates in main and the version
+  is stamped ONCE, on release day. Landed-but-unreleased work goes as a short line under
+  SHIPPING NEXT in TASKS_TODO.md (TASKS_DONE.md still gets its full entry — it is the changelog
+  of WORK, not of releases). The release itself: bump the manifest once, empty SHIPPING NEXT
+  into the public notes (short and glanceable), `tools\package.ps1` (which gates on
+  tools/AssemblyGuard), upload per tools/WORKSHOP-UPLOAD.md. A player-blocking bug is the
+  standing exception — say so and ship it alone.
 
 ## Hard requirements (Anton's musts)
 
@@ -165,6 +173,11 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   SeaScoutMissionViews.cs     the sea ride's view set ("TrainingBattlesSeaScout"): the land
                               scout's core + the DLC's ship-control (helm) and ship-preload
                               views, no battle HUD — same scanner footgun, same body-only rule
+  NavalBridge.cs              the door to the naval SATELLITE assembly, and the module's promise
+                              that it loads WITHOUT War Sails: loads TrainingBattles.Naval.dll by
+                              hand from our own bin folder, once per session, only after NavalDLC
+                              is confirmed in the AppDomain — read its class doc before putting
+                              any DLC type anywhere but a method body
   Models/TrainingBattleRewardModel.cs  the "it was only training" guard (zero renown/loot/
                               prisoners — and at sea: no ship transfers, no post-defeat hull
                               damage, no figurehead loot — while TrainingActive). A DECORATOR
@@ -198,6 +211,13 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
                               tier over ShipSlot.MatchingPieces/RequiredPortLevel),
                               SiegeEquipVM/SiegeEquipRowVM (the engineer's bench: both sides'
                               siege engines, tier-locked rows, caps = the mission's slots)
+src/TrainingBattles.Naval/    net472 — THE NAVAL SATELLITE (2026.07.28), the only assembly allowed
+                              to carry War Sails types in its TYPE SURFACE. Loaded by hand via
+                              NavalBridge, never named in SubModule.xml, shipped beside the module.
+  SeaScoutDeploymentController.cs  the sea ride's flight-recording deployment controller — it must
+                              DERIVE from NavalDeploymentMissionController, and while it lived in
+                              the module assembly the whole mod failed to start for every player
+                              without the DLC (v1.3.0-v1.3.3)
 tests/TrainingBattles.Core.Tests/  net8.0 xUnit tests for Core (keep green)
 module/SubModule.xml          manifest (optional MCM dependency declared)
 module/GUI/Prefabs/           the windows' prefab XMLs (native brushes/sprites only, no own
@@ -207,6 +227,11 @@ tools/deploy.ps1              build + install as "Training Battles (dev)" into t
                               the Workshop copy — enable only ONE at a time)
 tools/package.ps1             clean dist\TrainingBattles layout + versioned zip — what the
                               Workshop uploader ships (real module id, no .Dev)
+tools/AssemblyGuard/          the SOFT-DEPENDENCY GATE: reads a built assembly's metadata (no game
+                              DLLs, nothing loaded) and fails on any forbidden assembly found in a
+                              type's base type, interfaces or fields — the check no playtest on a
+                              machine that OWNS the optional module can ever perform. package.ps1
+                              runs it (War Sails hard-fails, MCM warns)
 tools/WORKSHOP-UPLOAD.md      the whole Steam release loop + the uploader's quirks;
                               item 3770681619, updates go through WorkshopUpdate.xml
                               (WorkshopCreate.xml already ran once — never again)
@@ -279,9 +304,23 @@ before deploying or the DLL is locked.
   reference NavalDLC.dll (+.View) at build — soft-dependency, never shipped, under the HARD
   RULE in SeaScoutMission's class doc: naval types in METHOD BODIES ONLY, never in a base
   class, interface, field type, or method signature anywhere in the module assembly, so
-  every no-DLC assembly scan (view creator, savegame, MCM) still succeeds. ONE sanctioned
-  exception: SeaScoutDeploymentController extends the DLC's deployment controller (the MCM
-  settings class set the foreign-base-type precedent; documented on the class).
+  every no-DLC assembly scan (view creator, savegame, MCM) still succeeds. AMENDED AGAIN
+  2026.07.28 — the rule has NO EXCEPTIONS, and the one it used to have cost us three broken
+  releases: see the next bullet.
+- A foreign BASE TYPE (or interface, or field type) from an optional module KILLS THE WHOLE MOD
+  for everyone who lacks that module — the single most expensive lesson of this project so far.
+  The game's own loader (`Module.AddSubModule` → `CollectModuleAssemblyTypes`) calls
+  `Assembly.GetTypes()` on our DLL and turns any `ReflectionTypeLoadException` into
+  `AssemblyLoadResult.CriticalError`: startup error dialog, module never loaded. `GetTypes()`
+  LOADS each type, and a type load eagerly resolves base type + interfaces + field types; method
+  BODIES are JIT-compiled on first call, which is the whole reason the bodies-only rule is safe.
+  `SeaScoutDeploymentController : NavalDeploymentMissionController` broke that in v1.3.0 and made
+  the mod unloadable without War Sails until v1.3.4 (Nexus report 2026.07.28). Anything that must
+  derive from an optional module's type goes in a SATELLITE ASSEMBLY loaded by hand
+  (src/TrainingBattles.Naval + NavalBridge). It cannot be caught by playing — on a machine that
+  owns the optional module everything works — so `tools/AssemblyGuard` checks the built metadata
+  and package.ps1 gates on it. STILL OPEN: the MCM settings class has the same shape (an MCMv5
+  base type) since v1.0.0, so today the mod also needs MCM despite calling it optional.
 - War Sails naval semantics: `MapEvent.IsNavalMapEvent` is just `!Position.IsOnLand` — start
   an encounter at sea and the whole naval pipeline lights up; the only fork is
   `CampaignMission.OpenNavalBattleMission`. A side with ZERO ships loses instantly, so give

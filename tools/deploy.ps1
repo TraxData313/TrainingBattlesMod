@@ -13,7 +13,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $moduleDir = Join-Path $GameFolder "Modules\TrainingBattles.Dev"
 $binDir = Join-Path $moduleDir "bin\Win64_Shipping_Client"
 
-dotnet build (Join-Path $repoRoot "src\TrainingBattles.Module\TrainingBattles.Module.csproj") -c $Configuration
+# The NAVAL SATELLITE is the build entry point: it references the module, so this one build
+# produces both. TrainingBattles.Naval.dll holds every type that must DERIVE from a War Sails
+# type - it is loaded by hand at sea and never named in SubModule.xml, so a player without the
+# DLC never touches it (the v1.3.0-v1.3.3 startup break; see NavalBridge's class doc).
+dotnet build (Join-Path $repoRoot "src\TrainingBattles.Naval\TrainingBattles.Naval.csproj") -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Build failed." }
 
 New-Item -ItemType Directory -Force $binDir | Out-Null
@@ -26,6 +30,10 @@ $outDir = Join-Path $repoRoot "src\TrainingBattles.Module\bin\$Configuration"
 Copy-Item (Join-Path $outDir "TrainingBattles.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "TrainingBattles.Core.dll") $binDir -Force
 Copy-Item (Join-Path $outDir "Newtonsoft.Json.dll") $binDir -Force -ErrorAction SilentlyContinue
+
+# The satellite rides beside the module - NavalBridge loads it from this very folder.
+$navalDll = Join-Path $repoRoot "src\TrainingBattles.Naval\bin\$Configuration\TrainingBattles.Naval.dll"
+Copy-Item $navalDll $binDir -Force
 
 # GUI assets (the custom windows' prefab XMLs) ride along. Remove-then-copy: Copy-Item with a
 # folder source and an existing folder destination would nest a GUI\GUI inside it instead.
