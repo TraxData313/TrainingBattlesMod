@@ -65,7 +65,14 @@ defend (phantoms besiege when the player holds, reinforce the garrison when the 
 the player's engineer arms both sides on the player's purse, and the phantoms are invisible to
 wages and prestige — the same session fixed HarvestBattleDead to skip the phantom party's death
 book (a latent field-mock bug: same-type phantom corpses inflated friendly KIA dockets).
-Awaiting playtest. Later: TOWN sieges (same code + Lord's Hall stage + own rates).
+Awaiting playtest. TOWNS (the town update, 2026.08.02): the same muster at an OWNED town —
+own rates (default 10 wages / 14-day per-town clock, MCM), shared prestige keys — and past
+the walls the LORD'S HALL: when a stormed town's (or castle's! — vanilla arms the pull-back
+for ANY player-attacker siege, the old "castles never" belief was false) defenders rout 20+
+men, the walls mission ends winnerless, and the drill's own hall menu offers "Storm the
+Lord's Hall" — vanilla's keep fight (max 19 pickable stormers vs 27 priority defenders) on
+the same map event, same aftermath — or "end the drill" with the walls won. Awaiting
+playtest.
 
 ## Who does what — and how we work
 
@@ -373,6 +380,19 @@ before deploying or the DLL is locked.
   colors (the player's own at an owned castle) — no clan dressing reaches it, so
   `PaintEnemyMissionTeams` rewrites the enemy Team's color/banner backing fields from
   `SubModule.OnMissionBehaviorInitialize` (after teams exist, before agents spawn).
+- The LORD'S HALL machinery (the town update's finds, 2026.08.02): vanilla arms the
+  defender pull-back in EVERY player-attacker siege mission — castles too
+  (`OpenSiegeMissionWithDeployment` → `EnableEnemyDefenderPullBack(20)`, no IsTown check) —
+  20+ ROUTED defenders + side depleted ends the mission WINNERLESS
+  (`CreateDefenderPushedBack` → `CampaignBattleResult.EnemyPulledBack`, `BattleResolved`
+  false) and `CampaignSiegeStateHandler` flips the settlement to `InTheLordsHall` (reset
+  rides `Settlement.FinalizeSiegeEvent()` — our dismantlers already call it). The hall
+  mission (`OpenSiegeLordsHallFightMission`) builds BOTH sides itself from the live map
+  event via priority rosters — but `MapEventSide.forcePriorityTroops` honors them ONLY
+  while `PlayerSiege.BesiegedSettlement` is set and the state is InTheLordsHall; without a
+  live player siege the hall spawns everyone. `MapEvent.ResetBattleState()` before opening
+  it (vanilla's shape), and gate any re-offer on `CampaignBattleResult.BattleResolved` —
+  the settlement's hall state outlives a decided keep fight, only the result knows.
 
 ## Build & deploy
 

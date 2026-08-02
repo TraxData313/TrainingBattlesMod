@@ -117,9 +117,10 @@ namespace TrainingBattles
 
         // ---- The castle siege drill (Anton's castle update, 2026.07.25) --------------------
 
-        /// <summary>The CASTLE SIEGE drill: at an owned castle, muster the company (the garrison
+        /// <summary>The SIEGE drill: at an owned castle or town, muster the company (the garrison
         /// and militia stand with the defense) and storm — or hold — your own walls, siege
-        /// equipment and all. Default on; the one MCM toggle of the feature.</summary>
+        /// equipment and all. Default on; the one MCM toggle of the feature. The key name
+        /// predates the town drill (2026.08.02) and stays for config-file compatibility.</summary>
         public bool EnableCastleTraining { get; set; } = true;
 
         /// <summary>The castle drill's price in days of wages for every soul on the field —
@@ -131,6 +132,17 @@ namespace TrainingBattles
         /// its own clock, separate from the field drill's). 0 = unlimited. Default 168 — one
         /// week (Anton's call).</summary>
         public int CastleTrainingCooldownHours { get; set; } = 168;
+
+        /// <summary>The TOWN siege drill's price in days of wages — a town muster is the
+        /// grandest drill of all, bigger walls, bigger garrison, and the Lord's Hall waiting
+        /// past them. Default 10, double the castle (Anton's call, 2026.08.02 — his old 50×
+        /// sketch retired next to the castle playtest's 5×).</summary>
+        public int TownTrainingCostWages { get; set; } = 10;
+
+        /// <summary>In-game hours between town drills AT THE SAME TOWN (each town keeps its
+        /// own clock, shared storage with the castles'). 0 = unlimited. Default 336 — two
+        /// weeks (Anton's old instinct, kept).</summary>
+        public int TownTrainingCooldownHours { get; set; } = 336;
 
         /// <summary>What one man-day of siege-engine construction costs in gold on the drill's
         /// bill — each engine's price is the game's own man-day cost times this rate, so a
@@ -324,6 +336,8 @@ namespace TrainingBattles
             TrainingCostWagesSea = Clamp(TrainingCostWagesSea, 0, 60);
             CastleTrainingCostWages = Clamp(CastleTrainingCostWages, 0, 60);
             CastleTrainingCooldownHours = Clamp(CastleTrainingCooldownHours, 0, 720);
+            TownTrainingCostWages = Clamp(TownTrainingCostWages, 0, 100);
+            TownTrainingCooldownHours = Clamp(TownTrainingCooldownHours, 0, 720);
             SiegeEngineGoldPerManDay = Clamp(SiegeEngineGoldPerManDay, 0, 1000);
             EngineerTier1Skill = Clamp(EngineerTier1Skill, 0, 300);
             EngineerTier2Skill = Clamp(EngineerTier2Skill, 0, 300);

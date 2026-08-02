@@ -683,13 +683,61 @@ hour is the MCM default — which remains ungated by design (it's the player's g
 setting, not battlefield intel). An MCM default of "night" does apply to a lost-duel battle;
 if a playtest ever minds, gate EffectiveBattleHour for real battles behind the duel too.
 
-## Town siege training (the castle drill's follow-up)
+## Town siege training + the Lord's Hall — BUILT 2026.08.02, awaiting playtest
 
-Castles landed 2026.07.25 (section above). Towns ride the same code with: their own pay
-multiplier and cooldown (Anton's old sketch said ~50× / 14 days — re-ask, castle went 5×/7d),
-bigger scenes, and the Lord's Hall pull-back stage (`SiegeLordsHallFightModel`,
-`Settlement.SiegeState.InTheLordsHall`) that castles never enter. Gate: `Settlement.IsTown`
-beside the existing IsCastle door.
+Anton's calls (2026.08.02): town rates 10 wages / 336h (double the castle's 5×/168h; his old
+50×/14d sketch retired), and FIGHT THE KEEP. The gate: the door now also stands on the "town"
+menu (option id `training_town_drill`, index 4), one shared `FortDoorCondition`
+(IsCastle || IsTown + owner clan + per-settlement clock); `TownTrainingCostWages` /
+`TownTrainingCooldownHours` in config + MCM; the Features toggle keeps its
+`EnableCastleTraining` key name (config-compat) but covers both kinds; renown/influence
+per-100-men keys are SHARED with castles (bigger town fields scale them naturally); the
+cooldown store was already settlement-id-keyed (save key unchanged). Cancel returns to the
+right settlement menu now ("town" vs "castle" — was hardcoded).
+
+THE LORD'S HALL (attack road only — vanilla gives a defending player no keep retreat):
+
+- MYTH CORRECTED: vanilla arms the pull-back in EVERY player-attacker siege mission, castles
+  included (`SandBoxMissions.OpenSiegeMissionWithDeployment` →
+  `BattleEndLogic.EnableEnemyDefenderPullBack(20)`, no IsTown check) — so the CASTLE drill
+  could already end "defenders pulled back" (20+ routed + side depleted →
+  `MissionResult.CreateDefenderPushedBack`, event winnerless,
+  `CampaignBattleResult.EnemyPulledBack`, `BattleResolved == false`) and silently settled at
+  trigger (b). `CampaignSiegeStateHandler` (rides every siege mission, ours too) flips
+  `Settlement.CurrentSiegeState` OnTheWalls→InTheLordsHall on any player-attacker
+  non-retreat non-defeat end; `Settlement.FinalizeSiegeEvent()` (both our dismantlers call
+  it first) resets it — the state was never leaking, even before towns.
+- THE FLOW: new tick catch (a2), between (a) aftermath-ready and (b) foreign-menu kill:
+  `HallStageOpen()` → steer to our own two-option menu `training_hall_menu` (vanilla's next
+  screen would be its re-attack encounter menu — exactly the menu (b) exists to kill, so the
+  catch preempts it and idles while the player sits at our menu or its selection popup;
+  bounded 300-tick wait for a menu context when the map is bare). "Storm the Lord's Hall" =
+  vanilla's MenuHelper road verbatim: attacker cap = max(1, min(19, round(hallDefenders ×
+  0.7))) via `SiegeLordsHallFightModel`, `MenuContext.OpenTroopSelection` with
+  `MobilePartyHelper.GetStrongestAndPriorTroops` preselected, Done →
+  `MapEvent.ResetBattleState()` + `OpenSiegeLordsHallFightMission("lordshall" scene at wall
+  level)` — the mission builds ITSELF from the live map event (PartyGroupTroopSupplier +
+  priority rosters, defender list minted inside the open call: max 27, 0.7 archer cap, its
+  BattleEndLogic has no second pull-back). "Let them stand — end the drill" =
+  FinishTrainingBattle (the pre-hall behavior).
+- THE GUARDS: (1) `PlayerSiege.BesiegedSettlement == siege` required —
+  `MapEventSide.forcePriorityTroops` only honors priority rosters under a live player siege;
+  without it the hall would spawn EVERYONE (attack road arms StartPlayerSiege; if its
+  try/catch ever ate a failure, the offer stands down and the drill settles like before).
+  (2) `CampaignBattleResult.BattleResolved` gates the door — the settlement stays
+  InTheLordsHall until teardown, so after a DECISIVE hall fight only the result keeps the
+  door shut; a hall RETREAT (unresolved) re-offers the storm, vanilla-style; the result is
+  written by `CampaignMissionComponent` at mission end, before any tick sees the map.
+  (3) Every failure road inside the hall launch settles the drill instead of hanging it.
+- The summary: a fought hall forces the "walls carried" sentence + "The Lord's Hall fell
+  with them." / "The Lord's Hall held." Aftermath/surgeon/XP/prestige/mock phantoms all
+  unchanged — hall casualties land in the same map event the aftermath already harvests
+  (phantoms reinforcing the garrison can man the hall; their dead stay off the books via
+  the HarvestBattleDead skip).
+- PLAYTEST EYES: hall spawn caps with a mock-reinforced garrison; the pulled-back CASTLE
+  drill (the keep offer is new there); retreat-from-hall → storm-again loop; the town door's
+  index-4 seat on the crowded town menu; auto-resolve never reaches the hall (sim can't
+  flip the state — `SetNextSiegeState` is mission-only).
 
 ## Scouting with companions
 

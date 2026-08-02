@@ -33,8 +33,8 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Features", GroupOrder = 0)]
         public bool EnableMockEnemyTraining { get; set; } = true;
 
-        [SettingPropertyBool("Castle siege training", Order = 1, RequireRestart = false,
-            HintText = "At a castle you OWN: muster the company and storm — or hold — your own walls, siege equipment and all. The garrison and militia stand with the defense and follow the same training rules (wounds healed, XP kept, the surgeon's small real-death band). Default on.")]
+        [SettingPropertyBool("Siege training (castles & towns)", Order = 1, RequireRestart = false,
+            HintText = "At a castle or town you OWN: muster the company and storm — or hold — your own walls, siege equipment and all. The garrison and militia stand with the defense and follow the same training rules (wounds healed, XP kept, the surgeon's small real-death band). Storming a town whose defenders pull back opens the Lord's Hall fight. Default on.")]
         [SettingPropertyGroup("Features", GroupOrder = 0)]
         public bool EnableCastleTraining { get; set; } = true;
 
@@ -172,22 +172,32 @@ namespace TrainingBattles.Mcm
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public int CastleTrainingCooldownHours { get; set; } = 168;
 
-        [SettingPropertyBool("Deal the company in half by default", Order = 6, RequireRestart = false,
+        [SettingPropertyInteger("Town drill cost (days of wages)", 0, 100, "0", Order = 6, RequireRestart = false,
+            HintText = "The town siege drill's rate — the grandest muster of all, paid for every soul on the field. Picked siege engines add their own price on top. Default 10, double the castle.")]
+        [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
+        public int TownTrainingCostWages { get; set; } = 10;
+
+        [SettingPropertyInteger("Town drill cooldown (in-game hours)", 0, 720, "0", Order = 7, RequireRestart = false,
+            HintText = "Rest between town drills AT THE SAME TOWN — each town keeps its own clock. 0 = unlimited. Default 336 (two weeks).")]
+        [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
+        public int TownTrainingCooldownHours { get; set; } = 336;
+
+        [SettingPropertyBool("Deal the company in half by default", Order = 8, RequireRestart = false,
             HintText = "Opening the divide screen with no pick made deals every man and companion 50/50 into the two halves first (still fully editable). Default on.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public bool AutoSplitInHalf { get; set; } = true;
 
-        [SettingPropertyBool("Disorganized after training", Order = 7, RequireRestart = false,
+        [SettingPropertyBool("Disorganized after training", Order = 9, RequireRestart = false,
             HintText = "The party is disorganized for a while after a drill. Default on.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public bool DisorganizedAfterTraining { get; set; } = true;
 
-        [SettingPropertyFloatingInteger("Castle drill renown (per 100 men)", 0f, 10f, "0.0", Order = 8, RequireRestart = false,
-            HintText = "A castle siege drill is a grand muster and the realm notices: renown earned per 100 friendly men on the field (both halves, garrison and militia), once per drill. Paid at the drill's end, never through battle rewards — kills and loot stay worthless in training. 0 = none. Default 1.")]
+        [SettingPropertyFloatingInteger("Siege drill renown (per 100 men)", 0f, 10f, "0.0", Order = 10, RequireRestart = false,
+            HintText = "A siege drill — castle or town — is a grand muster and the realm notices: renown earned per 100 friendly men on the field (both halves, garrison and militia), once per drill. Paid at the drill's end, never through battle rewards — kills and loot stay worthless in training. 0 = none. Default 1.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public float CastleDrillRenownPer100Men { get; set; } = 1.0f;
 
-        [SettingPropertyFloatingInteger("Castle drill influence (per 100 men)", 0f, 10f, "0.0", Order = 9, RequireRestart = false,
+        [SettingPropertyFloatingInteger("Siege drill influence (per 100 men)", 0f, 10f, "0.0", Order = 11, RequireRestart = false,
             HintText = "The same muster's influence — the kingdom sees a lord who keeps a sharp garrison. 0 = none. Default 1.")]
         [SettingPropertyGroup("Pacing & costs", GroupOrder = 5)]
         public float CastleDrillInfluencePer100Men { get; set; } = 1.0f;

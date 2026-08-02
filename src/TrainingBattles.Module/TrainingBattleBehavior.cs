@@ -7,6 +7,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
 using TaleWorlds.CampaignSystem.CharacterDevelopment;
+using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using TaleWorlds.CampaignSystem.Encounters;
 using TaleWorlds.CampaignSystem.GameMenus;
 using TaleWorlds.CampaignSystem.GameState;
@@ -47,6 +48,7 @@ namespace TrainingBattles
     public sealed class TrainingBattleBehavior : CampaignBehaviorBase
     {
         public const string MenuId = "training_battle_menu";
+        public const string HallMenuId = "training_hall_menu";
         private const string OpponentPartyIdPrefix = "training_opponents";
         // The mock-enemy drill's temp party: its men are PHANTOMS (never the player's), so the
         // stale-party recovery must destroy it WITHOUT merging — a distinct prefix keeps the two
@@ -160,6 +162,12 @@ namespace TrainingBattles
         private List<float>? _wallSnapshot;        // wall-section HP ratios walking in (only
                                                    // campaign bombardment ticks damage walls —
                                                    // this is the belt to that finding's braces)
+        private bool _hallFought;                  // the drill went past the walls into the
+                                                   // LORD'S HALL (the town update, 2026.08.02)
+                                                   // — read by the aftermath's summary line
+        private int _hallWaitTicks;                // bounded wait for vanilla's re-attack menu
+                                                   // after a pulled-back walls mission — the
+                                                   // hall offer needs a menu context to stand on
         private string _castleCooldownData = string.Empty;
                                                    // persisted per-castle drill clocks:
                                                    // "settlementId=lastHours;..." — each castle
@@ -371,21 +379,172 @@ namespace TrainingBattles
                 "{=TB_opt_cancel}Cancel training",
                 CancelCondition, _ => CancelTraining(), isLeave: true);
 
-            // The CASTLE door (the castle update, 2026.07.25): at an owned castle, the same
-            // muster over the settlement's own walls — the siege drill.
+            // The STRONGHOLD doors (the castle update 2026.07.25; towns joined 2026.08.02): at
+            // an owned castle or town, the same muster over the settlement's own walls — the
+            // siege drill. One condition serves both menus: each only ever shows inside its own
+            // kind of settlement.
             starter.AddGameMenuOption("castle", "training_castle_drill",
                 "{=TB_opt_castle_door}Hold a training siege on these walls",
-                CastleDoorCondition, _ => OpenCastleMuster(), isLeave: false, index: 4);
+                FortDoorCondition, _ => OpenFortMuster(), isLeave: false, index: 4);
+            starter.AddGameMenuOption("town", "training_town_drill",
+                "{=TB_opt_town_door}Hold a training siege on these walls",
+                FortDoorCondition, _ => OpenFortMuster(), isLeave: false, index: 4);
+
+            // The LORD'S HALL stage (the town update, 2026.08.02): when the drill's walls fall
+            // but the defenders PULL BACK — vanilla's own rule, armed in every player-attacker
+            // siege mission (20+ routed defenders + side depleted → winnerless end, settlement
+            // flipped to InTheLordsHall) — the survivors bar themselves in the keep. This menu
+            // takes over from vanilla's re-attack screen (which would refight the walls as a
+            // REAL battle with every protection disarmed): Storm continues the SAME map event
+            // into vanilla's hall fight, End settles the drill with the walls won.
+            starter.AddGameMenu(HallMenuId, "{TB_HALL_TEXT}", HallMenuInit);
+            starter.AddGameMenuOption(HallMenuId, "training_hall_storm",
+                "{=TB_opt_hall_storm}Storm the Lord's Hall",
+                HallStormCondition, HallStormConsequence, isLeave: false);
+            starter.AddGameMenuOption(HallMenuId, "training_hall_end",
+                "{=TB_opt_hall_end}Let them stand — end the drill",
+                args => { args.optionLeaveType = GameMenuOption.LeaveType.Leave; return true; },
+                _ => FinishTrainingBattle(), isLeave: true);
         }
 
-        // ------------------------------ the castle door ------------------------------
+        // ------------------------------ the Lord's Hall stage ------------------------------
 
-        private bool CastleDoorCondition(MenuCallbackArgs args)
+        private void HallMenuInit(MenuCallbackArgs args)
+        {
+            var name = _siegeSettlement?.Name?.ToString() ?? "the stronghold";
+            MBTextManager.SetTextVariable("TB_HALL_TEXT",
+                "The walls of " + name + " are carried — but the last defenders pulled back in "
+                + "good order and barred themselves in the Lord's Hall. The drill can follow "
+                + "them through the doors, or stand down with the walls won.", false);
+        }
+
+        /// <summary>The keep fight runs on vanilla's own hall-fight model: a handful of picked
+        /// stormers against the defenders' best — the tooltip tells the caps before the pick.</summary>
+        private bool HallStormCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Mission;
+            try
+            {
+                var model = Campaign.Current.Models.SiegeLordsHallFightModel;
+                var cap = HallAttackerCap(model, out var defenderCount);
+                args.Tooltip = new TextObject("{=TB_tip_hall_storm}A fight through doorways has "
+                    + "no room for a shield wall: " + defenderCount + " defenders hold the hall "
+                    + "and no more than " + cap + " of your men can force it — pick them. The "
+                    + "same training rules judge the fallen afterward.");
+            }
+            catch { }
+            return true;
+        }
+
+        /// <summary>Vanilla's own sizing (MenuHelper's lords-hall road, copied): the attacker
+        /// brings 0.7 men per hall defender, capped by the model (19 by default), never
+        /// fewer than one.</summary>
+        private int HallAttackerCap(SiegeLordsHallFightModel model, out int defenderCount)
+        {
+            defenderCount = 0;
+            var mapEvent = MobileParty.MainParty?.MapEvent;
+            if (mapEvent == null) return 1;
+            var defenders = model.GetPriorityListForLordsHallFightMission(
+                mapEvent, BattleSideEnum.Defender, model.MaxDefenderSideTroopCount);
+            foreach (var _ in defenders.Troops) defenderCount++;
+            return Math.Max(1, Math.Min(model.MaxAttackerSideTroopCount,
+                (int)Math.Round(defenderCount * model.AttackerDefenderTroopCountRatio)));
+        }
+
+        /// <summary>"Storm the Lord's Hall" — vanilla's own troop-selection popup over this
+        /// menu's context, then the hall mission from its Done callback (the exercised path:
+        /// vanilla's LordsHallTroopRosterManageDone opens the mission straight from there).</summary>
+        private void HallStormConsequence(MenuCallbackArgs args)
+        {
+            try
+            {
+                var main = MobileParty.MainParty;
+                var model = Campaign.Current.Models.SiegeLordsHallFightModel;
+                var cap = HallAttackerCap(model, out var defenderCount);
+                var full = TroopRoster.CreateDummyTroopRoster();
+                full.Add(main.MemberRoster);
+                var flat = full.ToFlattenedRoster();
+                flat.RemoveIf(x => x.IsWounded);
+                var pre = TroopRoster.CreateDummyTroopRoster();
+                pre.Add(MobilePartyHelper.GetStrongestAndPriorTroops(flat, cap, includePlayer: true));
+                TbLog.Info("siege", "hall stage: selection opens | hall defenders " + defenderCount
+                    + " | attacker cap " + cap);
+                args.MenuContext.OpenTroopSelection(full, pre,
+                    (CharacterObject ch) => !ch.IsPlayerCharacter, OnHallTroopsPicked, cap, 1);
+            }
+            catch (Exception ex)
+            {
+                TbLog.Info("siege", "hall stage FAILED to open the selection (" + ex + ") — settling the drill");
+                FinishTrainingBattle();
+            }
+        }
+
+        private void OnHallTroopsPicked(TroopRoster picked)
+        {
+            try
+            {
+                var siege = _siegeSettlement;
+                var mapEvent = MobileParty.MainParty?.MapEvent;
+                if (siege == null || mapEvent == null || picked == null || picked.TotalHealthyCount < 1)
+                {
+                    FinishTrainingBattle();
+                    return;
+                }
+                // Vanilla's shape verbatim: clear the walls mission's undecided state so the
+                // hall fight writes the event's real verdict, then the keep's own scene at the
+                // stronghold's wall level.
+                mapEvent.ResetBattleState();
+                var wallLevel = 1;
+                try { wallLevel = siege.Town?.GetWallLevel() ?? 1; } catch { }
+                var scene = siege.LocationComplex.GetLocationWithId("lordshall").GetSceneName(wallLevel);
+                _hallFought = true;
+                TbLog.Info("siege", "hall stage OPENS | " + siege.Name + " | scene " + scene
+                    + " | " + picked.TotalManCount + " stormers picked");
+                CampaignMission.OpenSiegeLordsHallFightMission(scene, picked.ToFlattenedRoster());
+            }
+            catch (Exception ex)
+            {
+                TbLog.Info("siege", "hall stage FAILED to open the mission (" + ex + ") — settling the drill");
+                FinishTrainingBattle();
+            }
+        }
+
+        /// <summary>Whether the drill stands at the hall's door RIGHT NOW: a winnerless siege
+        /// event on the drill's stronghold flipped to InTheLordsHall (only a player-attacker
+        /// walls mission ever flips it), with PlayerSiege still armed — the hall mission's
+        /// priority rosters only apply under a live player siege (MapEventSide's
+        /// forcePriorityTroops), so without it the offer stands down and the drill settles.</summary>
+        private bool HallStageOpen()
+        {
+            try
+            {
+                var siege = _siegeSettlement;
+                if (siege == null || !_battleRan) return false;
+                if (siege.CurrentSiegeState != Settlement.SiegeState.InTheLordsHall) return false;
+                var encounter = PlayerEncounter.Current;
+                if (encounter == null || encounter.BattleSimulation != null) return false;
+                // The state stays InTheLordsHall until the teardown resets it — after a
+                // DECISIVE hall fight the door must not reopen. Vanilla's own routing keys
+                // off the last mission's result: only an unresolved one (pulled back, or a
+                // retreat from the keep) leaves the storm on the table.
+                var result = PlayerEncounter.CampaignBattleResult;
+                if (result == null || result.BattleResolved) return false;
+                var mapEvent = MobileParty.MainParty?.MapEvent;
+                if (mapEvent == null || mapEvent.HasWinner) return false;
+                if (mapEvent.PlayerSide != BattleSideEnum.Attacker) return false;
+                return PlayerSiege.BesiegedSettlement == siege;
+            }
+            catch { return false; }
+        }
+
+        // ------------------------------ the stronghold door ------------------------------
+
+        private bool FortDoorCondition(MenuCallbackArgs args)
         {
             if (!_config.EnableCastleTraining) return false;
             if (!_config.EnableSplitTraining && !_config.EnableMockEnemyTraining) return false;
             var settlement = Settlement.CurrentSettlement;
-            if (settlement == null || !settlement.IsCastle) return false;
+            if (settlement == null || (!settlement.IsCastle && !settlement.IsTown)) return false;
             if (settlement.OwnerClan != Clan.PlayerClan) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
             if (settlement.SiegeEvent != null || MobileParty.MainParty.MapEvent != null)
@@ -393,7 +552,7 @@ namespace TrainingBattles
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_castle_real}A real fight owns these walls — no drilling now.");
             }
-            else if (!CastleCooldownReady(settlement, out var remaining))
+            else if (!FortCooldownReady(settlement, out var remaining))
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_castle_rest}These walls were drilled recently — ready in "
@@ -405,12 +564,15 @@ namespace TrainingBattles
                     + "or hold them. The garrison and militia stand with the DEFENSE and follow the same "
                     + "training rules (wounds healed, XP kept, the surgeon's small real-death chance); take "
                     + "garrison men into your party first if you want them under your own banner. "
-                    + "Your engineer's skill decides the siege equipment.");
+                    + "Your engineer's skill decides the siege equipment."
+                    + (settlement.IsTown
+                        ? " Storm a town whose defenders pull back and the LORD'S HALL fight waits past the walls."
+                        : string.Empty));
             }
             return true;
         }
 
-        private void OpenCastleMuster()
+        private void OpenFortMuster()
         {
             _siegeSettlement = Settlement.CurrentSettlement;
             try { GameMenu.SwitchToMenu(MenuId); } catch { _siegeSettlement = null; }
@@ -501,15 +663,26 @@ namespace TrainingBattles
 
         // ------------------------------ the castle clocks ------------------------------
 
-        /// <summary>Each castle rests on its own clock (config CastleTrainingCooldownHours),
+        /// <summary>The siege drill's config rates by the stronghold's kind — towns pay and
+        /// rest on their own keys (Anton, 2026.08.02: 10 wages / two weeks, double the
+        /// castle), castles on the original ones.</summary>
+        private int FortCooldownConfigHours(Settlement settlement)
+            => settlement != null && settlement.IsTown
+                ? _config.TownTrainingCooldownHours : _config.CastleTrainingCooldownHours;
+
+        private int FortWageDays(Settlement settlement)
+            => settlement != null && settlement.IsTown
+                ? _config.TownTrainingCostWages : _config.CastleTrainingCostWages;
+
+        /// <summary>Each stronghold rests on its own clock (castle or town config hours),
         /// apart from the field drill's single one. The stamps ride the save as one string.</summary>
-        private bool CastleCooldownReady(Settlement settlement, out double hoursRemaining)
+        private bool FortCooldownReady(Settlement settlement, out double hoursRemaining)
         {
             hoursRemaining = 0;
-            if (_config.CastleTrainingCooldownHours <= 0 || settlement == null) return true;
+            if (settlement == null || FortCooldownConfigHours(settlement) <= 0) return true;
             var last = ReadCastleStamp(settlement);
             var now = CampaignTime.Now.ToHours;
-            var hours = EffectiveCooldownHours(_config.CastleTrainingCooldownHours, out _);
+            var hours = EffectiveCooldownHours(FortCooldownConfigHours(settlement), out _);
             hoursRemaining = TrainingCooldown.HoursRemaining(now, last, hours);
             return TrainingCooldown.IsReady(now, last, hours);
         }
@@ -658,8 +831,9 @@ namespace TrainingBattles
                 line += " Party becomes disorganized.";
             if (!DrillCooldownReady(out var remaining))
                 line += " Next drill in " + FormatRemaining(remaining) + ".";
-            else if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
-                line += " One siege drill per " + ShortCooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.";
+            else if (_siegeSettlement != null && FortCooldownConfigHours(_siegeSettlement) > 0)
+                line += " One siege drill per " + ShortCooldownNote(FortCooldownConfigHours(_siegeSettlement))
+                    + (_siegeSettlement.IsTown ? " at each town." : " at each castle.");
             else if (_siegeSettlement == null && _config.CooldownHours > 0)
                 line += " One drill per " + ShortCooldownNote(_config.CooldownHours) + ".";
             return line + " The (?) below reckons it in full.";
@@ -681,7 +855,9 @@ namespace TrainingBattles
             {
                 var costLine = "The bill: " + cost + " denars — " + CostDays()
                     + FormatDaysWages(CostDays()) + " for every soul on the field"
-                    + (_siegeSettlement != null ? " (castle rates)" : (MainPartyAtSea() ? " (sea rates)" : ""))
+                    + (_siegeSettlement != null
+                        ? (_siegeSettlement.IsTown ? " (town rates)" : " (castle rates)")
+                        : (MainPartyAtSea() ? " (sea rates)" : ""))
                     + ", spent on training equipment and troop rewards";
                 if (_siegeSettlement != null && SiegeEquipmentBill() > 0)
                     costLine += "; " + SiegeEquipmentBill() + " of it is the engineer's engines";
@@ -696,9 +872,10 @@ namespace TrainingBattles
                 parts.Add("The garrison and militia always stand with the defense; take garrison "
                     + "men into your party first if you want them under your own banner.");
             }
-            if (_siegeSettlement != null && _config.CastleTrainingCooldownHours > 0)
+            if (_siegeSettlement != null && FortCooldownConfigHours(_siegeSettlement) > 0)
                 parts.Add("The clock: one siege drill per "
-                    + CooldownNote(_config.CastleTrainingCooldownHours) + " at each castle.");
+                    + CooldownNote(FortCooldownConfigHours(_siegeSettlement))
+                    + (_siegeSettlement.IsTown ? " at each town." : " at each castle."));
             else if (_siegeSettlement == null && _config.CooldownHours > 0)
                 parts.Add("The clock: one drill per " + CooldownNote(_config.CooldownHours) + ".");
             if (_config.DisorganizedAfterTraining)
@@ -726,12 +903,12 @@ namespace TrainingBattles
             return hours >= configHours ? configHours + " hours" : hours.ToString("0.#") + " hours";
         }
 
-        /// <summary>The muster's cooldown, whichever clock owns this drill: the castle's own in
-        /// siege mode, the field drill's single clock otherwise.</summary>
+        /// <summary>The muster's cooldown, whichever clock owns this drill: the stronghold's
+        /// own in siege mode, the field drill's single clock otherwise.</summary>
         private bool DrillCooldownReady(out double hoursRemaining)
         {
             return _siegeSettlement != null
-                ? CastleCooldownReady(_siegeSettlement, out hoursRemaining)
+                ? FortCooldownReady(_siegeSettlement, out hoursRemaining)
                 : CooldownReady(out hoursRemaining);
         }
 
@@ -832,11 +1009,11 @@ namespace TrainingBattles
                 + surgeon.Describe() + ").";
         }
 
-        /// <summary>The drill's price in days of wages — castle, sea or land rates, by where
-        /// the drill stands (Anton, 2026.07.25: the sea drill costs double, the castle drill
-        /// five days — a siege takes real organization).</summary>
+        /// <summary>The drill's price in days of wages — town, castle, sea or land rates, by
+        /// where the drill stands (Anton, 2026.07.25: the sea drill costs double, the castle
+        /// drill five days; 2026.08.02: the town drill ten — the grandest muster of all).</summary>
         private int CostDays() =>
-            _siegeSettlement != null ? _config.CastleTrainingCostWages
+            _siegeSettlement != null ? FortWageDays(_siegeSettlement)
             : MainPartyAtSea() ? _config.TrainingCostWagesSea : _config.TrainingCostWagesLand;
 
         /// <summary>" The fleet divides with the men: 2 hulls opposite, 3 with you (the flagship
@@ -1320,14 +1497,15 @@ namespace TrainingBattles
             _chosenSceneId = null;
             _shipDividePick = null;
             _mockFleetPick = null;
-            var wasSiege = _siegeSettlement != null;
+            var siegeMenu = _siegeSettlement == null ? null : (_siegeSettlement.IsTown ? "town" : "castle");
             _siegeSettlement = null;
             _siegeAtkPick = null;
             _siegeDefPick = null;
-            // A castle muster came from the castle menu — go back to it, not out of the walls.
+            // A stronghold muster came from the settlement's own menu — go back to it, not out
+            // of the walls.
             try
             {
-                if (wasSiege) GameMenu.SwitchToMenu("castle");
+                if (siegeMenu != null) GameMenu.SwitchToMenu(siegeMenu);
                 else GameMenu.ExitToLast();
             }
             catch { }
@@ -1384,6 +1562,35 @@ namespace TrainingBattles
                 if (_aftermathReady)
                 {
                     FinishTrainingBattle();
+                    return;
+                }
+                // (a2) The LORD'S HALL door (the town update, 2026.08.02): the walls mission
+                //     ended with the defenders PULLED BACK — a winnerless end vanilla follows
+                //     with its re-attack encounter menu, the exact menu trigger (b) exists to
+                //     kill. Steer to OUR hall menu instead and let the drill continue into the
+                //     keep or settle with the walls won. While the player sits at the hall menu
+                //     (or its troop-selection popup) this catch idles, keeping (b) muzzled.
+                if (HallStageOpen())
+                {
+                    if (!mapState.AtMenu)
+                    {
+                        // Vanilla's menu is still on its way — hold, bounded (never hang a drill).
+                        if (++_hallWaitTicks < 300) return;
+                        TbLog.Info("siege", "hall stage: vanilla's menu never came — settling the drill");
+                        FinishTrainingBattle();
+                        return;
+                    }
+                    _hallWaitTicks = 0;
+                    if (Campaign.Current.CurrentMenuContext?.GameMenu?.StringId != HallMenuId)
+                    {
+                        TbLog.Info("siege", "hall stage: defenders pulled back into the keep — offering the storm");
+                        try { GameMenu.SwitchToMenu(HallMenuId); }
+                        catch (Exception ex)
+                        {
+                            TbLog.Info("siege", "hall menu failed (" + ex.Message + ") — settling the drill");
+                            FinishTrainingBattle();
+                        }
+                    }
                     return;
                 }
                 // (b) The player bailed out — retreated from the mission OR canceled the
@@ -1953,9 +2160,9 @@ namespace TrainingBattles
             if (!DrillCooldownReady(out _)) return;
             if (_siegeSettlement != null)
             {
-                if (!CanCastleMusterNow(out var castleReason))
+                if (!CanFortMusterNow(out var fortReason))
                 {
-                    InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + castleReason));
+                    InformationManager.DisplayMessage(new InformationMessage("Training Battles: " + fortReason));
                     return;
                 }
             }
@@ -2139,6 +2346,8 @@ namespace TrainingBattles
             _checkResults = true;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            _hallFought = false;
+            _hallWaitTicks = 0;
             _battleDead.Clear();
             _battleDeadHarvested = false;
 
@@ -2223,14 +2432,15 @@ namespace TrainingBattles
 
         // ------------------------------ the siege battle ------------------------------
 
-        /// <summary>The castle muster's own validation: the company must stand inside the owned,
-        /// unbesieged castle. (Unlike the field muster, a LIVE PlayerEncounter is expected here —
-        /// being inside a settlement IS an encounter; the launch stands it down itself.)</summary>
-        private bool CanCastleMusterNow(out string reason)
+        /// <summary>The stronghold muster's own validation: the company must stand inside the
+        /// owned, unbesieged castle or town. (Unlike the field muster, a LIVE PlayerEncounter is
+        /// expected here — being inside a settlement IS an encounter; the launch stands it down
+        /// itself.)</summary>
+        private bool CanFortMusterNow(out string reason)
         {
             var settlement = _siegeSettlement;
             var main = MobileParty.MainParty;
-            if (settlement == null || main == null) { reason = "no castle to drill at."; return false; }
+            if (settlement == null || main == null) { reason = "no stronghold to drill at."; return false; }
             if (main.CurrentSettlement != settlement) { reason = "the company must stand inside " + settlement.Name + "."; return false; }
             if (settlement.OwnerClan != Clan.PlayerClan) { reason = "these walls are not yours."; return false; }
             if (settlement.SiegeEvent != null) { reason = "a real siege owns these walls."; return false; }
@@ -3417,6 +3627,8 @@ namespace TrainingBattles
             _battleRan = false;
             _aftermathReady = false;
             _pendingPlayerWon = null;
+            _hallFought = false;
+            _hallWaitTicks = 0;
             _battleDead.Clear();
             _battleDeadHarvested = false;
             _opponentParty = null;
@@ -3854,12 +4066,19 @@ namespace TrainingBattles
                 catch { }
             }
 
+            // A fought hall means the walls were carried by the player whatever the final
+            // verdict — the keep alone decided the drill then.
             var summary = (siegeSettlement != null
                     ? (opponentWasMock
-                        ? (playerWon ? "You carried the walls of " + siegeSettlement.Name + ". "
-                                     : "The mock enemy carried the walls. ")
-                        : (playerWon ? "Your side carried the walls of " + siegeSettlement.Name + ". "
-                                     : "The other side carried the walls. "))
+                        ? (playerWon || _hallFought
+                            ? "You carried the walls of " + siegeSettlement.Name + ". "
+                            : "The mock enemy carried the walls. ")
+                        : (playerWon || _hallFought
+                            ? "Your side carried the walls of " + siegeSettlement.Name + ". "
+                            : "The other side carried the walls. "))
+                      + (_hallFought
+                        ? (playerWon ? "The Lord's Hall fell with them. " : "The Lord's Hall held. ")
+                        : "")
                     : opponentWasMock
                         ? (playerWon ? "You carried the field. " : "The mock enemy carried the field. ")
                         : (playerWon ? "Your half carried the field. " : "The other half carried the field. "))

@@ -69,6 +69,8 @@ namespace TrainingBattles.Mcm
             s.SiegeEngineGoldPerManDay = c.SiegeEngineGoldPerManDay;
             s.CastleTrainingCostWages = c.CastleTrainingCostWages;
             s.CastleTrainingCooldownHours = c.CastleTrainingCooldownHours;
+            s.TownTrainingCostWages = c.TownTrainingCostWages;
+            s.TownTrainingCooldownHours = c.TownTrainingCooldownHours;
             s.CastleDrillRenownPer100Men = (float)c.CastleDrillRenownPer100Men;
             s.CastleDrillInfluencePer100Men = (float)c.CastleDrillInfluencePer100Men;
             s.XpKeptMinPercent = c.XpKeptMinPercent;
@@ -113,6 +115,8 @@ namespace TrainingBattles.Mcm
             c.SiegeEngineGoldPerManDay = s.SiegeEngineGoldPerManDay;
             c.CastleTrainingCostWages = s.CastleTrainingCostWages;
             c.CastleTrainingCooldownHours = s.CastleTrainingCooldownHours;
+            c.TownTrainingCostWages = s.TownTrainingCostWages;
+            c.TownTrainingCooldownHours = s.TownTrainingCooldownHours;
             c.CastleDrillRenownPer100Men = s.CastleDrillRenownPer100Men;
             c.CastleDrillInfluencePer100Men = s.CastleDrillInfluencePer100Men;
             c.XpKeptMinPercent = s.XpKeptMinPercent;
