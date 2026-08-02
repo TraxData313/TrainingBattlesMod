@@ -307,6 +307,7 @@ namespace TrainingBattles
             _clanResweepClanId = null;
             _clanResweepTicks = 0;
             RestoreOpponentClanLook(); // a crash mid-drill must not leave a bandit clan in our colors
+            SweepFortTrainingBanners(); // ...nor a stronghold flying the training banner (it SAVES)
             RefreshBanditClanVisuals(); // and any historically orange looter icon heals on load
             RecoverStaleDrillSieges(); // BEFORE the party recovery — dismantle the siege shell first
             RecoverStaleOpponentParties();
@@ -2523,6 +2524,9 @@ namespace TrainingBattles
                 _drillSiegeEvent = Campaign.Current.SiegeEventManager.StartSiegeEvent(siege, main);
                 DeactivateDrillBlockade(_drillSiegeEvent); // a port castle + own fleet raises one
                 PrepareDrillCamp(_drillSiegeEvent);
+                // The defended stronghold LEADS the enemy side on this road — fly the training
+                // banner over it so the scoreboard and the sim panel name the right foe.
+                FlyTrainingBannerOverFort(siege);
                 // The auto-resolve arms PlayerSiege ITSELF (BattleSimulation's ctor calls
                 // StartPlayerSiege with isSimulation: true for siege assaults) — only the
                 // led-in-person road wants the HUD armed here.
@@ -3236,6 +3240,59 @@ namespace TrainingBattles
             catch (Exception ex) { TbLog.Info("colors", "mission team paint failed (cosmetic): " + ex.Message); }
         }
 
+        /// <summary>The ATTACK road's enemy-banner fix (Anton's town playtest, 2026.08.02: "both
+        /// sides are colored with mine banner"): the defended stronghold LEADS the enemy side, and
+        /// every big banner surface reads the SIDE LEADER — the led mission's scoreboard
+        /// (SandboxMissionBattleScoreContext) and the auto-resolve panel
+        /// (SandboxSimulationBattleScoreContext) both read MapEvent side LeaderParty.Banner, and
+        /// the wall TEAM is born from the settlement combatant's banner. All of those funnel
+        /// through Settlement.Banner, which honors Party.CustomBanner FIRST — so the drill flies
+        /// the training banner over the settlement party for its duration. CustomBanner is
+        /// SAVEABLE, so <see cref="SweepFortTrainingBanners"/> clears it on every exit road AND
+        /// on session load (a crash must not leave the town flying the orange cross). What this
+        /// deliberately does NOT fix: the garrison's and militia's SHIELD heraldry — leaderless
+        /// origins read their party's MAP FACTION banner (PartyGroupAgentOrigin.Banner), and the
+        /// wall parties ARE the player's faction; dressing it would recolor the player's own half
+        /// too. The picked half / the phantoms on the walls already carry orange shields through
+        /// the lender clan's dressing, and the painted team supplies the uniform tint.</summary>
+        private void FlyTrainingBannerOverFort(Settlement siege)
+        {
+            if (!_config.UseOpponentBanner || siege?.Party == null) return;
+            try
+            {
+                siege.Party.SetCustomBanner(new Banner(_config.OpponentBannerCode));
+                TbLog.Info("colors", "the stronghold flies the training banner for the drill: " + siege.Name);
+            }
+            catch { /* colors are decoration — never stop a drill over them */ }
+        }
+
+        /// <summary>Takes the training banner OFF every player settlement that flies it — the
+        /// aftermath's, the abort's and the session-load heal in one stateless sweep (no reliance
+        /// on _siegeSettlement, which the exit roads null at different times). Only OUR banner is
+        /// touched: a custom banner some other mod set is compared by serialized code and left
+        /// alone. Vanilla never sets CustomBanner on settlement parties.</summary>
+        private void SweepFortTrainingBanners()
+        {
+            try
+            {
+                var clan = Clan.PlayerClan;
+                if (clan == null) return;
+                string ours;
+                try { ours = new Banner(_config.OpponentBannerCode).Serialize(); }
+                catch { return; }
+                foreach (var settlement in clan.Settlements)
+                {
+                    if (settlement?.Party?.CustomBanner == null) continue;
+                    string? code = null;
+                    try { code = settlement.Party.CustomBanner.Serialize(); } catch { }
+                    if (code != ours) continue;
+                    settlement.Party.SetCustomBanner(null);
+                    TbLog.Info("colors", "the stronghold's own banner restored: " + settlement.Name);
+                }
+            }
+            catch { }
+        }
+
         /// <summary>Dresses the opposing half in the training banner. The banner itself goes on the
         /// party (<c>SetCustomBanner</c> — the team's flag). The team COLORS and the men's shield
         /// heraldry, though, are read straight from the party's MAP FACTION at spawn time (verified
@@ -3612,6 +3669,7 @@ namespace TrainingBattles
             }
             _opponentIsMockEnemy = false;
             RestoreOpponentClanLook();
+            SweepFortTrainingBanners(); // an aborted attack drill leaves no orange over the gate
             RestorePartyRoles(); // the officers keep their posts through an aborted drill
             // A drill that never happened is a drill nobody gets paid for.
             if (_chargedCost > 0)
@@ -3746,6 +3804,7 @@ namespace TrainingBattles
             _chargedCost = 0; // the drill happened — the chest is spent
             Models.TrainingBattlesSceneModel.PendingSceneId = null; // never read = never armed again
             RestoreOpponentClanLook(); // the lender clan gets its own colors back
+            SweepFortTrainingBanners(); // and the stronghold its own banner (attack-road drills)
             // Who the fleet truly was before the drill — read BEFORE RestoreFleet clears the
             // snapshot; the mock sea drill's capture sweep below tells own from phantom by it.
             var ownHulls = new HashSet<Ship>();

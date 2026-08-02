@@ -739,6 +739,33 @@ THE LORD'S HALL (attack road only — vanilla gives a defending player no keep r
   index-4 seat on the crowded town menu; auto-resolve never reaches the hall (sim can't
   flip the state — `SetNextSiegeState` is mission-only).
 
+PLAYTEST ROUND 1 (2026.08.02, defences + attacks, led + auto — two findings):
+
+- "BOTH SIDES FLY MY BANNER" (attack road) — root-caused in the corpus and FIXED same day.
+  The banner surfaces each read a DIFFERENT source: the led scoreboard
+  (`SandboxMissionBattleScoreContext`) and the auto-resolve panel
+  (`SandboxSimulationBattleScoreContext`) read the MAP EVENT SIDE LEADER's banner; the
+  mission teams are born from the side-leader combatant's banner + MAP-FACTION color pair
+  (`MissionCombatantsLogic.AddEnemyTeam`); uniforms read `agentTeam.Color` at spawn (so
+  `PaintEnemyMissionTeams` was landing — the log proved it); SHIELDS of leaderless troops
+  read their party's MAP FACTION banner (`PartyGroupAgentOrigin.Banner`). On the attack
+  road the enemy side is LED BY THE SETTLEMENT — every leader-read showed Anton's banner
+  (his own town), which is also why castle DEFENDS always looked right (enemy leader there
+  = the orange-dressed temp party). THE FIX: `Settlement.Banner` honors `Party.CustomBanner`
+  FIRST — `FlyTrainingBannerOverFort` flies the training banner over the settlement party
+  while it leads the enemy side (attack road, set beside the blockade stand-down), and
+  `SweepFortTrainingBanners` (stateless: every player settlement, own-banner-code match
+  only) clears it at aftermath + abort + session load — CustomBanner is `[SaveableProperty]`,
+  a crash must not leave the town orange. NOT FIXABLE without dressing the player's own
+  faction: garrison/militia SHIELD heraldry (they ARE his faction — recoloring it would
+  recolor his half too). The picked half / phantoms on the walls carry orange shields via
+  the lender-clan dressing; the painted team supplies the enemy uniform tint.
+- "AUTO ASSAULT CHEAPER THAN LED (79k vs 82k)" — BY DESIGN, already labeled: an ordered
+  assault fields no bench engines (they are mission data; the sim only knows the walls'
+  advantage), so the launch subtracts `SiegeEquipmentBill()` on the simulate road, the
+  send option prices itself with its OWN suffix, and its tooltip says the engines sit out
+  and are not billed. The picks stay armed for a later led assault. No change.
+
 ## Scouting with companions
 
 V1 scouts ALONE. Spawn picked companions alongside with follow-AI so the ride has an escort —

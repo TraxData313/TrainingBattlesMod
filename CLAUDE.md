@@ -286,6 +286,13 @@ before deploying or the DLL is locked.
   `PartyBase.CustomBanner`, but uniform tint from the MAP FACTION's color pair and leaderless
   troops' shield heraldry from the faction's banner — recoloring the opponents means dressing
   the lender bandit CLAN too, and clan colors PERSIST IN SAVES (restore data must ride SyncData).
+  AND a fourth for sieges (the town playtest, 2026.08.02): the big banner surfaces — led
+  scoreboard, auto-resolve panel, team creation — all read the MAP EVENT SIDE LEADER's banner,
+  and an attacked settlement LEADS its side, so a drill on your own walls shows YOUR banner as
+  the enemy. `Settlement.Banner` honors `Party.CustomBanner` first — fly the training banner
+  over the settlement party for the drill (it's `[SaveableProperty]`: sweep it off on every
+  exit road AND on load). Garrison/militia shields stay the owner faction's — unfixable
+  without recoloring the player's own half.
 - The battle commit we drive via `PlayerEncounter.Update()` settles XP AND LOOT in one guarded
   pass — our reward model empties BOTH loot-chance lists (`GetLootItemChancesForWinnerParties`,
   `GetLootCasualtyChances`), which skips vanilla's distribution loops entirely, so
