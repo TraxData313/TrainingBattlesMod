@@ -1,5 +1,5 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
-- TOWN siege drill: muster at an owned town (own rates: 10 wages / 14-day clock) + the LORD'S HALL storm when the walls fall but the defenders pull back — castles get the keep offer too, vanilla always had it armed (see AI_NOTES)
+- (empty — v1.4.0 took the town update, the banner fix and the surgeon retune out the door)
 
 BUGS:
 - [ ] Same bug, second door: no MCM = mod won't load either (since v1.0.0) — MCM satellite, own session + menu playtest (see AI_NOTES)

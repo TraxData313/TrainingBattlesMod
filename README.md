@@ -1,5 +1,5 @@
 # Training Battles
-- Split up your boys in two teams and do a drill battle — on land, at sea (War Sails), or a siege drill on your own castle walls.
+- Split up your boys in two teams and do a drill battle — on land, at sea (War Sails), or a siege drill on your own walls, castle or town.
 - Pick your battle ground (and time) before the drills and before the real battles
 
 ![Training Battles](Screenshots/preview_thumbnail.jpg)
@@ -11,7 +11,7 @@ If one of these searches brought you here — yes, this is that mod:
 
 - a mod for **practice battles** / **sparring** — train your troops
 - a mod for **naval training battles** / practice **sea battles** with your own fleet (War Sails)
-- a mod for **siege practice** — storm or defend **your own castle walls** in a mock siege
+- a mod for **siege practice** — storm or defend **your own castle or town walls** in a mock siege
 - a mod to **change the time of day of battles** — fight at **full bright daylight**, night, dawn, noon or evening
 - a mod to **pick the battlefield** / **choose where you fight** before a battle
 - a mod to **scout the battlefield before the battle** — walk it on foot, see the real deployment lines
@@ -54,16 +54,18 @@ hulls, fitted as well as you please — and its ships vanish with its men.
 ![Composing a mock enemy](Screenshots/20260724115022_1.jpg)
 *Composing a mock enemy: every troop in the game, 500 of each on the shelf, any mix up to 1000 men.*
 
-**Castle siege drills** — at your **own castle** the muster becomes a **siege drill**: storm
-your own walls or hold them, on the castle's real scene at its true wall level. The
-**garrison and militia** always stand with the defense (take them into your party first if
-you want them under your own banner), your **Engineer** readies the siege equipment for both
-sides, and everyone on the field follows the same training rules — wounds healed, XP kept,
-the surgeon watching over the fallen. A grand muster is a public event: it costs more than a
-field drill, each castle keeps its own clock, and the realm takes note — a little **renown
-and influence** for the show of arms. The mock enemy comes to the walls too: the phantoms
-besiege you when you hold them, or reinforce the garrison when you storm. The drill waits
-behind its own option on the castle menu.
+**Siege drills — castles and towns** — at your **own castle or town** the muster becomes a
+**siege drill**: storm your own walls or hold them, on the real scene at its true wall
+level. The **garrison and militia** always stand with the defense (take them into your
+party first to command them yourself), your **Engineer** readies the siege equipment for
+both sides, and everyone on the field follows the same training rules — wounds healed, XP
+kept, the surgeon watching over the fallen. A grand muster is a public event: it costs more
+than a field drill, each stronghold keeps its own clock, and the realm takes note — a little
+**renown and influence**. Storm a town whose defenders pull back in good order and the
+**Lord's Hall** waits past the walls — pick your best few and finish the drill in the keep,
+or let them stand. The mock enemy comes to the walls too: phantoms besiege you when you
+hold, reinforce the garrison when you storm. The drill waits behind its own option on the
+castle and town menus.
 
 ![The castle door](Screenshots/20260726173241_1.jpg)
 *Arrive at your own castle and the option is waiting: "Hold a training siege on these walls."*
@@ -117,9 +119,9 @@ All of it tunable in MCM — each officer has their own group of knobs.
 Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\config.json`) **and** in the in-game **Mod Configuration Menu (MCM)**. MCM is a soft dependency — without it the config file alone runs the show.
 
 - **Officer knobs** — the Quartermaster's XP band, the fighter-instructor bonus, the Steward cooldown speed-up, the Surgeon's death/wounded bands, the Engineer's equipment tiers, the scouting duel ratios (each officer has its own MCM group)
-- **Drill knobs** — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), the castle drill's own pay, clock and prestige rates, disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
+- **Drill knobs** — hero health restored %, cooldown hours, drill pay (land and sea, days of wages), each stronghold's own pay and clock (castle and town), the prestige rates, disorganized toggle, auto-split-in-half, the opponent half's banner (any banner-editor code)
 - **Ground & time knobs** — time of day for battles, the real-battle scout toggles (defending and attacking separately)
-- **Misc** — the mock-enemy and castle-drill toggles, the hotkey (default `G` on the campaign map), debug logging
+- **Misc** — the mock-enemy and siege-drill toggles, the hotkey (default `G` on the campaign map), debug logging
 
 ![The MCM settings page](Screenshots/20260724120934_1.jpg)
 *Every knob in MCM — sliders for the aftermath, the pacing and the battlefield tools.*
@@ -129,7 +131,6 @@ Every parameter lives in a JSON config (`Documents\...\Configs\TrainingBattles\c
 
 Next milestones, in the order they'll likely land:
 
-- **Town training sieges** — drill in your own **cities**: bigger walls, bigger stakes, the Lord's Hall and all
 - **Army training** — drill while leading a hosted **army**: march the whole banner against a mock enemy
 
 No dates promised — this is a hobby, and playtesting sets the pace.

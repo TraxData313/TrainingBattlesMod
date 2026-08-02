@@ -67,16 +67,17 @@ namespace TrainingBattles
 
         /// <summary>KIA→KIA: of the men who would have died, this percent TRULY DIES — the
         /// drill's one real, permanent cost (Anton, 2026.07.25: a hard drill has real stakes).
-        /// Default 3% with no doctor, 0.1% at Medicine 300. Set both to 0 to restore the old
-        /// "nobody ever dies" pledge.</summary>
-        public double RealDeathPercentAtMedicine0 { get; set; } = 3.0;
-        public double RealDeathPercentAtMedicine300 { get; set; } = 0.1;
+        /// Default 0.5% with no doctor (Anton's town-playtest retune, 2026.08.02 — 8 true dead
+        /// from a 1k drill was too dear; was 3), 0.05% at Medicine 300 (was 0.1). Set both to 0
+        /// to restore the old "nobody ever dies" pledge.</summary>
+        public double RealDeathPercentAtMedicine0 { get; set; } = 0.5;
+        public double RealDeathPercentAtMedicine300 { get; set; } = 0.05;
 
         /// <summary>KIA→wounded: of the would-have-died who live, this percent wakes truly
         /// WOUNDED; the rest shrug it off. Default 20% with no doctor (Anton's playtest retune,
-        /// 2026.07.25 — was 30), 5% at Medicine 300.</summary>
+        /// 2026.07.25 — was 30), 2.5% at Medicine 300 (the 2026.08.02 retune — was 5).</summary>
         public double KiaWoundedPercentAtMedicine0 { get; set; } = 20.0;
-        public double KiaWoundedPercentAtMedicine300 { get; set; } = 5.0;
+        public double KiaWoundedPercentAtMedicine300 { get; set; } = 2.5;
 
         /// <summary>Wounded→wounded: of the men merely DOWNED in the drill (battle-wounded and
         /// knocked out — they never died), this percent STAYS wounded afterward; the rest are
@@ -438,7 +439,18 @@ namespace TrainingBattles
             // v13 (2026.07.26, the companions polish): the quartermaster's Steward speeds the
             // cooldown and the best-fighting companions instruct for bonus kept-XP — all new
             // keys with safe defaults, nothing to migrate.
-            ConfigVersion = 13;
+            // v14 (2026.08.02, the town update's retune): the surgeon eases — 8 true dead from a
+            // 1k drill was too dear (Anton's town playtest). Death band 3→0.5 / 0.1→0.05, the
+            // wake-wounded floor 5→2.5. Values still on the old defaults follow, hand picks stay;
+            // compares are TOLERANT because MCM's float sliders round-trip doubles with noise
+            // (Anton's own file carried 0.10000000149...).
+            if (ConfigVersion < 14)
+            {
+                if (Math.Abs(RealDeathPercentAtMedicine0 - 3.0) < 0.001) RealDeathPercentAtMedicine0 = 0.5;
+                if (Math.Abs(RealDeathPercentAtMedicine300 - 0.1) < 0.001) RealDeathPercentAtMedicine300 = 0.05;
+                if (Math.Abs(KiaWoundedPercentAtMedicine300 - 5.0) < 0.001) KiaWoundedPercentAtMedicine300 = 2.5;
+            }
+            ConfigVersion = 14;
             if (string.IsNullOrWhiteSpace(OpenMenuHotkey)) OpenMenuHotkey = "G";
         }
 

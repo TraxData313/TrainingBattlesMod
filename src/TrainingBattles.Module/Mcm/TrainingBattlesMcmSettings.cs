@@ -65,15 +65,15 @@ namespace TrainingBattles.Mcm
         // Three bands, each scaled linearly by the surgeon's Medicine from the "no doctor"
         // end (skill 0) to the "master doctor" end (skill 300). No wounded man ever dies.
 
-        [SettingPropertyFloatingInteger("Real deaths at Medicine 0 (%)", 0f, 25f, "0.0'%'", Order = 0, RequireRestart = false,
-            HintText = "KIA→KIA: of the men who would have died, this share TRULY DIES with no doctor — the drill's one real, permanent cost. Default 3. Set both real-death sliders to 0 for the old 'nobody ever dies' training.")]
+        [SettingPropertyFloatingInteger("Real deaths at Medicine 0 (%)", 0f, 25f, "0.00'%'", Order = 0, RequireRestart = false,
+            HintText = "KIA→KIA: of the men who would have died, this share TRULY DIES with no doctor — the drill's one real, permanent cost. Default 0.5. Set both real-death sliders to 0 for the old 'nobody ever dies' training.")]
         [SettingPropertyGroup("The Surgeon — the fallen", GroupOrder = 2)]
-        public float RealDeathPercentAtMedicine0 { get; set; } = 3.0f;
+        public float RealDeathPercentAtMedicine0 { get; set; } = 0.5f;
 
-        [SettingPropertyFloatingInteger("Real deaths at Medicine 300 (%)", 0f, 25f, "0.0'%'", Order = 1, RequireRestart = false,
-            HintText = "The same share under a master surgeon. Default 0.1 — a great doctor makes hard training nearly safe.")]
+        [SettingPropertyFloatingInteger("Real deaths at Medicine 300 (%)", 0f, 25f, "0.00'%'", Order = 1, RequireRestart = false,
+            HintText = "The same share under a master surgeon. Default 0.05 — a great doctor makes hard training nearly safe.")]
         [SettingPropertyGroup("The Surgeon — the fallen", GroupOrder = 2)]
-        public float RealDeathPercentAtMedicine300 { get; set; } = 0.1f;
+        public float RealDeathPercentAtMedicine300 { get; set; } = 0.05f;
 
         [SettingPropertyFloatingInteger("Fallen wake wounded at Medicine 0 (%)", 0f, 100f, "0.0'%'", Order = 2, RequireRestart = false,
             HintText = "KIA→wounded: of the would-have-died who live, this share wakes truly WOUNDED with no doctor; the rest shrug it off. Default 20.")]
@@ -81,9 +81,9 @@ namespace TrainingBattles.Mcm
         public float KiaWoundedPercentAtMedicine0 { get; set; } = 20.0f;
 
         [SettingPropertyFloatingInteger("Fallen wake wounded at Medicine 300 (%)", 0f, 100f, "0.0'%'", Order = 3, RequireRestart = false,
-            HintText = "The same share under a master surgeon. Default 5.")]
+            HintText = "The same share under a master surgeon. Default 2.5.")]
         [SettingPropertyGroup("The Surgeon — the fallen", GroupOrder = 2)]
-        public float KiaWoundedPercentAtMedicine300 { get; set; } = 5.0f;
+        public float KiaWoundedPercentAtMedicine300 { get; set; } = 2.5f;
 
         [SettingPropertyFloatingInteger("Downed stay wounded at Medicine 0 (%)", 0f, 100f, "0.0'%'", Order = 4, RequireRestart = false,
             HintText = "Wounded→wounded: of the men merely downed in the drill (knocked out, battle-wounded — they never died), this share STAYS wounded with no doctor; the rest are patched up on the spot. Default 10. There is deliberately no wounded→death path.")]
