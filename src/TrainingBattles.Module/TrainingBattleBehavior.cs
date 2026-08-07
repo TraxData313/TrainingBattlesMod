@@ -21,6 +21,7 @@ using TaleWorlds.Core;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
+using TaleWorlds.ScreenSystem;
 using TrainingBattles.Core;
 
 namespace TrainingBattles
@@ -1659,6 +1660,11 @@ namespace TrainingBattles
 
             if (mapState.AtMenu || mapState.MapConversationActive) return;
             if (InformationManager.IsAnyInquiryActive()) return;
+            // Someone is TYPING: an overlay's text field holds the keyboard — Immersive AI's chat
+            // window, the encyclopedia's search box, a save-name line. Letters typed there are
+            // words, not hotkeys (Anton's find, 2026.08.08: "g" mid-chat mustered the drill).
+            // The engine's own signal: a focused layer whose text widget has the keys.
+            try { if (ScreenManager.FocusedLayer?.IsFocusedOnInput() == true) return; } catch { /* guard is best-effort */ }
             if (!Input.IsKeyReleased(ParseKey(_config.OpenMenuHotkey))) return;
 
             if (!CanMusterNow(out var reason))
