@@ -1,7 +1,8 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
-- (empty — v1.4.0 took the town update, the banner fix and the surgeon retune out the door)
+- Party size vs battle ready mismatch after a drill — fixed (companions came home seated twice; old saves heal on load)
 
 BUGS:
+- [x] Party size ≠ battle ready after a drill (Rendan, Steam 2026.08.08) — hero seated twice on merge home, fixed 2026.08.08 (see TASKS_DONE)
 - [ ] Same bug, second door: no MCM = mod won't load either (since v1.0.0) — MCM satellite, own session + menu playtest (see AI_NOTES)
 - [x] No "Select the battlefield" vs bandits + scout ride skipped its picker — starved scene pool, tiers added 2026.07.27 (see AI_NOTES)
 - [ ] Orange Looters - Orange (train color) looters still are seen appearing after a mock castle or sea battle, but now they at least turn normal looters after a screen is opened and closed (line the inventory)
@@ -9,6 +10,7 @@ BUGS:
 
 
 NEXT UPDATE:
+- [ ] Playtest: drill with a COMPANION on the opposing half — party size must equal battle ready after it, the companion keeps his party role, no "rejoined the company" line for a man who never scattered (fix landed 2026.08.08)
 - [x] Playtest: CASTLE mock enemy (built 2026.07.26 — phantoms besiege or reinforce the garrison; see AI_NOTES)
 - [x] Playtest: Steward speeds the cooldown + fighter companions instruct for XP (built 2026.07.26)
 - [x] Renown/influence for the CASTLE drill: built 2026.07.25, scales with men on the field (see AI_NOTES; field/sea drills too? not decided)

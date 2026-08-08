@@ -124,6 +124,14 @@ real opinions, push back, propose things.
   SMALL real-death chance now exists BY DESIGN — the surgeon's KIA→KIA band, default 3% of
   the would-have-died at Medicine 0 falling to 0.1% at 300, announced in the muster tooltip
   and the summary, zeroable in MCM for the original no-deaths pledge. Heroes never truly die.
+- **CROSS-MOD CONTRACT with ImmersiveAI (2026.08.08): the party-id prefixes are load-bearing.**
+  The sibling mod's battle chronicle (`ImmersiveChatBehavior.Battles.cs`, `IsTrainingBattle`)
+  recognizes our drills by the `OpponentPartyIdPrefix` ("training_opponents") and
+  `MockEnemyPartyIdPrefix` ("training_mock_enemy") constants in `TrainingBattleBehavior` and
+  skips them whole — otherwise every drill would enter its chronicle as a real war and its NPCs
+  would "remember" fighting their own comrades. NEVER rename these prefixes (and give any NEW
+  drill-party kind a `training_`-prefixed id, then extend ImmersiveAI's check) without updating
+  both repos together.
 
 ## Repository layout (real since 2026.07.23 — V1 core built, awaiting first playtest)
 
@@ -299,6 +307,16 @@ before deploying or the DLL is locked.
   `RosterToReceiveLootItems` stays empty and the post-battle loot screens never open. Harmony
   loot mods hook that same commit anyway, so the aftermath still diffs the pre-fight ItemRoster
   snapshot and removes anything gained.
+- MOVING A HERO BETWEEN ROSTERS: remove FIRST, add SECOND — always. `Hero.OnRemovedFromParty`
+  sets `PartyBelongedTo = null` UNCONDITIONALLY (it never checks which party is releasing him),
+  and `TroopRoster.Clear()` fires it through `AddToCountsAtIndex`. Add-then-clear therefore leaves
+  a hero standing in the new roster belonging to NOBODY: his party roles are stripped
+  (`SetPartyBelongedTo` → `RemoveAllPartyRolesOfHero`), his healing no longer reaches the roster's
+  cached wounded counter (the `Hero.HitPoints` setter notifies `PartyBelongedTo`'s roster only),
+  and every "is he home?" check reads him as away — ours then added a SECOND seat for the same man
+  via `AddHeroToPartyAction` (party size counted him twice, battle ready once: Rendan's mismatch,
+  2026.08.08). A hero element with Number 2 SURVIVES IN THE SAVE (the cached counters are rebuilt
+  on load, the data is not). `RepairHeroSeats` enforces the invariant on load and after each drill.
 - Vanilla makes the losing side's UNCAPTURED heroes FUGITIVE at map-event end ("Regrouping" on
   the clan screen) and REMOVES them from the roster — a no-capture guard reroutes companions
   into exactly that hole; the aftermath must walk snapshot-heroes home explicitly.

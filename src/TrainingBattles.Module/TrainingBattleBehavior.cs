@@ -313,6 +313,7 @@ namespace TrainingBattles
             RecoverStaleDrillSieges(); // BEFORE the party recovery — dismantle the siege shell first
             RecoverStaleOpponentParties();
             RescueStuckFugitiveCompanions();
+            RepairHeroSeats(); // old saves: heroes seated twice, or seated but belonging to nobody
             // Saves touched by pre-fix drills carry stale "separated after a battle" tracker
             // entries — this sweep also cleans them on load, not just after a drill.
             SweepCompanionSeparationTracker();
@@ -3516,6 +3517,20 @@ namespace TrainingBattles
                     if (hero.IsPrisoner) continue; // 1b's walk-back owns the prisoner path
                     try
                     {
+                        // He may be standing in the ranks ALREADY and simply belong to nobody in the
+                        // engine's books (see MergePartyBackIntoMain) — walking him "home" then adds
+                        // a SECOND copy of him to the roster. Lift the seat he holds first, so the
+                        // action below re-seats him instead of duplicating him; and say nothing,
+                        // because this hero never actually left.
+                        var seated = MobileParty.MainParty.MemberRoster.GetTroopCount(el.Character);
+                        if (seated > 0)
+                        {
+                            MobileParty.MainParty.MemberRoster.AddToCounts(el.Character, -seated);
+                            AddHeroToPartyAction.Apply(hero, MobileParty.MainParty, showNotification: false);
+                            TbLog.Info("drill", hero.Name + " stood in the ranks belonging to nobody ("
+                                + seated + "× seated) — reseated");
+                            continue;
+                        }
                         if (hero.IsFugitive) hero.ChangeState(Hero.CharacterStates.Active);
                         AddHeroToPartyAction.Apply(hero, MobileParty.MainParty, showNotification: false);
                         InformationManager.DisplayMessage(new InformationMessage(
@@ -3550,6 +3565,41 @@ namespace TrainingBattles
                 {
                     if (hero != null && hero.PartyBelongedTo == MobileParty.MainParty)
                         scattered.Remove(hero);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>Every hero in the main party sits in exactly ONE seat and belongs to the party
+        /// he sits in — the engine's own invariant, and both halves of it could break in drills
+        /// before 2026.08.08 (see MergePartyBackIntoMain): a companion could come home seated TWICE,
+        /// or seated once while the engine thought he belonged to nobody. Either way the party
+        /// counters drift — the top bar's party size counts a man the battle-ready count cannot see
+        /// (Rendan's report, Steam 2026.08.08) — and a stale double seat outlives the session in the
+        /// save. This sweep lifts every mis-seated hero out and lets the engine's own action seat him
+        /// again, on load (old saves heal) and after every drill (belt over the fix). THE PLAYER is
+        /// never touched: removing the leader, even for the instant between the two calls, hands the
+        /// main party a null leader.</summary>
+        private static void RepairHeroSeats()
+        {
+            try
+            {
+                var main = MobileParty.MainParty;
+                if (main == null) return;
+                foreach (var el in new List<TroopRosterElement>(main.MemberRoster.GetTroopRoster()))
+                {
+                    var hero = el.Character?.HeroObject;
+                    if (hero == null || hero == Hero.MainHero || !hero.IsAlive) continue;
+                    var belonged = hero.PartyBelongedTo;
+                    if (el.Number <= 1 && belonged == main) continue;
+                    try
+                    {
+                        main.MemberRoster.AddToCounts(el.Character, -el.Number);
+                        AddHeroToPartyAction.Apply(hero, main, showNotification: false);
+                        TbLog.Info("repair", "reseated " + hero.Name + " — held " + el.Number
+                            + " seat(s), belonged to " + (belonged?.Name?.ToString() ?? "nobody"));
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -3922,6 +3972,7 @@ namespace TrainingBattles
             //     straight back into the ranks.
             RecoverScatteredHeroes(mainSnapshot);
             RecoverScatteredHeroes(opponentSnapshot);
+            RepairHeroSeats(); // ...and nobody comes home twice, or home to nobody — before the roles
 
             // 1c-bis. …and with their posts: the engine stripped every crossing (and every
             //     scattered) hero of their party roles — scout, engineer, quartermaster, surgeon —
@@ -4345,22 +4396,37 @@ namespace TrainingBattles
             return result;
         }
 
+        /// <summary>The opposing half comes home. HERO ORDER MATTERS: vanilla's
+        /// Hero.OnRemovedFromParty nulls PartyBelongedTo UNCONDITIONALLY — it never checks WHICH
+        /// party is letting the hero go — so a hero added to the main party BEFORE the temp party's
+        /// roster is cleared ends up standing in our ranks belonging to nobody. Everything downstream
+        /// then misreads him: his party roles are stripped a second time (and RestorePartyRoles skips
+        /// him), his healing no longer reaches the roster's cached wounded count, and the
+        /// scattered-hero walk-back seats a SECOND copy of him — the permanent party-size vs
+        /// battle-ready mismatch Rendan reported (Steam, 2026.08.08). So each hero LEAVES the temp
+        /// party first and JOINS the main party second, exactly like vanilla's own transfers.
+        /// (GetTroopRoster hands out the LIVE list and this loop now mutates it — iterate a copy.)</summary>
         private static void MergePartyBackIntoMain(MobileParty party)
         {
             try
             {
                 var main = MobileParty.MainParty;
-                foreach (var el in party.MemberRoster.GetTroopRoster())
+                foreach (var el in new List<TroopRosterElement>(party.MemberRoster.GetTroopRoster()))
                 {
                     if (el.Character == null) continue;
+                    if (el.Character.IsHero)
+                        party.MemberRoster.AddToCounts(el.Character, -el.Number, false, -el.WoundedNumber);
                     main.MemberRoster.AddToCounts(el.Character, el.Number, false, el.WoundedNumber, el.Xp);
                 }
                 party.MemberRoster.Clear();
                 // Belt and braces: the reward model forbids prisoner-taking in training, but if any
-                // of our own ended up in the wagons, they walk home too.
-                foreach (var el in party.PrisonRoster.GetTroopRoster())
+                // of our own ended up in the wagons, they walk home too — heroes out of the wagons
+                // first, so nobody is a member and a prisoner at the same moment.
+                foreach (var el in new List<TroopRosterElement>(party.PrisonRoster.GetTroopRoster()))
                 {
                     if (el.Character == null) continue;
+                    if (el.Character.IsHero)
+                        party.PrisonRoster.AddToCounts(el.Character, -el.Number, false, -el.WoundedNumber);
                     main.MemberRoster.AddToCounts(el.Character, el.Number, false, el.WoundedNumber);
                 }
                 party.PrisonRoster.Clear();
@@ -4376,9 +4442,11 @@ namespace TrainingBattles
             try
             {
                 var main = MobileParty.MainParty;
-                foreach (var el in party.PrisonRoster.GetTroopRoster())
+                foreach (var el in new List<TroopRosterElement>(party.PrisonRoster.GetTroopRoster()))
                 {
                     if (el.Character == null) continue;
+                    if (el.Character.IsHero) // out of the wagons first — see MergePartyBackIntoMain
+                        party.PrisonRoster.AddToCounts(el.Character, -el.Number, false, -el.WoundedNumber);
                     main.MemberRoster.AddToCounts(el.Character, el.Number, false, el.WoundedNumber);
                 }
                 party.PrisonRoster.Clear();
