@@ -93,7 +93,7 @@ namespace TrainingBattles
         private bool TimeOfDayCondition(MenuCallbackArgs args)
         {
             args.optionLeaveType = GameMenuOption.LeaveType.Wait;
-            if (!GroundToolsAllowed(out var mapEvent)) return false;
+            if (!HourToolAllowed(out var mapEvent)) return false;
             var tip = "{=TB_tip_time}Pick the hour for THIS battle only — the standing default "
                 + "lives in the mod options. This battle: "
                 + AtmospherePresets.Label(TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
@@ -204,6 +204,23 @@ namespace TrainingBattles
             mapEvent = MapEvent.PlayerMapEvent;
             if (mapEvent == null || !mapEvent.IsFieldBattle) return false;
             if (TrainingBattleBehavior.TrainingActive) return false;
+            return mapEvent.PlayerSide == BattleSideEnum.Defender
+                ? _config.ChooseGroundWhenDefending
+                : _config.ChooseGroundWhenAttacking;
+        }
+
+        /// <summary>The hour pick's gate — wider than the ground tools': the VILLAGE provocations
+        /// too (raid, forced supplies, forced volunteers — Anton's ask, 2026.09.28). They share
+        /// vanilla's "encounter" menu ("Attack!" / "Send troops") once the villagers take up arms,
+        /// and their village mission builds its sky through SandBoxMissions → MapWeatherModel like
+        /// any field battle, so the pick lands. The ground tools stay field-only: a village fight
+        /// is fought in the village's own scene.</summary>
+        private bool HourToolAllowed(out MapEvent mapEvent)
+        {
+            mapEvent = MapEvent.PlayerMapEvent;
+            if (mapEvent == null || TrainingBattleBehavior.TrainingActive) return false;
+            if (!(mapEvent.IsFieldBattle || mapEvent.IsRaid
+                || mapEvent.IsForcingSupplies || mapEvent.IsForcingVolunteers)) return false;
             return mapEvent.PlayerSide == BattleSideEnum.Defender
                 ? _config.ChooseGroundWhenDefending
                 : _config.ChooseGroundWhenAttacking;
