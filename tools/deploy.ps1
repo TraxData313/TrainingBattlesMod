@@ -2,7 +2,7 @@
 # Usage: powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 [-Configuration Release]
 param(
     [string]$Configuration = "Release",
-    [string]$GameFolder = "C:\Program Files (x86)\Steam\steamapps\common\Mount & Blade II Bannerlord"
+    [string]$GameFolder = "D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord"
 )
 
 $ErrorActionPreference = "Stop"

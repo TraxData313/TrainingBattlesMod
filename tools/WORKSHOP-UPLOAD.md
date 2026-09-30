@@ -26,7 +26,7 @@ Page: https://steamcommunity.com/sharedfiles/filedetails/?id=3770681619
 
 3. **Run the uploader** (Steam open and logged in):
    ```powershell
-   & "C:\Program Files (x86)\Steam\steamapps\common\Mount & Blade II Bannerlord\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.SteamWorkshop.exe" "C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\tools\WorkshopUpdate.xml"
+   & "D:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.SteamWorkshop.exe" "C:\Users\Trax\Documents\BannerlordMods\TrainingBattlesMod\tools\WorkshopUpdate.xml"
    ```
 
 ## Uploader quirks (decompiled 2026.07.13 for ImmersiveAI — trust these)

@@ -4,10 +4,10 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <!-- Path to the Bannerlord installation; override in Directory.Build.props.user if yours differs -->
-    <GameFolder>C:\Program Files (x86)\Steam\steamapps\common\Mount &amp; Blade II Bannerlord</GameFolder>
+    <GameFolder>D:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord</GameFolder>
     <!-- Mod Configuration Menu (MCM v5), referenced but NOT shipped (its module provides it at runtime).
          Steam Workshop id 2859238197. Override in Directory.Build.props.user if yours lives elsewhere. -->
-    <McmBinFolder>C:\Program Files (x86)\Steam\steamapps\workshop\content\261550\2859238197\bin\Win64_Shipping_Client</McmBinFolder>
+    <McmBinFolder>D:\SteamLibrary\steamapps\workshop\content\261550\2859238197\bin\Win64_Shipping_Client</McmBinFolder>
     <!-- War Sails (NavalDLC), referenced but NOT shipped — same soft-dependency shape as MCM.
          Only the sea scout ride touches its types, and only when the party is at sea (impossible
          without the DLC). Building does require War Sails installed. -->
