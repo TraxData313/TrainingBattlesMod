@@ -53,7 +53,14 @@ namespace TrainingBattles
         {
             CampaignEvents.OnSessionLaunchedEvent.AddNonSerializedListener(this, OnSessionLaunched);
             CampaignEvents.MapEventEnded.AddNonSerializedListener(this, OnMapEventEnded);
+            CampaignEvents.TickEvent.AddNonSerializedListener(this, OnTick);
         }
+
+        /// <summary>True while a one-battle hour was armed from a SIEGE door (the siege menu or
+        /// the join-a-siege menu). Those doors can be walked away from with no map event ever
+        /// starting ("Don't get involved", lifting the siege), so MapEventEnded alone cannot
+        /// disarm the pick — <see cref="OnTick"/> does, the moment the siege is no longer ours.</summary>
+        private bool _hourArmedAtSiege;
 
         public override void SyncData(IDataStore dataStore) { }
 
@@ -88,6 +95,16 @@ namespace TrainingBattles
             starter.AddGameMenuOption("naval_encounter_disengaged", "training_battles_time_of_day",
                 BattleSceneCatalog.ChooseTimeOfDayOptionText,
                 DisengagedTimeOfDayCondition, _ => ChooseTimeOfDay(), isLeave: false, index: 1);
+            // And on the doors INTO someone else's siege (Anton's ask, 2026.10.03 — the Sahel
+            // Castle screen): "join_siege_event" (join the besiegers / assault their camp / break
+            // in) and "join_sally_out" (the garrison you sit with rides out). Same siege rule: no
+            // scouting duel, the pick colors the next battle only.
+            starter.AddGameMenuOption("join_siege_event", "training_battles_time_of_day",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                JoinSiegeTimeOfDayCondition, _ => ChooseSiegeTimeOfDay(), isLeave: false, index: 0);
+            starter.AddGameMenuOption("join_sally_out", "training_battles_time_of_day",
+                BattleSceneCatalog.ChooseTimeOfDayOptionText,
+                JoinSiegeTimeOfDayCondition, _ => ChooseSiegeTimeOfDay(), isLeave: false, index: 0);
         }
 
         private bool TimeOfDayCondition(MenuCallbackArgs args)
@@ -152,10 +169,53 @@ namespace TrainingBattles
             return true;
         }
 
+        /// <summary>The join-a-siege doors' hour pick: the player stands at a settlement under
+        /// siege (outside, or inside with a sally riding out) and has not yet chosen a side.</summary>
+        private bool JoinSiegeTimeOfDayCondition(MenuCallbackArgs args)
+        {
+            args.optionLeaveType = GameMenuOption.LeaveType.Wait;
+            if (TrainingBattleBehavior.TrainingActive || !InSiegeContext()) return false;
+            args.Tooltip = new TextObject("{=TB_tip_time_join_siege}Pick the hour for the NEXT "
+                + "battle at these walls only — the standing default lives in the mod options. Next "
+                + "battle: "
+                + AtmospherePresets.Label(TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config)).ToLowerInvariant()
+                + (TrainingBattlesMapWeatherModel.PendingBattleHour != null ? " (your pick)." : "."));
+            return true;
+        }
+
+        /// <summary>Is the player still somewhere a siege battle can come from — in a battle,
+        /// besieging, inside besieged walls, or standing at a besieged settlement's menu?</summary>
+        private static bool InSiegeContext()
+        {
+            try
+            {
+                if (MapEvent.PlayerMapEvent != null) return true;
+                var main = MobileParty.MainParty;
+                if (main?.BesiegedSettlement != null || main?.CurrentSettlement?.SiegeEvent != null)
+                    return true;
+                return PlayerEncounter.EncounterSettlement?.SiegeEvent != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void OnTick(float dt)
+        {
+            if (!_hourArmedAtSiege) return;
+            if (TrainingBattlesMapWeatherModel.PendingBattleHour == null) { _hourArmedAtSiege = false; return; }
+            if (InSiegeContext()) return;
+            // Walked away from the siege before any battle: the pick was for THAT fight only.
+            TrainingBattlesMapWeatherModel.PendingBattleHour = null;
+            _hourArmedAtSiege = false;
+        }
+
         private void ChooseSiegeTimeOfDay()
         {
             BattleSceneCatalog.ShowTimeOfDayPicker(_config, () =>
             {
+                _hourArmedAtSiege = TrainingBattlesMapWeatherModel.PendingBattleHour != null;
                 var effective = TrainingBattlesMapWeatherModel.EffectiveBattleHour(_config);
                 InformationManager.DisplayMessage(new InformationMessage(effective < 0
                     ? "Training Battles: the next assault follows the campaign clock."
@@ -194,6 +254,7 @@ namespace TrainingBattles
             {
                 TrainingBattlesSceneModel.PendingSceneId = null;
                 TrainingBattlesMapWeatherModel.PendingBattleHour = null;
+                _hourArmedAtSiege = false;
             }
         }
 

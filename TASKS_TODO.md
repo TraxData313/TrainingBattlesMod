@@ -1,6 +1,7 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
 - Party size vs battle ready mismatch after a drill — fixed (companions came home seated twice; old saves heal on load)
 - Battle hour pick now also on VILLAGE fights (raid / force supplies / force volunteers) — needs playtest
+- Battle hour pick now also when JOINING someone else's siege (and their sally out) — needs playtest
 
 BUGS:
 - [x] Party size ≠ battle ready after a drill (Rendan, Steam 2026.08.08) — hero seated twice on merge home, fixed 2026.08.08 (see TASKS_DONE)
