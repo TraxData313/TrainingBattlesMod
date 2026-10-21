@@ -428,7 +428,17 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 ```
 
 Game path and MCM path live in `Directory.Build.props`; personal overrides go in
-`Directory.Build.props.user` (git-ignored via `*.user`).
+`Directory.Build.props.user` (git-ignored via `*.user`). On the current PC the game is under
+`C:\Program Files (x86)\Steam\...` (no D: drive) — pass `-GameFolder` to deploy.ps1.
+
+**Smart App Control** (Windows, on on this PC — NEVER turn it off or touch security settings)
+sometimes refuses a freshly built unsigned DLL; the game then crashes at "Resolving:
+TrainingBattles.Core" (Code Integrity events 3033/3077). The fix is a rebuild whose bytes
+differ: set `$env:SourceRevisionId = "$(git rev-parse HEAD).sac1"` (then .sac2 …) before
+deploy.ps1 — only the informational version changes — and confirm with
+`tools\SmartAppControl\loadcheck.ps1`, which LoadFiles the three installed DLLs in a fresh
+.NET Framework process (the game's own verdict). Same workaround as
+`..\trax_combat_enhancements\tools\SmartAppControl\`.
 
 ## Design (researched 2026.07.23 — READ docs/training-battle-research.md FIRST)
 
