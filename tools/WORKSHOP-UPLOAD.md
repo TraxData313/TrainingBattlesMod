@@ -1,5 +1,9 @@
 # Updating the mod on the Steam Workshop
 
+> **ON HOLD since 2026.10.23 (Toni): do not upload.** Steam stays at v1.4.0 because any update
+> to the item gets hidden by Steam's moderation block. Releases go to GitHub and Nexus only
+> (see CLAUDE.md "Release status"). The task file below is ready for when the hold lifts.
+
 The upload path is Bannerlord's **own official uploader** —
 `TaleWorlds.MountAndBlade.SteamWorkshop.exe` in the game's `bin\Win64_Shipping_Client`.
 It rides the **already-logged-in Steam client**: no SteamCMD, no password, no Steam Guard.

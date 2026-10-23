@@ -109,6 +109,17 @@ real opinions, push back, propose things.
   into the public notes (short and glanceable), `tools\package.ps1` (which gates on
   tools/AssemblyGuard), upload per tools/WORKSHOP-UPLOAD.md. A player-blocking bug is the
   standing exception — say so and ship it alone.
+- **Release status (2026.10.23): STEAM IS HELD AT v1.4.0 — do not upload to Steam.** Toni's call:
+  item 3770681619 is his only Workshop item still visible, and any update gets hidden by Steam's
+  moderation block. Steam's v1.4.0 is commit ade2bc3 (2026.08.02). **v1.4.1** (tag on 233b4da:
+  phantom-seat fix, hotkey ignored while typing, hour pick on village fights and at other lords'
+  sieges/sallies — not playtested yet) is on GitHub
+  (https://github.com/TraxData313/TrainingBattlesMod/releases/tag/v1.4.1) and Nexus
+  (https://www.nexusmods.com/mountandblade2bannerlord/mods/12277) only. The `v1.4.0` tag sits on
+  8ba5b32 (10-03), newer than Steam's build — misleading but left alone, never moved. The GitHub
+  v1.4.0 zip (built 10-18) already carried the four fixes. tools/WorkshopUpdate.xml is ready
+  (this PC's dist path, v1.4.1 notes) for the day Toni lifts the hold; until then never run the
+  uploader.
 
 ## Hard requirements (Anton's musts)
 
