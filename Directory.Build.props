@@ -13,4 +13,6 @@
          without the DLC). Building does require War Sails installed. -->
     <NavalDlcBinFolder>$(GameFolder)\Modules\NavalDLC\bin\Win64_Shipping_Client</NavalDlcBinFolder>
   </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.props.user"
+          Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.props.user')" />
 </Project>
