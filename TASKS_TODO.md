@@ -1,5 +1,9 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
+- (empty — v1.4.1 shipped 2026.10.23 on GitHub + Nexus; Steam held at v1.4.0, see CLAUDE.md "Release status")
+
+v1.4.1 (2026.10.23, GitHub + Nexus only, NOT playtested yet):
 - Party size vs battle ready mismatch after a drill — fixed (companions came home seated twice; old saves heal on load)
+- Muster hotkey ignored while typing in a text field
 - Battle hour pick now also on VILLAGE fights (raid / force supplies / force volunteers) — needs playtest
 - Battle hour pick now also when JOINING someone else's siege (and their sally out) — needs playtest
 
