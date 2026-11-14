@@ -115,10 +115,14 @@ real opinions, push back, propose things.
   phantom-seat fix, hotkey ignored while typing, hour pick on village fights and at other lords'
   sieges/sallies — not playtested yet) is on GitHub
   (https://github.com/TraxData313/TrainingBattlesMod/releases/tag/v1.4.1) and Nexus
-  (https://www.nexusmods.com/mountandblade2bannerlord/mods/12277) only. The `v1.4.0` tag sits on
+  (https://www.nexusmods.com/mountandblade2bannerlord/mods/12277) only. **v1.4.2** (2026.11.14, tag
+  on 7fbbbe2: built for game v1.5.7, the siege capture lock found again — v1.4.1 is broken on
+  v1.5.7; boots and plays, the siege drill itself not playtested there yet) replaced it on both,
+  GitHub (https://github.com/TraxData313/TrainingBattlesMod/releases/tag/v1.4.2) and Nexus, the
+  v1.4.1 Nexus file archived. The `v1.4.0` tag sits on
   8ba5b32 (10-03), newer than Steam's build — misleading but left alone, never moved. The GitHub
   v1.4.0 zip (built 10-18) already carried the four fixes. tools/WorkshopUpdate.xml is ready
-  (this PC's dist path, v1.4.1 notes) for the day Toni lifts the hold; until then never run the
+  (this PC's dist path, v1.4.2 notes that also cover v1.4.1) for the day Toni lifts the hold; until then never run the
   uploader.
 
 ## Hard requirements (Anton's musts)
