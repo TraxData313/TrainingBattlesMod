@@ -286,7 +286,10 @@ The wires (all verified in the decompiled corpus):
   event exists (vanilla's own "siege continues" switch; public only via
   FinishBattleAndKeepSiegeEvent which also ends the battle). With it, FinalizeEvent skips the
   whole SiegeCompleted/AfterSiegeCompleted dispatch — no capture, no sack, no devastation, on
-  every exit road. Second lock: aftermath restores walls
+  every exit road. GAME v1.5.7 (2026.11.14): the flag and the event type left MapEvent for
+  `SiegeAssaultEventComponent` (`_keepSiegeEvent`, `_eventType`, via `MapEvent.Component`);
+  `GameReflection` finds either shape, throws on a miss, and the drill refuses to start
+  without the lock (see TASKS_DONE). Second lock: aftermath restores walls
   (SetWallSectionHitPointsRatioAtIndex; mission never writes wall damage — only campaign
   bombardment ticks do) and dismantles the siege via `SiegeEvent.FinalizeSiegeEvent()`
   (resets CurrentSiegeState, clears Settlement.SiegeEvent, unhooks camps).

@@ -172,6 +172,11 @@ src/TrainingBattles.Module/   net472 — the Bannerlord module:
   TbLog.cs                    the rolling debug ledger (training_battles.log, ~1 MB trim):
                               drills, duels, picks, officer resolutions, config loads —
                               last_drill_report.txt stays the per-stack deep witness
+  GameReflection.cs           the reach into the game's PRIVATE members (2026.11.14, game v1.5.7):
+                              the siege drill's two locks (found on SiegeAssaultEventComponent,
+                              or on MapEvent before v1.5.7; a miss throws, never a silent no-op),
+                              SiegeDrillBlocker (door + launch refuse on it) and the campaign-start
+                              SelfCheck over EVERY by-string lookup — add new ones to its Probes
   TrainingBattleBehavior.cs   THE HEART: muster menu, picker flow, battle recipe, aftermath,
                               cooldown, stale-party recovery — read its class doc first
   BattleSceneCatalog.cs       battlefield candidates for a position: strict patch chain +
@@ -391,10 +396,13 @@ before deploying or the DLL is locked.
 - SIEGE drills (the castle update's finds): the siege MISSION runs on plain data
   (`OpenSiegeMissionWithDeployment` + `MissionSiegeWeapon.CreateCampaignWeapon`), but the
   mission-end engine writeback null-refs without a campaign `SiegeEvent` — create a real one
-  (its empty construction lists make the writeback a no-op). MapEvent's private
+  (its empty construction lists make the writeback a no-op). The private
   `_keepSiegeEvent` (reflection; vanilla's "siege continues" switch) makes FinalizeEvent skip
   the entire SiegeCompleted dispatch — no capture/sack/devastation, on every exit road; set it
-  the moment the event exists. A defender-side mobile party with `CurrentSettlement == null`
+  the moment the event exists. SINCE GAME v1.5.7 it lives on the event's
+  `SiegeAssaultEventComponent` (with the type, `_eventType`), not on MapEvent — the old
+  `?.SetValue` lookups went silently dead on that update; `GameReflection` now owns both,
+  serves either game shape, and the siege drill REFUSES to start without the lock. A defender-side mobile party with `CurrentSettlement == null`
   silently flips the event Siege→SiegeOutside — seat defenders INSIDE first. And "inside"
   can be UNDONE under you: StartBattle's own sweep (AddInsideSettlementParties) WALKS OUT
   any inside party that fails `SiegeEvent.CanPartyJoinSide(Defender)` — the bandit temp

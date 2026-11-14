@@ -1,5 +1,5 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
-- (empty — v1.4.1 shipped 2026.10.23 on GitHub + Nexus; Steam held at v1.4.0, see CLAUDE.md "Release status")
+- Game v1.5.7: siege drill's capture lock found again (it had gone silently dead) + startup self-check — needs a siege playtest (see TASKS_DONE)
 
 v1.4.1 (2026.10.23, GitHub + Nexus only, NOT playtested yet):
 - Party size vs battle ready mismatch after a drill — fixed (companions came home seated twice; old saves heal on load)
