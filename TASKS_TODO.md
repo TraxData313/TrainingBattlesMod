@@ -1,5 +1,9 @@
 SHIPPING NEXT (done in main, NOT released yet — the version bumps only on release day):
+- (nothing yet)
+
+v1.4.2 (2026.11.14, GitHub + Nexus only, game v1.5.7 — boots and plays; the siege drill itself NOT playtested on v1.5.7 yet):
 - Game v1.5.7: siege drill's capture lock found again (it had gone silently dead) + startup self-check — needs a siege playtest (see TASKS_DONE)
+- Rebuilt against game v1.5.7 (the v1.4.1 binary throws there on Mission.SpawnAgent / CustomBattleCombatant)
 
 v1.4.1 (2026.10.23, GitHub + Nexus only, NOT playtested yet):
 - Party size vs battle ready mismatch after a drill — fixed (companions came home seated twice; old saves heal on load)
