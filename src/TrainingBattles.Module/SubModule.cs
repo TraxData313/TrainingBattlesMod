@@ -43,6 +43,14 @@ namespace TrainingBattles
                 var config = Config;
                 // If MCM was not yet ready when the main menu came up, bind it now (no-op once bound).
                 Mcm.McmBridge.TryBind(config);
+                // Are the game's private members we reach for still there? One log line when
+                // clean; each miss by name otherwise, and the player is told once.
+                var missing = GameReflection.SelfCheck();
+                if (missing.Count > 0)
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Training Battles: this game version moved " + missing.Count + " thing(s) the mod relies on"
+                        + (GameReflection.SiegeDrillBlocker != null ? " — the SIEGE drill is switched off" : string.Empty)
+                        + ". See training_battles.log."));
                 starter.AddBehavior(new TrainingBattleBehavior(config));
                 // Survey (pick) and scout the ground on a real field battle's encounter menu,
                 // defending or attacking (same picker and scout ride as training).

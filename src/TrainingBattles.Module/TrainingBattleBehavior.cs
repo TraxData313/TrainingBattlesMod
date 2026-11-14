@@ -550,7 +550,12 @@ namespace TrainingBattles
             if (settlement == null || (!settlement.IsCastle && !settlement.IsTown)) return false;
             if (settlement.OwnerClan != Clan.PlayerClan) return false;
             args.optionLeaveType = GameMenuOption.LeaveType.Manage;
-            if (settlement.SiegeEvent != null || MobileParty.MainParty.MapEvent != null)
+            if (GameReflection.SiegeDrillBlocker != null)
+            {
+                args.IsEnabled = false;
+                args.Tooltip = new TextObject("{=TB_tip_castle_blocked}Training Battles: " + SiegeDrillBlockedText);
+            }
+            else if (settlement.SiegeEvent != null || MobileParty.MainParty.MapEvent != null)
             {
                 args.IsEnabled = false;
                 args.Tooltip = new TextObject("{=TB_tip_castle_real}A real fight owns these walls — no drilling now.");
@@ -2454,15 +2459,27 @@ namespace TrainingBattles
             if (settlement.SiegeEvent != null) { reason = "a real siege owns these walls."; return false; }
             if (main.MapEvent != null) { reason = "you are already engaged."; return false; }
             if (main.Army != null) { reason = "the army's banners answer to sterner plans — leave the army to drill."; return false; }
+            // The drill's capture lock is a private game member — after a game update it may be
+            // gone. Then nothing is touched: no lock, no siege drill (GameReflection's class doc).
+            if (GameReflection.SiegeDrillBlocker != null)
+            {
+                TbLog.Info("siege", "launch refused — missing in this game version: " + GameReflection.SiegeDrillBlocker);
+                reason = SiegeDrillBlockedText;
+                return false;
+            }
             reason = string.Empty;
             return true;
         }
+
+        private const string SiegeDrillBlockedText = "the siege drill is switched off — this game version moved "
+            + "something it relies on to keep your walls safe (see training_battles.log). Field and sea drills are unaffected.";
 
         /// <summary>The siege drill's encounter and mission. Shape verified against this game
         /// version's decompiled corpus: a REAL SiegeEvent wraps the fight (the siege mission's
         /// engine-writeback reads the defender leader's SiegeEvent at mission end — a null there
         /// is a crash), PlayerEncounter.StartBattle makes the event a Siege on its own (the
-        /// defender is a fortification), and the map event's private _keepSiegeEvent flag —
+        /// defender is a fortification), and the private _keepSiegeEvent flag (on the event's
+        /// SiegeAssaultEventComponent since game v1.5.7, on MapEvent before) —
         /// set the moment the event exists — keeps FinalizeEvent from ever dispatching
         /// SiegeCompleted, so the capture/sack/devastation machinery never sees a drill. The
         /// mission gets its engines as plain MissionSiegeWeapon data (the engineer's bench);
@@ -2734,22 +2751,27 @@ namespace TrainingBattles
             TbLog.Info("siege", "ghost siege gone " + (siege.SiegeEvent == null));
         }
 
-        /// <summary>Sets the map event's private _keepSiegeEvent flag the moment the event is
-        /// born — vanilla's own "the siege continues past this battle" switch (public only via
-        /// FinishBattleAndKeepSiegeEvent, which also ends the battle). With it set, FinalizeEvent
-        /// skips the whole SiegeCompleted dispatch: no capture, no sack, no devastation — on
-        /// EVERY road out, even ones vanilla walks before our aftermath runs. Reflection, no
-        /// Harmony (the SweepCompanionSeparationTracker precedent); a miss costs nothing here
-        /// because the aftermath restores the settlement anyway — this is the first lock of two.</summary>
+        /// <summary>Sets the private _keepSiegeEvent flag the moment the event is born — vanilla's
+        /// own "the siege continues past this battle" switch (public only via
+        /// FinishBattleAndKeepSiegeEvent, which also ends the battle). With it set, the event's
+        /// finalize skips the whole SiegeCompleted dispatch: no capture, no sack, no devastation —
+        /// on EVERY road out, even ones vanilla walks before our aftermath runs. Reflection, no
+        /// Harmony. Since game v1.5.7 the flag lives on the event's SiegeAssaultEventComponent,
+        /// not on MapEvent — GameReflection finds whichever this game has. NOT best-effort any
+        /// more (2026.11.14): the old `?.SetValue` went silently dead on the update, so a miss
+        /// now THROWS and LaunchTraining's catch aborts the drill — no lock, no fight.</summary>
         private static void KeepSiegeEventThroughFinalize(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
         {
             try
             {
-                typeof(TaleWorlds.CampaignSystem.MapEvents.MapEvent)
-                    .GetField("_keepSiegeEvent", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.SetValue(mapEvent, true);
+                GameReflection.KeepSiegeEvent(mapEvent);
+                TbLog.Info("siege", "capture lock set (the siege-keep flag is on)");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                TbLog.Info("siege", "CAPTURE LOCK FAILED — the drill will not be fought: " + ex.Message);
+                throw new InvalidOperationException("the siege drill's capture lock could not be set — " + ex.Message, ex);
+            }
         }
 
         /// <summary>Completes the drill camp's siege preparations on the spot. Vanilla only
@@ -2776,18 +2798,19 @@ namespace TrainingBattles
         /// battle (SimulationContext falls back to the map position: no wall power, run-away
         /// rules, wrong result books). The led mission never reads the type — which is why two
         /// clean attack-road playtests never saw this — but the auto-resolve does. The re-enter
-        /// before the seat is the fix; this restores the type if any other road degrades it.</summary>
+        /// before the seat is the fix; this restores the type if any other road degrades it.
+        /// Since game v1.5.7 the type is the SiegeAssaultEventComponent's `_eventType` (the flip
+        /// is its OnAddInvolvedParty), and that component's simulation context is Siege whatever
+        /// the type says — the type still steers the siege's own end-of-battle bookkeeping.</summary>
         private static void EnsureSiegeAssaultType(TaleWorlds.CampaignSystem.MapEvents.MapEvent mapEvent)
         {
             try
             {
                 if (mapEvent == null || mapEvent.IsSiegeAssault) return;
                 var degraded = mapEvent.EventType;
-                typeof(TaleWorlds.CampaignSystem.MapEvents.MapEvent)
-                    .GetField("_mapEventType", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.SetValue(mapEvent, TaleWorlds.CampaignSystem.MapEvents.MapEvent.BattleTypes.Siege);
+                var restored = GameReflection.RestoreSiegeType(mapEvent, out var why);
                 TbLog.Info("siege", "EVENT TYPE DEGRADED to " + degraded + " — restored to Siege "
-                    + (mapEvent.IsSiegeAssault ? "(ok)" : "(RESTORE FAILED)"));
+                    + (restored ? "(ok)" : "(RESTORE FAILED" + (why.Length > 0 ? ": " + why : string.Empty) + ")"));
             }
             catch (Exception ex) { TbLog.Info("siege", "event type restore FAILED: " + ex.Message); }
         }
